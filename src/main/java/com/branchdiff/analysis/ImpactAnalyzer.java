@@ -49,7 +49,12 @@ public final class ImpactAnalyzer {
             if (!relevant || ch.classRemoved) continue;
             MethodInfo old = ch.oldMethod;
             // if ours itself no longer has the old method, ours' call sites were already migrated by ours
-            if (ours.findMethod(old.owner.fqn, old.key()) == null) continue;
+            MethodInfo oursM = ours.findMethod(old.owner.fqn, old.key());
+            if (oursM == null) continue;
+            // ours already made the same declaration change (return type / static / abstract), so its callers match it
+            if (ch.kind == MethodChange.Kind.MODIFIED && ch.newMethod != null
+                    && oursM.returnType.equals(ch.newMethod.returnType) && oursM.isStatic == ch.newMethod.isStatic
+                    && oursM.isAbstract == ch.newMethod.isAbstract) continue;
             scanCalls(ch, res);
         }
         for (String removedType : theirsChanges.removedClasses) {

@@ -88,10 +88,13 @@ public final class CodeIndex {
     public final MapperXmlIndex mapperXml = new MapperXmlIndex();
     public final Set<String> sourceRoots = new LinkedHashSet<>();
     public final boolean symbolSolverEnabled;
+    /** type solver of this version (project sources + JDK + classpath jars); null for the merge-base */
+    public final TypeSolver solver;
 
-    private CodeIndex(Snapshot snapshot, boolean symbolSolverEnabled) {
+    private CodeIndex(Snapshot snapshot, TypeSolver solver) {
         this.snapshot = snapshot;
-        this.symbolSolverEnabled = symbolSolverEnabled;
+        this.symbolSolverEnabled = solver != null;
+        this.solver = solver;
     }
 
     public static boolean isTestPath(String p) {
@@ -103,7 +106,7 @@ public final class CodeIndex {
      * name-based analysis is possible on this version's AST.
      */
     public static CodeIndex build(Snapshot snapshot, TypeSolver solver, boolean includeTests) {
-        CodeIndex idx = new CodeIndex(snapshot, solver != null);
+        CodeIndex idx = new CodeIndex(snapshot, solver);
         ParserConfiguration cfg = new ParserConfiguration().setLanguageLevel(ParserConfiguration.LanguageLevel.JAVA_21);
         if (solver != null) cfg.setSymbolResolver(new JavaSymbolSolver(solver));
         JavaParser parser = new JavaParser(cfg);
@@ -336,6 +339,50 @@ public final class CodeIndex {
             for (String s : c.supertypes) if (res.add(s)) q.add(s);
         }
         return res;
+    }
+
+    /** Supertypes (transitively) of a project type that are not project types themselves, excluding Object. */
+    public Set<String> externalAncestors(String fqn) {
+        Set<String> res = new LinkedHashSet<>();
+        for (String a : ancestors(fqn)) {
+            if (!classes.containsKey(a) && !a.equals("java.lang.Object") && !a.equals("Object")) res.add(a);
+        }
+        return res;
+    }
+
+    /**
+     * Whether a library supertype of project type {@code fqn} declares or inherits a method {@code name} that
+     * accepts {@code arity} arguments ({@code arity < 0}: any). Returns null when the type has a library
+     * supertype that cannot be resolved (for example without a Maven classpath), FALSE when every library
+     * supertype was resolved and none has such a method, or when there is no library supertype at all.
+     */
+    public Boolean externalSupertypeHasMethod(String fqn, String name, int arity) {
+        Set<String> ext = externalAncestors(fqn);
+        if (ext.isEmpty()) return Boolean.FALSE;
+        boolean unresolved = false;
+        for (String t : ext) {
+            if (solver == null) {
+                unresolved = true;
+                continue;
+            }
+            try {
+                var ref = solver.tryToSolveType(t);
+                if (!ref.isSolved()) {
+                    unresolved = true;
+                    continue;
+                }
+                for (var mu : ref.getCorrespondingDeclaration().getAllMethods()) {
+                    if (!mu.getName().equals(name)) continue;
+                    if (arity < 0) return Boolean.TRUE;
+                    int n = mu.getNoParams();
+                    boolean varargs = n > 0 && mu.getDeclaration().hasVariadicParameter();
+                    if (n == arity || (varargs && arity >= n - 1)) return Boolean.TRUE;
+                }
+            } catch (Throwable e) {
+                unresolved = true;
+            }
+        }
+        return unresolved ? null : Boolean.FALSE;
     }
 
     public boolean isAssignable(String fromFqn, String toFqn) {

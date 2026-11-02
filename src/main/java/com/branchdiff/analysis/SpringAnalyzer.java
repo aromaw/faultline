@@ -112,6 +112,8 @@ public final class SpringAnalyzer {
     List<Finding> values() {
         Set<String> baseIds = new HashSet<>();
         for (ValueRef v : base.valueRefs) baseIds.add(v.identity());
+        Set<String> oursIds = new HashSet<>();
+        for (ValueRef v : ours.valueRefs) oursIds.add(v.identity());
         Map<String, Finding> out = new LinkedHashMap<>();
         for (ValueRef v : theirs.valueRefs) {
             if (v.defaultValue() != null) continue;
@@ -119,11 +121,19 @@ public final class SpringAnalyzer {
             if (ours.config.has(v.key())) continue;
             boolean newRef = !baseIds.contains(v.identity());
             boolean inBaseConfig = base.config.has(v.key());
-            String origin;
-            if (newRef) origin = "THEIRS_NEW";
-            else if (inBaseConfig) origin = "OURS_REMOVED";
-            else continue; // pre-existing reference that was never in config files (env var etc.)
+            boolean oursHasRef = oursIds.contains(v.identity());
             List<ConfigIndex.KeyLoc> inTheirs = theirs.config.find(v.key());
+            String origin;
+            if (newRef) {
+                // ours already has the same reference and theirs has no config entry to port either:
+                // the key is resolved outside the scanned config files on both sides, not a migration gap
+                if (oursHasRef && inTheirs.isEmpty()) continue;
+                origin = "THEIRS_NEW";
+            } else if (inBaseConfig) {
+                // ours removed both the reference and the key: nothing in ours needs the key any more
+                if (!oursHasRef) continue;
+                origin = "OURS_REMOVED";
+            } else continue; // pre-existing reference that was never in config files (env var etc.)
             Finding f = out.get(v.key());
             if (f == null) {
                 boolean envLike = v.key().equals(v.key().toUpperCase()) && v.key().matches("[A-Z0-9_]+");

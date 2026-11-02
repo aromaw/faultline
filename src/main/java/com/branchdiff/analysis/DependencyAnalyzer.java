@@ -414,6 +414,21 @@ public final class DependencyAnalyzer {
     private void check(Dep d, MethodInfo needer, MethodChange ch, int line, Map<String, Finding> byKey) {
         Lookup inOurs = lookup(d, ours);
         if (inOurs.ok()) return;
+        // theirs may redeclare a method that ours' class still inherits from a library supertype
+        // (e.g. a StringUtils extending commons-lang3), so check ours' library supertypes before reporting
+        String inheritNote = null;
+        if ((d.kind == DepKind.METHOD || d.kind == DepKind.METHOD_REF) && !inOurs.status.equals("MISSING_TYPE")) {
+            List<String> owners = d.candidateOwners.isEmpty() ? List.of(d.owner) : d.candidateOwners;
+            for (String o : owners) {
+                if (!ours.classes.containsKey(o)) continue;
+                Boolean inherited = ours.externalSupertypeHasMethod(o, d.name, d.kind == DepKind.METHOD_REF ? -1 : d.arity);
+                if (Boolean.TRUE.equals(inherited)) return;
+                if (inherited == null && inheritNote == null) {
+                    inheritNote = "ours' " + Names.simpleName(o) + " has library supertype(s) " + ours.externalAncestors(o)
+                            + " that could not be resolved (no classpath?); the method may be inherited from them";
+                }
+            }
+        }
         Lookup inBase = lookup(d, base);
         String origin;
         if (inBase.ok()) origin = inOurs.status.equals("INCONSISTENT") ? "OURS_CHANGED" : "OURS_REMOVED";
@@ -443,6 +458,10 @@ public final class DependencyAnalyzer {
             if (inOurs.location != null) f.oursAt(inOurs.location);
             f.theirsAt(typeMissing && theirs.classes.containsKey(d.owner) ? theirs.classes.get(d.owner).location() : theirsDefinition(d));
             if (!d.certain) f.detail("resolution", "name-based fallback (symbol solver could not resolve)");
+            if (inheritNote != null) {
+                f.confidence = Confidence.UNCERTAIN;
+                f.detail("inheritance", inheritNote);
+            }
             byKey.put(key, f);
         }
         if (f.severity == Severity.LOW && !needer.owner.fqn.equals(d.owner)) {
