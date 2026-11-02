@@ -7,7 +7,7 @@
 | ours | `ours (43c6a1825b63967f252d4a7a3a3681310cca85de)` |
 | theirs | `theirs (ab4163f5d43e82d5a66bedc65a83ded18af3ba1c)` |
 | mergeBase | `8b9a36de7eb117333574ea3c9a54c20e0f221538` |
-| generated | 2026-11-02T14:05:35.368671687+08:00 |
+| generated | 2026-11-02T15:26:21.132594968+08:00 |
 
 Legend: **origin** `THEIRS_NEW` = theirs introduced the symbol (port it together with the code that needs it; a full merge brings it only if its file merges cleanly) · `OURS_REMOVED`/`OURS_CHANGED` = the merge-base had it and ours removed/changed it (semantic conflict git will NOT report) · `THEIRS_CHANGED` = theirs changed an API ours still uses.
 
@@ -22,6 +22,7 @@ Legend: **origin** `THEIRS_NEW` = theirs introduced the symbol (port it together
 | MYBATIS | 1 | 0 |
 | MAVEN_DEPENDENCY | 1 | 0 |
 | SIGNATURE_IMPACT | 9 | 0 |
+| CONSTANT_VALUE | 0 | 0 |
 | BOTH_MODIFIED | 2 | 0 |
 | **total** | 32 | 0 |
 
@@ -96,6 +97,12 @@ Symbols that methods added/modified by theirs need, checked against ours (certai
 | 7 | HIGH | STILL_USES_OLD_SIGNATURE | RENAMED | `com.example.order.util.OrderNumberGenerator#generate(Long)` | THEIRS_CHANGED | `com.example.order.export.OrderExportService#exportLine(Long) [in ours]` @ `order-service/src/main/java/com/example/order/export/OrderExportService.java:33` | `order-service/src/main/java/com/example/order/util/OrderNumberGenerator.java:9` | `order-service/src/main/java/com/example/order/export/OrderExportService.java:33` | Theirs renamed generate(Long) -> nextOrderNo(Long); caller was ADDED by ours: the merge will not update it<br>callSite: OrderNumberGenerator.generate(id) |
 | 8 | LOW | STILL_USES_REMOVED_FIELD | FIELD_RENAMED | `com.example.order.service.ShippingService.freeThreshold` | THEIRS_CHANGED | `com.example.order.service.ShippingService#fee(Order) [in ours]` @ `order-service/src/main/java/com/example/order/service/ShippingService.java:11` | `order-service/src/main/java/com/example/order/service/ShippingService.java:8` | `order-service/src/main/java/com/example/order/service/ShippingService.java:11` | Theirs renamed field ShippingService.freeThreshold -> freeShippingThreshold but ours still references it; referencing method unchanged in ours; theirs updated it, so a clean merge carries theirs' version<br>reference: freeThreshold<br>base: order-service/src/main/java/com/example/order/service/ShippingService.java:8 |
 | 9 | LOW | STILL_USES_OLD_SIGNATURE | RENAMED | `com.example.order.util.OrderNumberGenerator#generate(Long)` | THEIRS_CHANGED | `com.example.order.service.impl.OrderServiceImpl#createOrder(Order) [in ours]` @ `order-service/src/main/java/com/example/order/service/impl/OrderServiceImpl.java:26` | `order-service/src/main/java/com/example/order/util/OrderNumberGenerator.java:9` | `order-service/src/main/java/com/example/order/service/impl/OrderServiceImpl.java:26` | Theirs renamed generate(Long) -> nextOrderNo(Long); caller unchanged in ours; theirs updated it, so a clean merge carries theirs' version<br>callSite: OrderNumberGenerator.generate(order.getId()) |
+
+## 4b. Values changed by theirs (constant / field initializers, MyBatis XML statement bodies)
+
+LOW = only theirs changed it (a whole-branch merge carries it; a backport/cherry-pick must port it) · HIGH = ours and theirs changed it differently.
+
+_none_
 
 ## 5. Methods modified on both sides (manual review required)
 

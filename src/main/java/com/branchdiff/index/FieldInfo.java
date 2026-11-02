@@ -17,6 +17,8 @@ public final class FieldInfo {
     public final boolean enumConstant;
     public final Map<String, AnnotationExpr> annotations;
     public final int line;
+    /** normalized initializer (enum constants: arguments and class body), null when there is none */
+    public String initializer;
 
     public FieldInfo(ClassInfo owner, String name, String typeRaw, String type, boolean isStatic, boolean isFinal,
                      boolean hasInitializer, boolean enumConstant, Map<String, AnnotationExpr> annotations, int line) {

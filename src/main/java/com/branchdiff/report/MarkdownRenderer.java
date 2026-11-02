@@ -83,12 +83,20 @@ public final class MarkdownRenderer {
                 case MYBATIS -> "3.4 MyBatis mapper methods vs XML statement ids";
                 default -> c.name();
             }).append("\n\n");
-            table(sb, r, f -> !f.uncertain() && f.category == c, false);
+            table(sb, r, f -> !f.uncertain() && f.category == c && !isValueChange(f), false);
         }
 
         // 4. impact
         sb.append("## 4. Signature-change impact (places in ours still using an old signature, a deleted type, or a deleted/renamed field)\n\n");
         table(sb, r, f -> !f.uncertain() && f.category == Category.SIGNATURE_IMPACT, false);
+
+        // 4b. value changes
+        sb.append("## 4b. Values changed by theirs (constant / field initializers, MyBatis XML statement bodies)\n\n");
+        sb.append("LOW = only theirs changed it (a whole-branch merge carries it; a backport/cherry-pick must port it) · "
+                + "HIGH = ours and theirs changed it differently.\n\n");
+        List<Finding> values = r.findings.stream().filter(f -> !f.uncertain() && isValueChange(f)).toList();
+        table(sb, r, f -> !f.uncertain() && isValueChange(f), true);
+        for (Finding f : values) diffBlocks(sb, f, "`" + f.symbol + "` (" + f.status + ")");
 
         // 5. both modified
         sb.append("## 5. Methods modified on both sides (manual review required)\n\n");
@@ -100,13 +108,7 @@ public final class MarkdownRenderer {
             sb.append("- ours: `").append(nz(f.oursLocation)).append("` · theirs: `").append(nz(f.theirsLocation))
                     .append("` · base: `").append(nz(f.details.get("base"))).append("`\n");
             sb.append("- git textual conflict: **").append(nz(f.details.get("gitTextualConflict"))).append("**\n\n");
-            for (String k : List.of("diffBaseToOurs", "diffBaseToTheirs", "diffOursToTheirs")) {
-                Object d = f.details.get(k);
-                if (!(d instanceof List<?> lines)) continue;
-                sb.append("<details><summary>").append(k).append("</summary>\n\n```diff\n");
-                for (Object l : lines) sb.append(l).append('\n');
-                sb.append("```\n</details>\n\n");
-            }
+            diffBlocks(sb, f, null);
         }
 
         // 6. uncertain
@@ -125,6 +127,22 @@ public final class MarkdownRenderer {
             sb.append("\n</details>\n\n");
         }
         return sb.toString();
+    }
+
+    /** Value-level findings (field initializers, MyBatis element bodies) rendered in section 4b. */
+    static boolean isValueChange(Finding f) {
+        return f.category == Category.CONSTANT_VALUE
+                || (f.category == Category.MYBATIS && f.status.endsWith("_STATEMENT") && f.kind.startsWith("MAPPER_"));
+    }
+
+    private static void diffBlocks(StringBuilder sb, Finding f, String label) {
+        for (String k : List.of("diffBaseToOurs", "diffBaseToTheirs", "diffOursToTheirs")) {
+            Object d = f.details.get(k);
+            if (!(d instanceof List<?> lines)) continue;
+            sb.append("<details><summary>").append(label == null ? "" : label + " ").append(k).append("</summary>\n\n```diff\n");
+            for (Object l : lines) sb.append(l).append('\n');
+            sb.append("```\n</details>\n\n");
+        }
     }
 
     private static void table(StringBuilder sb, Report r, Predicate<Finding> p, boolean withCategory) {

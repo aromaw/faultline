@@ -9,7 +9,7 @@ import java.util.Map;
 public final class Finding {
     public enum Category {
         MISSING_DEPENDENCY, SPRING_BEAN, SPRING_CONFIG, INTERFACE_IMPL, MYBATIS, MAVEN_DEPENDENCY,
-        SIGNATURE_IMPACT, BOTH_MODIFIED
+        SIGNATURE_IMPACT, CONSTANT_VALUE, BOTH_MODIFIED
     }
 
     public enum Severity {HIGH, MEDIUM, LOW}

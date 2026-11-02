@@ -221,8 +221,10 @@ public final class CodeIndex {
                 boolean fin = f.isFinal() || kind == ClassInfo.Kind.INTERFACE;
                 for (VariableDeclarator v : f.getVariables()) {
                     String raw = v.getType().asString();
-                    ci.fields.put(v.getNameAsString(), new FieldInfo(ci, v.getNameAsString(), raw, Names.simpleErased(raw),
-                            st, fin, v.getInitializer().isPresent(), false, anns, Ast.line(v)));
+                    FieldInfo fi = new FieldInfo(ci, v.getNameAsString(), raw, Names.simpleErased(raw),
+                            st, fin, v.getInitializer().isPresent(), false, anns, Ast.line(v));
+                    fi.initializer = v.getInitializer().map(Ast::normalized).orElse(null);
+                    ci.fields.put(v.getNameAsString(), fi);
                 }
             } else if (m instanceof MethodDeclaration md) {
                 addMethod(ci, md, md.getNameAsString(), md.getType().asString(), false, md.isStatic(),
@@ -233,8 +235,17 @@ public final class CodeIndex {
         }
         if (td instanceof EnumDeclaration en) {
             for (EnumConstantDeclaration ec : en.getEntries()) {
-                ci.fields.put(ec.getNameAsString(), new FieldInfo(ci, ec.getNameAsString(), td.getNameAsString(),
-                        td.getNameAsString(), true, true, true, true, Map.of(), Ast.line(ec)));
+                FieldInfo fi = new FieldInfo(ci, ec.getNameAsString(), td.getNameAsString(),
+                        td.getNameAsString(), true, true, true, true, Map.of(), Ast.line(ec));
+                StringBuilder init = new StringBuilder("(");
+                for (int i = 0; i < ec.getArguments().size(); i++) {
+                    if (i > 0) init.append(", ");
+                    init.append(Ast.normalized(ec.getArguments().get(i)));
+                }
+                init.append(')');
+                for (BodyDeclaration<?> b : ec.getClassBody()) init.append('\n').append(Ast.normalized(b));
+                fi.initializer = init.toString();
+                ci.fields.put(ec.getNameAsString(), fi);
             }
         }
         if (td instanceof RecordDeclaration rd) {

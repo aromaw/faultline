@@ -25,7 +25,22 @@ public final class MapperXmlIndex {
         }
     }
 
+    /** Normalized content of one statement-like element, used for three-way body comparison. */
+    public record Body(String namespace, String id, String tag, String normalized, String file, int line) {
+        public String key() {
+            return tag + ":" + id;
+        }
+
+        public String location() {
+            return file + ":" + line;
+        }
+    }
+
     private static final Set<String> STATEMENT_TAGS = Set.of("select", "insert", "update", "delete");
+    /** elements whose content is compared across versions (statements plus reusable fragments and result maps) */
+    private static final Set<String> BODY_TAGS = Set.of("select", "insert", "update", "delete", "sql", "resultMap");
+    /** namespace -> tag:id -> body */
+    private final Map<String, Map<String, Body>> bodies = new LinkedHashMap<>();
     private final Map<String, Map<String, Statement>> byNamespace = new LinkedHashMap<>();
     private final Map<String, String> namespaceFile = new LinkedHashMap<>();
     private final List<String> errors = new ArrayList<>();
@@ -55,15 +70,66 @@ public final class MapperXmlIndex {
             NodeList children = root.getChildNodes();
             for (int i = 0; i < children.getLength(); i++) {
                 Node n = children.item(i);
-                if (n instanceof Element e && STATEMENT_TAGS.contains(e.getTagName())) {
+                if (n instanceof Element e && BODY_TAGS.contains(e.getTagName())) {
                     String id = e.getAttribute("id");
                     if (id.isEmpty()) continue;
-                    stmts.put(id, new Statement(ns, id, e.getTagName(), path, lineOf(content, e.getTagName(), id)));
+                    int line = lineOf(content, e.getTagName(), id);
+                    if (STATEMENT_TAGS.contains(e.getTagName())) stmts.put(id, new Statement(ns, id, e.getTagName(), path, line));
+                    bodies.computeIfAbsent(ns, k -> new LinkedHashMap<>()).put(e.getTagName() + ":" + id,
+                            new Body(ns, id, e.getTagName(), normalize(e), path, line));
                 }
             }
         } catch (Exception e) {
             errors.add(path + ": " + e.getMessage());
         }
+    }
+
+    /**
+     * Renders an element canonically: comments dropped, attributes sorted, whitespace in text collapsed, one line per
+     * element or text run, so formatting-only and comment-only edits compare equal.
+     */
+    static String normalize(Element e) {
+        StringBuilder sb = new StringBuilder();
+        render(e, sb, 0);
+        return sb.toString().strip();
+    }
+
+    private static void render(Element e, StringBuilder sb, int depth) {
+        String indent = "  ".repeat(depth);
+        sb.append(indent).append('<').append(e.getTagName());
+        var attrs = e.getAttributes();
+        java.util.TreeMap<String, String> sorted = new java.util.TreeMap<>();
+        for (int i = 0; i < attrs.getLength(); i++) sorted.put(attrs.item(i).getNodeName(), attrs.item(i).getNodeValue());
+        sorted.forEach((k, v) -> sb.append(' ').append(k).append("=\"").append(v.strip().replaceAll("\\s+", " ")).append('"'));
+        sb.append(">\n");
+        NodeList children = e.getChildNodes();
+        StringBuilder text = new StringBuilder();
+        for (int i = 0; i < children.getLength(); i++) {
+            Node c = children.item(i);
+            if (c.getNodeType() == Node.TEXT_NODE || c.getNodeType() == Node.CDATA_SECTION_NODE) {
+                text.append(' ').append(c.getNodeValue());
+            } else if (c instanceof Element ce) {
+                flushText(text, sb, depth + 1);
+                render(ce, sb, depth + 1);
+            }
+            // comments and processing instructions are ignored
+        }
+        flushText(text, sb, depth + 1);
+        sb.append(indent).append("</").append(e.getTagName()).append(">\n");
+    }
+
+    private static void flushText(StringBuilder text, StringBuilder sb, int depth) {
+        String t = text.toString().strip().replaceAll("\\s+", " ");
+        text.setLength(0);
+        if (!t.isEmpty()) sb.append("  ".repeat(depth)).append(t).append('\n');
+    }
+
+    public Map<String, Body> bodies(String ns) {
+        return bodies.getOrDefault(ns, Map.of());
+    }
+
+    public Set<String> bodyNamespaces() {
+        return bodies.keySet();
     }
 
     private static int lineOf(String content, String tag, String id) {

@@ -1,6 +1,6 @@
 {
   "tool" : "branch-diff-tool 0.1.0",
-  "generatedAt" : "2026-11-02T14:05:39.475570222+08:00",
+  "generatedAt" : "2026-11-02T15:26:25.247662217+08:00",
   "repo" : "/workspace/branch-diff-sample",
   "serviceDir" : "order-service",
   "refs" : {
@@ -33,6 +33,7 @@
       "MYBATIS" : 1,
       "MAVEN_DEPENDENCY" : 1,
       "SIGNATURE_IMPACT" : 9,
+      "CONSTANT_VALUE" : 0,
       "BOTH_MODIFIED" : 2
     },
     "findingsTotal" : 32,
@@ -49,24 +50,24 @@
     "callsNameMatchedFallback" : 0,
     "callsToExternalLibraries" : 19,
     "javaFiles" : {
+      "ours" : 17,
       "base" : 14,
-      "theirs" : 17,
-      "ours" : 17
+      "theirs" : 17
     },
     "siblingModules" : [ "common" ],
     "siblingJavaFiles" : {
+      "ours" : 4,
       "base" : 4,
-      "theirs" : 5,
-      "ours" : 4
+      "theirs" : 5
     },
     "siblingMode" : "deps",
     "configFiles" : {
-      "ours" : [ "order-service/src/main/resources/application-prod.properties", "order-service/src/main/resources/application.yml" ],
-      "theirs" : [ "order-service/src/main/resources/application-prod.properties", "order-service/src/main/resources/application.yml" ]
+      "theirs" : [ "order-service/src/main/resources/application-prod.properties", "order-service/src/main/resources/application.yml" ],
+      "ours" : [ "order-service/src/main/resources/application-prod.properties", "order-service/src/main/resources/application.yml" ]
     },
     "mapperXmlNamespaces" : {
-      "ours" : 1,
-      "theirs" : 1
+      "theirs" : 1,
+      "ours" : 1
     }
   },
   "warnings" : [ ],

@@ -74,8 +74,18 @@ java -jar target/branch-diff-tool.jar --repo . --theirs feature-x --json -o repo
    - Maven classpath：兄弟模块一般没有安装到本地仓库，`dependency:build-classpath` 会因此整体失败，所以在**临时副本**的服务 pom 中删除对兄弟模块的 `<dependency>`（它们的源码已经交给 SymbolSolver）。
    - 默认开启 `deps` 的理由：只加载服务**声明依赖**的模块，代价是多读几个 pom 和这些模块的源码（样例中 4–5 个文件，耗时可忽略）；不会把无关服务的代码混进来（避免同名类冲突、减少名称匹配噪声）；兄弟模块的代码永远不会单独产生报告，所以开启后已有的结果只会多出真实的跨模块缺口（样例中 `--no-siblings` 与默认相比只少了 G10 的两条）。`all` 适合非 Maven 声明的依赖关系，但在大型 monorepo 中更慢、噪声更多，因此不作为默认。
 6. **双方都修改的方法**：单独列出供人工审查，附 base→ours、base→theirs 的方法级 diff，并用 `git merge-file`（在临时文件上）预测该文件**是否会产生文本冲突**——"NO" 意味着 git 会静默合并，只能靠人工审查发现逻辑矛盾。双方做了相同修改的方法不报。
+7. **值变更**（三方比较，仅服务目录；报告第 4b 节）：没有方法级变更集的改动。
+   - 字段 / 常量初始化表达式（`static final` 常量、数组/集合初始化、实例字段初始化）以及枚举常量参数，去掉注释和格式后比较。类别 `CONSTANT_VALUE`，kind 为 `CONSTANT` / `FIELD` / `ENUM_CONSTANT`。
+   - MyBatis mapper XML 元素内容，按 `namespace` + 标签 + `id` 匹配 `<select|insert|update|delete|sql|resultMap>`，去掉 XML 注释、属性排序、压缩空白后比较。类别 `MYBATIS`，kind 为 `MAPPER_<标签>`，给出语句 id 和 `file:line`。
+   - 模型与方法一致：
 
-报告章节：概览统计 → 缺失依赖 → Spring 配置/Bean 缺口 → 签名变更影响（含已删除/改名字段）→ 双方修改 → 不确定项 → 附录（完整方法变更集，仅服务目录）。JSON 与 Markdown 内容一致。
+     | base / ours / theirs | 状态 | 严重度 | 说明 |
+     |---|---|---|---|
+     | base = ours ≠ theirs | `THEIRS_CHANGED_VALUE` / `THEIRS_CHANGED_STATEMENT` | LOW | 整分支合并会自动带上 theirs 的值；向单独维护的分支回移/cherry-pick 时必须一并移植（与同类 `THEIRS_NEW` 依赖的约定相同）。只有 theirs 修改的方法体在附录变更集中可见，值没有附录，所以在这里报告 |
+     | base ≠ ours、base ≠ theirs、ours ≠ theirs（或 base 中不存在、双方各自添加了不同的值） | `BOTH_CHANGED_*` / `BOTH_ADDED_*` | HIGH | 冲突修改，同"双方都修改的方法"；附 `git merge-file` 文本冲突预测 |
+     | 未改、仅 ours 修改、双方相同修改、仅注释/格式变化、ours 已删除 | — | 不报 | |
+
+报告章节：概览统计 → 缺失依赖 → Spring 配置/Bean 缺口 → 签名变更影响（含已删除/改名字段）→ 4b 值变更（常量、MyBatis 语句内容）→ 双方修改 → 不确定项 → 附录（完整方法变更集，仅服务目录）。JSON 与 Markdown 内容一致。
 
 ## 验证样例
 
@@ -124,4 +134,5 @@ java -jar target/branch-diff-tool.jar --repo /workspace/branch-diff-sample \
   - 兄弟模块中与服务无关的变化（兄弟模块内部缺口、兄弟模块中双方都修改的方法）按设计不报告；兄弟模块之外仍未被选中的模块依旧视为外部库。Maven 多模块的 classpath 解析若失败会降级为名称匹配。
 - 方法级匹配基于简单类型名（擦除泛型），同名不同包的参数类型可能误判为相同；类整体改包/改名会表现为"删除 + 新增"。
 - 字段反向追踪：只处理"删除/改名"，不报告字段**类型变化**或 static/final 变化；改名识别依赖相同的非空初始化表达式，无初始化表达式的字段和无参枚举常量改名会报告为 `*_REMOVED`（不给出新名字）；字段移动到其他（非父类）类视为删除。方法内**局部类**（local class）中的引用、字符串形式的引用（反射、SpEL、MyBatis XML 中的 `#{field}`）不扫描。
+- 值变更：只比较初始化表达式 / XML 文本本身。初始化表达式未变、但引用了另一个已变常量的常量不单独报告（被引用的那个会报）；在 static 块或构造器中赋值、运行时计算的值，以及兄弟模块或服务目录之外的 XML 不在范围内。兄弟模块中仅 theirs 修改的值不报告（需把该模块作为 `--service-dir` 运行）。`<include>` 引用的片段按其自身的 `<sql>` 元素比较，不做内联展开。
 - 未实现"对合并结果执行 `mvn compile`"的可选检查（需求中注明非必须）。

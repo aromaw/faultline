@@ -115,6 +115,7 @@ public final class Analyzer {
             findings.addAll(safe("maven dependencies", () -> PomAnalyzer.analyze(base, ours, theirs)));
             findings.addAll(safe("signature impact", () -> new ImpactAnalyzer(iBase, iOurs, iTheirs, csOursAll).analyze(csTheirsAll)));
             findings.addAll(safe("removed field impact", () -> new FieldImpactAnalyzer(iBase, iOurs, iTheirs, csOursAll).analyze()));
+            findings.addAll(safe("value changes", () -> new ValueChangeAnalyzer(iBase, iOurs, iTheirs).analyze()));
             BothModifiedAnalyzer both = new BothModifiedAnalyzer(base, ours, theirs);
             findings.addAll(safe("both-modified", () -> both.analyze(csTheirs, csOurs)));
             findings.sort(Comparator.comparing((Finding f) -> f.category).thenComparing(f -> f.severity)
