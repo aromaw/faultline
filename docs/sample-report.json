@@ -1,0 +1,779 @@
+{
+  "tool" : "branch-diff-tool 0.1.0",
+  "generatedAt" : "2026-11-02T14:05:39.475570222+08:00",
+  "repo" : "/workspace/branch-diff-sample",
+  "serviceDir" : "order-service",
+  "refs" : {
+    "ours" : "ours (43c6a1825b63967f252d4a7a3a3681310cca85de)",
+    "theirs" : "theirs (ab4163f5d43e82d5a66bedc65a83ded18af3ba1c)",
+    "mergeBase" : "8b9a36de7eb117333574ea3c9a54c20e0f221538"
+  },
+  "summary" : {
+    "theirsMethodChanges" : {
+      "ADDED" : 17,
+      "REMOVED" : 0,
+      "MODIFIED" : 5,
+      "SIGNATURE_CHANGED" : 1,
+      "RENAMED" : 1
+    },
+    "oursMethodChanges" : {
+      "ADDED" : 10,
+      "REMOVED" : 0,
+      "MODIFIED" : 3,
+      "SIGNATURE_CHANGED" : 0,
+      "RENAMED" : 0
+    },
+    "classesAddedByTheirs" : 3,
+    "classesRemovedByTheirs" : 0,
+    "findingsByCategory" : {
+      "MISSING_DEPENDENCY" : 13,
+      "SPRING_BEAN" : 2,
+      "SPRING_CONFIG" : 2,
+      "INTERFACE_IMPL" : 2,
+      "MYBATIS" : 1,
+      "MAVEN_DEPENDENCY" : 1,
+      "SIGNATURE_IMPACT" : 9,
+      "BOTH_MODIFIED" : 2
+    },
+    "findingsTotal" : 32,
+    "highSeverity" : 15,
+    "uncertain" : 0,
+    "identicalChangesOnBothSides" : 1,
+    "filesWithPredictedTextualConflicts" : 2
+  },
+  "analysisNotes" : {
+    "oursClasspath" : "ok (43 jars)",
+    "theirsClasspath" : "ok (44 jars)",
+    "theirsMethodsAnalyzed" : 24,
+    "callsResolvedBySymbolSolver" : 28,
+    "callsNameMatchedFallback" : 0,
+    "callsToExternalLibraries" : 19,
+    "javaFiles" : {
+      "base" : 14,
+      "theirs" : 17,
+      "ours" : 17
+    },
+    "siblingModules" : [ "common" ],
+    "siblingJavaFiles" : {
+      "base" : 4,
+      "theirs" : 5,
+      "ours" : 4
+    },
+    "siblingMode" : "deps",
+    "configFiles" : {
+      "ours" : [ "order-service/src/main/resources/application-prod.properties", "order-service/src/main/resources/application.yml" ],
+      "theirs" : [ "order-service/src/main/resources/application-prod.properties", "order-service/src/main/resources/application.yml" ]
+    },
+    "mapperXmlNamespaces" : {
+      "ours" : 1,
+      "theirs" : 1
+    }
+  },
+  "warnings" : [ ],
+  "findings" : [ {
+    "category" : "MISSING_DEPENDENCY",
+    "severity" : "HIGH",
+    "confidence" : "CERTAIN",
+    "status" : "MISSING",
+    "kind" : "CONSTANT",
+    "symbol" : "com.example.order.constants.OrderConstants.DEFAULT_CURRENCY",
+    "origin" : "OURS_REMOVED",
+    "message" : "Missing in ours (existed in the merge-base: ours removed it, git will not report this)",
+    "theirsLocation" : "order-service/src/main/java/com/example/order/constants/OrderConstants.java:7",
+    "oursLocation" : null,
+    "neededBy" : [ {
+      "by" : "com.example.order.service.PricingService#calculateFinalPrice(Order,String,int) [ADDED in theirs]",
+      "location" : "order-service/src/main/java/com/example/order/service/PricingService.java:35"
+    } ],
+    "details" : { }
+  }, {
+    "category" : "MISSING_DEPENDENCY",
+    "severity" : "MEDIUM",
+    "confidence" : "CERTAIN",
+    "status" : "MISSING",
+    "kind" : "METHOD",
+    "symbol" : "com.example.common.text.TextUtils#maskPhone(String)",
+    "origin" : "THEIRS_NEW",
+    "message" : "Missing in ours (introduced by theirs; must be ported together)",
+    "theirsLocation" : "common/src/main/java/com/example/common/text/TextUtils.java:11",
+    "oursLocation" : null,
+    "neededBy" : [ {
+      "by" : "com.example.order.service.impl.OrderServiceImpl#refundOrder(Long,BigDecimal) [ADDED in theirs]",
+      "location" : "order-service/src/main/java/com/example/order/service/impl/OrderServiceImpl.java:70"
+    } ],
+    "details" : { }
+  }, {
+    "category" : "MISSING_DEPENDENCY",
+    "severity" : "MEDIUM",
+    "confidence" : "CERTAIN",
+    "status" : "MISSING",
+    "kind" : "CONSTANT",
+    "symbol" : "com.example.order.constants.OrderConstants.MAX_DISCOUNT_PERCENT",
+    "origin" : "THEIRS_NEW",
+    "message" : "Missing in ours (introduced by theirs; must be ported together)",
+    "theirsLocation" : "order-service/src/main/java/com/example/order/constants/OrderConstants.java:13",
+    "oursLocation" : null,
+    "neededBy" : [ {
+      "by" : "com.example.order.service.PricingService#applyDiscount(BigDecimal,int,boolean) [SIGNATURE_CHANGED in theirs]",
+      "location" : "order-service/src/main/java/com/example/order/service/PricingService.java:24"
+    } ],
+    "details" : { }
+  }, {
+    "category" : "MISSING_DEPENDENCY",
+    "severity" : "MEDIUM",
+    "confidence" : "CERTAIN",
+    "status" : "MISSING",
+    "kind" : "TYPE",
+    "symbol" : "com.example.order.coupon.CouponService",
+    "origin" : "THEIRS_NEW",
+    "message" : "Type does not exist in ours (added by theirs)",
+    "theirsLocation" : "order-service/src/main/java/com/example/order/coupon/CouponService.java:10",
+    "oursLocation" : null,
+    "neededBy" : [ {
+      "by" : "com.example.order.service.impl.OrderServiceImpl#refundOrder(Long,BigDecimal) [ADDED in theirs]",
+      "location" : "order-service/src/main/java/com/example/order/service/impl/OrderServiceImpl.java:69"
+    } ],
+    "details" : {
+      "membersUsed" : [ "releaseCoupons(Long)" ]
+    }
+  }, {
+    "category" : "MISSING_DEPENDENCY",
+    "severity" : "MEDIUM",
+    "confidence" : "CERTAIN",
+    "status" : "MISSING",
+    "kind" : "METHOD",
+    "symbol" : "com.example.order.mapper.OrderMapper#selectByCustomerId(Long)",
+    "origin" : "THEIRS_NEW",
+    "message" : "Missing in ours (introduced by theirs; must be ported together)",
+    "theirsLocation" : "order-service/src/main/java/com/example/order/mapper/OrderMapper.java:18",
+    "oursLocation" : null,
+    "neededBy" : [ {
+      "by" : "com.example.order.service.impl.OrderServiceImpl#listCustomerOrders(Long) [ADDED in theirs]",
+      "location" : "order-service/src/main/java/com/example/order/service/impl/OrderServiceImpl.java:77"
+    } ],
+    "details" : { }
+  }, {
+    "category" : "MISSING_DEPENDENCY",
+    "severity" : "MEDIUM",
+    "confidence" : "CERTAIN",
+    "status" : "MISSING",
+    "kind" : "CONSTANT",
+    "symbol" : "com.example.order.model.OrderStatus.REFUNDED",
+    "origin" : "THEIRS_NEW",
+    "message" : "Missing in ours (introduced by theirs; must be ported together)",
+    "theirsLocation" : "order-service/src/main/java/com/example/order/model/OrderStatus.java:7",
+    "oursLocation" : null,
+    "neededBy" : [ {
+      "by" : "com.example.order.service.impl.OrderServiceImpl#refundOrder(Long,BigDecimal) [ADDED in theirs]",
+      "location" : "order-service/src/main/java/com/example/order/service/impl/OrderServiceImpl.java:68"
+    } ],
+    "details" : { }
+  }, {
+    "category" : "MISSING_DEPENDENCY",
+    "severity" : "MEDIUM",
+    "confidence" : "CERTAIN",
+    "status" : "INCONSISTENT",
+    "kind" : "METHOD",
+    "symbol" : "com.example.order.service.PricingService#applyDiscount(BigDecimal,int,boolean)",
+    "origin" : "THEIRS_NEW",
+    "message" : "Exists in ours with an incompatible signature: only applyDiscount(BigDecimal,int) exists",
+    "theirsLocation" : "order-service/src/main/java/com/example/order/service/PricingService.java:23",
+    "oursLocation" : "order-service/src/main/java/com/example/order/service/PricingService.java:20",
+    "neededBy" : [ {
+      "by" : "com.example.order.service.PricingService#calculateFinalPrice(Order,String,int) [ADDED in theirs]",
+      "location" : "order-service/src/main/java/com/example/order/service/PricingService.java:33"
+    }, {
+      "by" : "com.example.order.coupon.CouponService#preview(BigDecimal,int) [ADDED in theirs]",
+      "location" : "order-service/src/main/java/com/example/order/coupon/CouponService.java:26"
+    } ],
+    "details" : { }
+  }, {
+    "category" : "MISSING_DEPENDENCY",
+    "severity" : "MEDIUM",
+    "confidence" : "CERTAIN",
+    "status" : "MISSING",
+    "kind" : "METHOD",
+    "symbol" : "com.example.order.util.MoneyUtils#roundHalfUp(BigDecimal)",
+    "origin" : "THEIRS_NEW",
+    "message" : "Missing in ours (introduced by theirs; must be ported together)",
+    "theirsLocation" : "order-service/src/main/java/com/example/order/util/MoneyUtils.java:14",
+    "oursLocation" : null,
+    "neededBy" : [ {
+      "by" : "com.example.order.service.PricingService#calculateFinalPrice(Order,String,int) [ADDED in theirs]",
+      "location" : "order-service/src/main/java/com/example/order/service/PricingService.java:38"
+    } ],
+    "details" : { }
+  }, {
+    "category" : "MISSING_DEPENDENCY",
+    "severity" : "MEDIUM",
+    "confidence" : "CERTAIN",
+    "status" : "MISSING",
+    "kind" : "METHOD",
+    "symbol" : "com.example.order.util.OrderNumberGenerator#nextOrderNo(Long)",
+    "origin" : "THEIRS_NEW",
+    "message" : "Missing in ours (introduced by theirs; must be ported together)",
+    "theirsLocation" : "order-service/src/main/java/com/example/order/util/OrderNumberGenerator.java:9",
+    "oursLocation" : null,
+    "neededBy" : [ {
+      "by" : "com.example.order.service.impl.OrderServiceImpl#createOrder(Order) [MODIFIED in theirs]",
+      "location" : "order-service/src/main/java/com/example/order/service/impl/OrderServiceImpl.java:42"
+    } ],
+    "details" : { }
+  }, {
+    "category" : "MISSING_DEPENDENCY",
+    "severity" : "LOW",
+    "confidence" : "CERTAIN",
+    "status" : "MISSING",
+    "kind" : "FIELD",
+    "symbol" : "com.example.order.service.ShippingService.freeShippingThreshold",
+    "origin" : "THEIRS_NEW",
+    "message" : "Missing in ours (introduced by theirs in the same class; arrives with that class if it merges cleanly, must be ported together when cherry-picking)",
+    "theirsLocation" : "order-service/src/main/java/com/example/order/service/ShippingService.java:8",
+    "oursLocation" : null,
+    "neededBy" : [ {
+      "by" : "com.example.order.service.ShippingService#fee(Order) [MODIFIED in theirs]",
+      "location" : "order-service/src/main/java/com/example/order/service/ShippingService.java:11"
+    } ],
+    "details" : { }
+  }, {
+    "category" : "MISSING_DEPENDENCY",
+    "severity" : "LOW",
+    "confidence" : "CERTAIN",
+    "status" : "MISSING",
+    "kind" : "METHOD",
+    "symbol" : "com.example.order.service.impl.OrderServiceImpl#refundOrder(Long,BigDecimal)",
+    "origin" : "THEIRS_NEW",
+    "message" : "Missing in ours (introduced by theirs in the same class; arrives with that class if it merges cleanly, must be ported together when cherry-picking)",
+    "theirsLocation" : "order-service/src/main/java/com/example/order/service/impl/OrderServiceImpl.java:66",
+    "oursLocation" : null,
+    "neededBy" : [ {
+      "by" : "com.example.order.service.impl.OrderServiceImpl#cancelOrder(Long) [MODIFIED in theirs]",
+      "location" : "order-service/src/main/java/com/example/order/service/impl/OrderServiceImpl.java:61"
+    } ],
+    "details" : { }
+  }, {
+    "category" : "MISSING_DEPENDENCY",
+    "severity" : "LOW",
+    "confidence" : "CERTAIN",
+    "status" : "MISSING",
+    "kind" : "FIELD",
+    "symbol" : "com.example.order.service.impl.OrderServiceImpl.couponService",
+    "origin" : "THEIRS_NEW",
+    "message" : "Missing in ours (introduced by theirs in the same class; arrives with that class if it merges cleanly, must be ported together when cherry-picking)",
+    "theirsLocation" : "order-service/src/main/java/com/example/order/service/impl/OrderServiceImpl.java:27",
+    "oursLocation" : null,
+    "neededBy" : [ {
+      "by" : "com.example.order.service.impl.OrderServiceImpl#refundOrder(Long,BigDecimal) [ADDED in theirs]",
+      "location" : "order-service/src/main/java/com/example/order/service/impl/OrderServiceImpl.java:69"
+    } ],
+    "details" : { }
+  }, {
+    "category" : "MISSING_DEPENDENCY",
+    "severity" : "LOW",
+    "confidence" : "CERTAIN",
+    "status" : "MISSING",
+    "kind" : "FIELD",
+    "symbol" : "com.example.order.service.impl.OrderServiceImpl.smsSender",
+    "origin" : "THEIRS_NEW",
+    "message" : "Missing in ours (introduced by theirs in the same class; arrives with that class if it merges cleanly, must be ported together when cherry-picking)",
+    "theirsLocation" : "order-service/src/main/java/com/example/order/service/impl/OrderServiceImpl.java:31",
+    "oursLocation" : null,
+    "neededBy" : [ {
+      "by" : "com.example.order.service.impl.OrderServiceImpl#refundOrder(Long,BigDecimal) [ADDED in theirs]",
+      "location" : "order-service/src/main/java/com/example/order/service/impl/OrderServiceImpl.java:70"
+    } ],
+    "details" : { }
+  }, {
+    "category" : "SPRING_BEAN",
+    "severity" : "HIGH",
+    "confidence" : "CERTAIN",
+    "status" : "MISSING",
+    "kind" : "BEAN_NAME",
+    "symbol" : "@Qualifier/@Resource(\"smsNotifier\") NotificationSender",
+    "origin" : "THEIRS_NEW",
+    "message" : "Bean named 'smsNotifier' is defined only in theirs (component)",
+    "theirsLocation" : "order-service/src/main/java/com/example/order/notify/SmsNotificationSender.java:5",
+    "oursLocation" : null,
+    "neededBy" : [ {
+      "by" : "com.example.order.service.impl.OrderServiceImpl (field smsSender, field)",
+      "location" : "order-service/src/main/java/com/example/order/service/impl/OrderServiceImpl.java:31"
+    } ],
+    "details" : { }
+  }, {
+    "category" : "SPRING_BEAN",
+    "severity" : "HIGH",
+    "confidence" : "CERTAIN",
+    "status" : "MISSING",
+    "kind" : "BEAN",
+    "symbol" : "com.example.order.coupon.CouponService",
+    "origin" : "THEIRS_NEW",
+    "message" : "No bean of type CouponService in ours (the type itself does not exist in ours); theirs defines it via component",
+    "theirsLocation" : "order-service/src/main/java/com/example/order/coupon/CouponService.java:10",
+    "oursLocation" : null,
+    "neededBy" : [ {
+      "by" : "com.example.order.service.impl.OrderServiceImpl (field couponService, field)",
+      "location" : "order-service/src/main/java/com/example/order/service/impl/OrderServiceImpl.java:27"
+    } ],
+    "details" : { }
+  }, {
+    "category" : "SPRING_CONFIG",
+    "severity" : "HIGH",
+    "confidence" : "CERTAIN",
+    "status" : "MISSING",
+    "kind" : "PROPERTY",
+    "symbol" : "order.coupon.expire-days",
+    "origin" : "THEIRS_NEW",
+    "message" : "Property is required (no default) and is defined in theirs' config but in none of ours' application*/bootstrap* files",
+    "theirsLocation" : "order-service/src/main/resources/application.yml:18",
+    "oursLocation" : null,
+    "neededBy" : [ {
+      "by" : "com.example.order.coupon.CouponService (field expireDays, @Value ${order.coupon.expire-days})",
+      "location" : "order-service/src/main/java/com/example/order/coupon/CouponService.java:17"
+    } ],
+    "details" : {
+      "theirsProfile" : "default",
+      "ours config files" : [ "order-service/src/main/resources/application-prod.properties", "order-service/src/main/resources/application.yml" ]
+    }
+  }, {
+    "category" : "SPRING_CONFIG",
+    "severity" : "MEDIUM",
+    "confidence" : "CERTAIN",
+    "status" : "MISSING",
+    "kind" : "CONFIGURATION_PROPERTIES",
+    "symbol" : "@ConfigurationProperties(prefix=\"order.payment\") com.example.order.payment.PaymentProperties",
+    "origin" : "THEIRS_NEW",
+    "message" : "Keys bound by this properties class are configured in theirs but missing from ours' config files (ours has nothing under prefix 'order.payment')",
+    "theirsLocation" : "order-service/src/main/resources/application.yml:20",
+    "oursLocation" : null,
+    "neededBy" : [ {
+      "by" : "com.example.order.payment.PaymentProperties",
+      "location" : "order-service/src/main/java/com/example/order/payment/PaymentProperties.java:6"
+    } ],
+    "details" : {
+      "missingKeys" : [ "order.payment.gateway-url (theirs: order-service/src/main/resources/application.yml:20)", "order.payment.timeout-ms (theirs: order-service/src/main/resources/application.yml:21)" ]
+    }
+  }, {
+    "category" : "INTERFACE_IMPL",
+    "severity" : "HIGH",
+    "confidence" : "CERTAIN",
+    "status" : "MISSING",
+    "kind" : "IMPLEMENTATION",
+    "symbol" : "com.example.order.service.impl.CachedOrderService must implement com.example.order.service.OrderService#refundOrder(Long,BigDecimal)",
+    "origin" : "THEIRS_NEW",
+    "message" : "Implementation exists only in ours (theirs never saw it) and does not implement the new abstract method: will not compile after merge",
+    "theirsLocation" : "order-service/src/main/java/com/example/order/service/OrderService.java:14",
+    "oursLocation" : "order-service/src/main/java/com/example/order/service/impl/CachedOrderService.java:13",
+    "neededBy" : [ {
+      "by" : "com.example.order.service.OrderService#refundOrder(Long,BigDecimal) [ADDED in theirs]",
+      "location" : "order-service/src/main/java/com/example/order/service/OrderService.java:14"
+    } ],
+    "details" : { }
+  }, {
+    "category" : "INTERFACE_IMPL",
+    "severity" : "LOW",
+    "confidence" : "CERTAIN",
+    "status" : "MISSING",
+    "kind" : "IMPLEMENTATION",
+    "symbol" : "com.example.order.service.impl.OrderServiceImpl must implement com.example.order.service.OrderService#refundOrder(Long,BigDecimal)",
+    "origin" : "THEIRS_NEW",
+    "message" : "Ours' version of this implementation lacks the method; theirs' version of the same class implements it, so it should arrive with the merge of that class (verify it merges cleanly)",
+    "theirsLocation" : "order-service/src/main/java/com/example/order/service/OrderService.java:14",
+    "oursLocation" : "order-service/src/main/java/com/example/order/service/impl/OrderServiceImpl.java:11",
+    "neededBy" : [ {
+      "by" : "com.example.order.service.OrderService#refundOrder(Long,BigDecimal) [ADDED in theirs]",
+      "location" : "order-service/src/main/java/com/example/order/service/OrderService.java:14"
+    } ],
+    "details" : {
+      "theirsImplementation" : "order-service/src/main/java/com/example/order/service/impl/OrderServiceImpl.java:66"
+    }
+  }, {
+    "category" : "MYBATIS",
+    "severity" : "HIGH",
+    "confidence" : "CERTAIN",
+    "status" : "MISSING",
+    "kind" : "MAPPER_STATEMENT",
+    "symbol" : "com.example.order.mapper.OrderMapper#selectByCustomerId",
+    "origin" : "THEIRS_NEW",
+    "message" : "Ours is missing: interface method OrderMapper.selectByCustomerId(..) + XML statement id=\"selectByCustomerId\" in order-service/src/main/resources/mapper/OrderMapper.xml",
+    "theirsLocation" : "order-service/src/main/resources/mapper/OrderMapper.xml:22",
+    "oursLocation" : null,
+    "neededBy" : [ {
+      "by" : "com.example.order.mapper.OrderMapper#selectByCustomerId (theirs mapper method)",
+      "location" : "order-service/src/main/java/com/example/order/mapper/OrderMapper.java:18"
+    } ],
+    "details" : {
+      "theirsXml" : "order-service/src/main/resources/mapper/OrderMapper.xml:22",
+      "statementKind" : "select"
+    }
+  }, {
+    "category" : "MAVEN_DEPENDENCY",
+    "severity" : "MEDIUM",
+    "confidence" : "CERTAIN",
+    "status" : "MISSING",
+    "kind" : "MAVEN_DEPENDENCY",
+    "symbol" : "org.projectlombok:lombok",
+    "origin" : "THEIRS_NEW",
+    "message" : "Dependency declared in theirs' pom but not in ours'",
+    "theirsLocation" : "order-service/pom.xml",
+    "oursLocation" : null,
+    "neededBy" : [ ],
+    "details" : { }
+  }, {
+    "category" : "SIGNATURE_IMPACT",
+    "severity" : "HIGH",
+    "confidence" : "CERTAIN",
+    "status" : "STILL_USES_REMOVED_FIELD",
+    "kind" : "CONSTANT_REMOVED",
+    "symbol" : "com.example.common.CommonConstants.LEGACY_TENANT",
+    "origin" : "THEIRS_CHANGED",
+    "message" : "Theirs removed constant CommonConstants.LEGACY_TENANT but ours still references it; the referencing code was ADDED by ours: the merge will not update it",
+    "theirsLocation" : "common/src/main/java/com/example/common/CommonConstants.java:3",
+    "oursLocation" : "order-service/src/main/java/com/example/order/export/OrderExportService.java:33",
+    "neededBy" : [ {
+      "by" : "com.example.order.export.OrderExportService#exportLine(Long) [in ours]",
+      "location" : "order-service/src/main/java/com/example/order/export/OrderExportService.java:33"
+    } ],
+    "details" : {
+      "reference" : "CommonConstants.LEGACY_TENANT",
+      "base" : "common/src/main/java/com/example/common/CommonConstants.java:6"
+    }
+  }, {
+    "category" : "SIGNATURE_IMPACT",
+    "severity" : "HIGH",
+    "confidence" : "CERTAIN",
+    "status" : "STILL_USES_REMOVED_FIELD",
+    "kind" : "CONSTANT_RENAMED",
+    "symbol" : "com.example.order.constants.OrderConstants.EXPORT_SEPARATOR",
+    "origin" : "THEIRS_CHANGED",
+    "message" : "Theirs renamed constant OrderConstants.EXPORT_SEPARATOR -> CSV_SEPARATOR but ours still references it; the referencing declaration was added/changed by ours: the merge will not update it",
+    "theirsLocation" : "order-service/src/main/java/com/example/order/constants/OrderConstants.java:11",
+    "oursLocation" : "order-service/src/main/java/com/example/order/export/ExportLimits.java:8",
+    "neededBy" : [ {
+      "by" : "com.example.order.export.ExportLimits.SEP (field initializer) [in ours]",
+      "location" : "order-service/src/main/java/com/example/order/export/ExportLimits.java:8"
+    } ],
+    "details" : {
+      "reference" : "OrderConstants.EXPORT_SEPARATOR",
+      "base" : "order-service/src/main/java/com/example/order/constants/OrderConstants.java:13"
+    }
+  }, {
+    "category" : "SIGNATURE_IMPACT",
+    "severity" : "HIGH",
+    "confidence" : "CERTAIN",
+    "status" : "STILL_USES_REMOVED_FIELD",
+    "kind" : "CONSTANT_RENAMED",
+    "symbol" : "com.example.order.constants.OrderConstants.EXPORT_SEPARATOR",
+    "origin" : "THEIRS_CHANGED",
+    "message" : "Theirs renamed constant OrderConstants.EXPORT_SEPARATOR -> CSV_SEPARATOR but ours still references it; the referencing code was ADDED by ours: the merge will not update it",
+    "theirsLocation" : "order-service/src/main/java/com/example/order/constants/OrderConstants.java:11",
+    "oursLocation" : "order-service/src/main/java/com/example/order/export/OrderExportService.java:32",
+    "neededBy" : [ {
+      "by" : "com.example.order.export.OrderExportService#exportLine(Long) [in ours]",
+      "location" : "order-service/src/main/java/com/example/order/export/OrderExportService.java:32"
+    } ],
+    "details" : {
+      "reference" : "OrderConstants.EXPORT_SEPARATOR",
+      "base" : "order-service/src/main/java/com/example/order/constants/OrderConstants.java:13"
+    }
+  }, {
+    "category" : "SIGNATURE_IMPACT",
+    "severity" : "HIGH",
+    "confidence" : "CERTAIN",
+    "status" : "STILL_USES_REMOVED_FIELD",
+    "kind" : "ENUM_CONSTANT_REMOVED",
+    "symbol" : "com.example.order.model.OrderStatus.CLOSED",
+    "origin" : "THEIRS_CHANGED",
+    "message" : "Theirs removed enum constant OrderStatus.CLOSED but ours still references it; the referencing code was ADDED by ours: the merge will not update it",
+    "theirsLocation" : "order-service/src/main/java/com/example/order/model/OrderStatus.java:3",
+    "oursLocation" : "order-service/src/main/java/com/example/order/service/impl/CachedOrderService.java:44",
+    "neededBy" : [ {
+      "by" : "com.example.order.service.impl.CachedOrderService#isClosed(Long) [in ours]",
+      "location" : "order-service/src/main/java/com/example/order/service/impl/CachedOrderService.java:44"
+    } ],
+    "details" : {
+      "reference" : "OrderStatus.CLOSED",
+      "base" : "order-service/src/main/java/com/example/order/model/OrderStatus.java:7"
+    }
+  }, {
+    "category" : "SIGNATURE_IMPACT",
+    "severity" : "HIGH",
+    "confidence" : "CERTAIN",
+    "status" : "STILL_USES_OLD_SIGNATURE",
+    "kind" : "SIGNATURE_CHANGED",
+    "symbol" : "com.example.order.service.PricingService#applyDiscount(BigDecimal,int)",
+    "origin" : "THEIRS_CHANGED",
+    "message" : "Theirs changed the parameters of applyDiscount(BigDecimal,int) -> applyDiscount(BigDecimal,int,boolean); caller was ADDED by ours: the merge will not update it",
+    "theirsLocation" : "order-service/src/main/java/com/example/order/service/PricingService.java:23",
+    "oursLocation" : "order-service/src/main/java/com/example/order/export/OrderExportService.java:31",
+    "neededBy" : [ {
+      "by" : "com.example.order.export.OrderExportService#exportLine(Long) [in ours]",
+      "location" : "order-service/src/main/java/com/example/order/export/OrderExportService.java:31"
+    } ],
+    "details" : {
+      "callSite" : "pricingService.applyDiscount(order.getAmount(), 10)"
+    }
+  }, {
+    "category" : "SIGNATURE_IMPACT",
+    "severity" : "HIGH",
+    "confidence" : "CERTAIN",
+    "status" : "STILL_USES_REMOVED_FIELD",
+    "kind" : "FIELD_RENAMED",
+    "symbol" : "com.example.order.service.ShippingService.freeThreshold",
+    "origin" : "THEIRS_CHANGED",
+    "message" : "Theirs renamed field ShippingService.freeThreshold -> freeShippingThreshold but ours still references it; the referencing code was ADDED by ours: the merge will not update it",
+    "theirsLocation" : "order-service/src/main/java/com/example/order/service/ShippingService.java:8",
+    "oursLocation" : "order-service/src/main/java/com/example/order/service/ShippingService.java:18",
+    "neededBy" : [ {
+      "by" : "com.example.order.service.ShippingService#isFreeShipping(Order) [in ours]",
+      "location" : "order-service/src/main/java/com/example/order/service/ShippingService.java:18"
+    } ],
+    "details" : {
+      "reference" : "freeThreshold",
+      "base" : "order-service/src/main/java/com/example/order/service/ShippingService.java:8"
+    }
+  }, {
+    "category" : "SIGNATURE_IMPACT",
+    "severity" : "HIGH",
+    "confidence" : "CERTAIN",
+    "status" : "STILL_USES_OLD_SIGNATURE",
+    "kind" : "RENAMED",
+    "symbol" : "com.example.order.util.OrderNumberGenerator#generate(Long)",
+    "origin" : "THEIRS_CHANGED",
+    "message" : "Theirs renamed generate(Long) -> nextOrderNo(Long); caller was ADDED by ours: the merge will not update it",
+    "theirsLocation" : "order-service/src/main/java/com/example/order/util/OrderNumberGenerator.java:9",
+    "oursLocation" : "order-service/src/main/java/com/example/order/export/OrderExportService.java:33",
+    "neededBy" : [ {
+      "by" : "com.example.order.export.OrderExportService#exportLine(Long) [in ours]",
+      "location" : "order-service/src/main/java/com/example/order/export/OrderExportService.java:33"
+    } ],
+    "details" : {
+      "callSite" : "OrderNumberGenerator.generate(id)"
+    }
+  }, {
+    "category" : "SIGNATURE_IMPACT",
+    "severity" : "LOW",
+    "confidence" : "CERTAIN",
+    "status" : "STILL_USES_REMOVED_FIELD",
+    "kind" : "FIELD_RENAMED",
+    "symbol" : "com.example.order.service.ShippingService.freeThreshold",
+    "origin" : "THEIRS_CHANGED",
+    "message" : "Theirs renamed field ShippingService.freeThreshold -> freeShippingThreshold but ours still references it; referencing method unchanged in ours; theirs updated it, so a clean merge carries theirs' version",
+    "theirsLocation" : "order-service/src/main/java/com/example/order/service/ShippingService.java:8",
+    "oursLocation" : "order-service/src/main/java/com/example/order/service/ShippingService.java:11",
+    "neededBy" : [ {
+      "by" : "com.example.order.service.ShippingService#fee(Order) [in ours]",
+      "location" : "order-service/src/main/java/com/example/order/service/ShippingService.java:11"
+    } ],
+    "details" : {
+      "reference" : "freeThreshold",
+      "base" : "order-service/src/main/java/com/example/order/service/ShippingService.java:8"
+    }
+  }, {
+    "category" : "SIGNATURE_IMPACT",
+    "severity" : "LOW",
+    "confidence" : "CERTAIN",
+    "status" : "STILL_USES_OLD_SIGNATURE",
+    "kind" : "RENAMED",
+    "symbol" : "com.example.order.util.OrderNumberGenerator#generate(Long)",
+    "origin" : "THEIRS_CHANGED",
+    "message" : "Theirs renamed generate(Long) -> nextOrderNo(Long); caller unchanged in ours; theirs updated it, so a clean merge carries theirs' version",
+    "theirsLocation" : "order-service/src/main/java/com/example/order/util/OrderNumberGenerator.java:9",
+    "oursLocation" : "order-service/src/main/java/com/example/order/service/impl/OrderServiceImpl.java:26",
+    "neededBy" : [ {
+      "by" : "com.example.order.service.impl.OrderServiceImpl#createOrder(Order) [in ours]",
+      "location" : "order-service/src/main/java/com/example/order/service/impl/OrderServiceImpl.java:26"
+    } ],
+    "details" : {
+      "callSite" : "OrderNumberGenerator.generate(order.getId())"
+    }
+  }, {
+    "category" : "BOTH_MODIFIED",
+    "severity" : "HIGH",
+    "confidence" : "CERTAIN",
+    "status" : "BOTH_MODIFIED",
+    "kind" : "modified/modified",
+    "symbol" : "com.example.order.service.PricingService#calculatePrice(Order)",
+    "origin" : "BOTH",
+    "message" : "ours: MODIFIED, theirs: MODIFIED",
+    "theirsLocation" : "order-service/src/main/java/com/example/order/service/PricingService.java:15-21",
+    "oursLocation" : "order-service/src/main/java/com/example/order/service/PricingService.java:12-18",
+    "neededBy" : [ ],
+    "details" : {
+      "base" : "order-service/src/main/java/com/example/order/service/PricingService.java:12",
+      "diffBaseToOurs" : [ "  public BigDecimal calculatePrice(Order order) {", "-     BigDecimal amount = order.getAmount();", "+     BigDecimal amount = order.getAmount() == null ? null : order.getAmount().multiply(new BigDecimal(\"1.06\"));", "      if (amount == null) {", "  ..." ],
+      "diffBaseToTheirs" : [ "      }", "-     return amount.setScale(2, RoundingMode.HALF_UP);", "+     return amount.multiply(new BigDecimal(\"1.06\")).setScale(2, RoundingMode.HALF_UP);", "  }" ],
+      "gitTextualConflict" : "NO - git merges this file cleanly, so only semantic review can catch contradictions"
+    }
+  }, {
+    "category" : "BOTH_MODIFIED",
+    "severity" : "HIGH",
+    "confidence" : "CERTAIN",
+    "status" : "BOTH_MODIFIED",
+    "kind" : "modified/modified",
+    "symbol" : "com.example.order.service.impl.OrderServiceImpl#cancelOrder(Long)",
+    "origin" : "BOTH",
+    "message" : "ours: MODIFIED, theirs: MODIFIED",
+    "theirsLocation" : "order-service/src/main/java/com/example/order/service/impl/OrderServiceImpl.java:54-64",
+    "oursLocation" : "order-service/src/main/java/com/example/order/service/impl/OrderServiceImpl.java:38-48",
+    "neededBy" : [ ],
+    "details" : {
+      "base" : "order-service/src/main/java/com/example/order/service/impl/OrderServiceImpl.java:35",
+      "diffBaseToOurs" : [ "      }", "+     if (order.getStatus() == OrderStatus.PAID) {", "+         throw new IllegalStateException(\"paid order cannot be cancelled: \" + id);", "+     }", "      orderMapper.updateStatus(id, OrderStatus.CANCELLED.name());", "  ..." ],
+      "diffBaseToTheirs" : [ "      }", "+     if (order.getStatus() == OrderStatus.PAID) {", "+         refundOrder(id, order.getAmount());", "+     }", "      orderMapper.updateStatus(id, OrderStatus.CANCELLED.name());", "  ..." ],
+      "gitTextualConflict" : "YES - 1 conflict hunk(s) in order-service/src/main/java/com/example/order/service/impl/OrderServiceImpl.java"
+    }
+  } ],
+  "changeSets" : {
+    "theirs" : [ {
+      "kind" : "ADDED",
+      "method" : "com.example.order.mapper.OrderMapper#selectByCustomerId(Long) : List",
+      "location" : "order-service/src/main/java/com/example/order/mapper/OrderMapper.java:18"
+    }, {
+      "kind" : "ADDED",
+      "method" : "com.example.order.mapper.OrderMapper#countAll() : int",
+      "location" : "order-service/src/main/java/com/example/order/mapper/OrderMapper.java:20"
+    }, {
+      "kind" : "ADDED",
+      "method" : "com.example.order.service.OrderService#refundOrder(Long,BigDecimal) : void",
+      "location" : "order-service/src/main/java/com/example/order/service/OrderService.java:14"
+    }, {
+      "kind" : "ADDED",
+      "method" : "com.example.order.service.OrderService#describe(Long) : String",
+      "location" : "order-service/src/main/java/com/example/order/service/OrderService.java:16"
+    }, {
+      "kind" : "MODIFIED",
+      "method" : "com.example.order.service.PricingService#calculatePrice(Order) : BigDecimal",
+      "location" : "order-service/src/main/java/com/example/order/service/PricingService.java:15"
+    }, {
+      "kind" : "SIGNATURE_CHANGED",
+      "method" : "com.example.order.service.PricingService#applyDiscount(BigDecimal,int)  ->  applyDiscount(BigDecimal,int,boolean)",
+      "location" : "order-service/src/main/java/com/example/order/service/PricingService.java:23"
+    }, {
+      "kind" : "ADDED",
+      "method" : "com.example.order.service.PricingService#calculateFinalPrice(Order,String,int) : BigDecimal",
+      "location" : "order-service/src/main/java/com/example/order/service/PricingService.java:30"
+    }, {
+      "kind" : "MODIFIED",
+      "method" : "com.example.order.service.ShippingService#fee(Order) : BigDecimal",
+      "location" : "order-service/src/main/java/com/example/order/service/ShippingService.java:10"
+    }, {
+      "kind" : "MODIFIED",
+      "method" : "com.example.order.service.impl.OrderServiceImpl#createOrder(Order) : Order",
+      "location" : "order-service/src/main/java/com/example/order/service/impl/OrderServiceImpl.java:38"
+    }, {
+      "kind" : "MODIFIED",
+      "method" : "com.example.order.service.impl.OrderServiceImpl#getOrder(Long) : Order",
+      "location" : "order-service/src/main/java/com/example/order/service/impl/OrderServiceImpl.java:46"
+    }, {
+      "kind" : "MODIFIED",
+      "method" : "com.example.order.service.impl.OrderServiceImpl#cancelOrder(Long) : void",
+      "location" : "order-service/src/main/java/com/example/order/service/impl/OrderServiceImpl.java:54"
+    }, {
+      "kind" : "ADDED",
+      "method" : "com.example.order.service.impl.OrderServiceImpl#refundOrder(Long,BigDecimal) : void",
+      "location" : "order-service/src/main/java/com/example/order/service/impl/OrderServiceImpl.java:66"
+    }, {
+      "kind" : "ADDED",
+      "method" : "com.example.order.service.impl.OrderServiceImpl#listCustomerOrders(Long) : List",
+      "location" : "order-service/src/main/java/com/example/order/service/impl/OrderServiceImpl.java:73"
+    }, {
+      "kind" : "ADDED",
+      "method" : "com.example.order.util.MoneyUtils#roundHalfUp(BigDecimal) : BigDecimal",
+      "location" : "order-service/src/main/java/com/example/order/util/MoneyUtils.java:14"
+    }, {
+      "kind" : "RENAMED",
+      "method" : "com.example.order.util.OrderNumberGenerator#generate(Long)  ->  nextOrderNo(Long)",
+      "location" : "order-service/src/main/java/com/example/order/util/OrderNumberGenerator.java:9"
+    }, {
+      "kind" : "ADDED",
+      "method" : "com.example.order.coupon.CouponService#preview(BigDecimal,int) : BigDecimal",
+      "location" : "order-service/src/main/java/com/example/order/coupon/CouponService.java:25"
+    }, {
+      "kind" : "ADDED",
+      "method" : "com.example.order.coupon.CouponService#releaseCoupons(Long) : void",
+      "location" : "order-service/src/main/java/com/example/order/coupon/CouponService.java:29"
+    }, {
+      "kind" : "ADDED",
+      "method" : "com.example.order.notify.SmsNotificationSender#send(String,String) : void",
+      "location" : "order-service/src/main/java/com/example/order/notify/SmsNotificationSender.java:7"
+    }, {
+      "kind" : "ADDED",
+      "method" : "com.example.order.payment.PaymentProperties#getGatewayUrl() : String",
+      "location" : "order-service/src/main/java/com/example/order/payment/PaymentProperties.java:13"
+    }, {
+      "kind" : "ADDED",
+      "method" : "com.example.order.payment.PaymentProperties#setGatewayUrl(String) : void",
+      "location" : "order-service/src/main/java/com/example/order/payment/PaymentProperties.java:14"
+    }, {
+      "kind" : "ADDED",
+      "method" : "com.example.order.payment.PaymentProperties#getTimeoutMs() : int",
+      "location" : "order-service/src/main/java/com/example/order/payment/PaymentProperties.java:15"
+    }, {
+      "kind" : "ADDED",
+      "method" : "com.example.order.payment.PaymentProperties#setTimeoutMs(int) : void",
+      "location" : "order-service/src/main/java/com/example/order/payment/PaymentProperties.java:16"
+    }, {
+      "kind" : "ADDED",
+      "method" : "com.example.order.payment.PaymentProperties#getRetryCount() : int",
+      "location" : "order-service/src/main/java/com/example/order/payment/PaymentProperties.java:17"
+    }, {
+      "kind" : "ADDED",
+      "method" : "com.example.order.payment.PaymentProperties#setRetryCount(int) : void",
+      "location" : "order-service/src/main/java/com/example/order/payment/PaymentProperties.java:18"
+    } ],
+    "ours" : [ {
+      "kind" : "MODIFIED",
+      "method" : "com.example.order.service.PricingService#calculatePrice(Order) : BigDecimal",
+      "location" : "order-service/src/main/java/com/example/order/service/PricingService.java:12"
+    }, {
+      "kind" : "ADDED",
+      "method" : "com.example.order.service.ShippingService#isFreeShipping(Order) : boolean",
+      "location" : "order-service/src/main/java/com/example/order/service/ShippingService.java:17"
+    }, {
+      "kind" : "MODIFIED",
+      "method" : "com.example.order.service.impl.OrderServiceImpl#getOrder(Long) : Order",
+      "location" : "order-service/src/main/java/com/example/order/service/impl/OrderServiceImpl.java:30"
+    }, {
+      "kind" : "MODIFIED",
+      "method" : "com.example.order.service.impl.OrderServiceImpl#cancelOrder(Long) : void",
+      "location" : "order-service/src/main/java/com/example/order/service/impl/OrderServiceImpl.java:38"
+    }, {
+      "kind" : "ADDED",
+      "method" : "com.example.order.export.ExportLimits#<init>()",
+      "location" : "order-service/src/main/java/com/example/order/export/ExportLimits.java:10"
+    }, {
+      "kind" : "ADDED",
+      "method" : "com.example.order.export.OrderExportService#<init>(OrderMapper,PricingService)",
+      "location" : "order-service/src/main/java/com/example/order/export/OrderExportService.java:24"
+    }, {
+      "kind" : "ADDED",
+      "method" : "com.example.order.export.OrderExportService#exportLine(Long) : String",
+      "location" : "order-service/src/main/java/com/example/order/export/OrderExportService.java:29"
+    }, {
+      "kind" : "ADDED",
+      "method" : "com.example.order.export.OrderExportService#maxLines() : int",
+      "location" : "order-service/src/main/java/com/example/order/export/OrderExportService.java:36"
+    }, {
+      "kind" : "ADDED",
+      "method" : "com.example.order.service.impl.CachedOrderService#<init>(OrderServiceImpl)",
+      "location" : "order-service/src/main/java/com/example/order/service/impl/CachedOrderService.java:20"
+    }, {
+      "kind" : "ADDED",
+      "method" : "com.example.order.service.impl.CachedOrderService#createOrder(Order) : Order",
+      "location" : "order-service/src/main/java/com/example/order/service/impl/CachedOrderService.java:24"
+    }, {
+      "kind" : "ADDED",
+      "method" : "com.example.order.service.impl.CachedOrderService#getOrder(Long) : Order",
+      "location" : "order-service/src/main/java/com/example/order/service/impl/CachedOrderService.java:31"
+    }, {
+      "kind" : "ADDED",
+      "method" : "com.example.order.service.impl.CachedOrderService#cancelOrder(Long) : void",
+      "location" : "order-service/src/main/java/com/example/order/service/impl/CachedOrderService.java:36"
+    }, {
+      "kind" : "ADDED",
+      "method" : "com.example.order.service.impl.CachedOrderService#isClosed(Long) : boolean",
+      "location" : "order-service/src/main/java/com/example/order/service/impl/CachedOrderService.java:42"
+    } ]
+  },
+  "predictedTextualConflicts" : [ "order-service/src/main/java/com/example/order/service/impl/OrderServiceImpl.java (1 hunk(s))", "order-service/src/main/resources/application.yml (1 hunk(s))" ]
+}
