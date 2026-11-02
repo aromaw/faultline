@@ -62,10 +62,10 @@ java -jar target/branch-diff-tool.jar --repo . --theirs feature-x --json -o repo
    - 接口/抽象方法：theirs 在接口（非 default）或抽象类中新增的抽象方法，ours 的哪些实现类没有实现；区分"ours 独有的实现类"（HIGH，合并后必然编译失败）和"theirs 版本已实现、随合并带来"（LOW）。
    - MyBatis：Mapper 接口方法（无 `@Select` 等注解时）与 XML `namespace` + `<select|insert|update|delete id>` 的对应；theirs 新增的 XML id 在 ours 中缺少接口方法或语句。
    - Maven：theirs 的 pom 中新增、ours 没有的依赖。
-4. **签名变更反向影响**：theirs 删除、重命名、改参数或改返回类型的方法（以及删除的类型），找出 ours 中仍按旧形式调用的位置（file:line）。调用方是 ours 新增/修改的代码 → HIGH（合并不会帮你改）；调用方未变且 theirs 已更新 → LOW。
+4. **签名变更反向影响**：theirs 删除、重命名、改参数或改返回类型的方法（以及删除的类型），找出 ours 中仍按旧形式调用的位置（file:line）。调用方是 ours 新增/修改的代码 → HIGH（合并不会帮你改）；调用方未变且 theirs 已更新 → LOW；调用方在 ours 未变、在 theirs 已删除或改名 → LOW（整分支合并会一并删除；cherry-pick 时需复查）；其他 → MEDIUM。
    - **字段/常量反向追踪**（`STILL_USES_REMOVED_FIELD`）：theirs 删除或改名的字段（实例字段、`static final` 常量、接口常量、枚举常量；所在类在 theirs 中仍存在、ours 仍保留该字段），扫描 ours 中仍引用它的位置：方法/构造器体、字段初始化表达式、枚举常量参数、初始化块，支持 `Type.NAME`、`this.x`、无限定名、`import static`。优先用 SymbolSolver 确认引用的就是该声明（同名局部变量、其他类的同名常量不会误报）；解析失败时退化为按 import/作用域匹配并标记 UNCERTAIN。
    - 改名识别：theirs 在同一类中新增的字段类型、static/枚举属性相同且**初始化表达式相同（非空）**且唯一 → `*_RENAMED`（报告给出新名字），否则为 `*_REMOVED`。
-   - 严重度规则与方法相同：引用所在的方法/声明是 ours 新增或修改的（或整个类只有 ours 有）→ HIGH；ours 未改动、theirs 版本已不再引用 → LOW；其他 → MEDIUM。同一成员内的多处引用合并为一条（`moreReferences`）。
+   - 严重度规则与方法相同：引用所在的方法/声明是 ours 新增或修改的（或整个类只有 ours 有）→ HIGH；ours 未改动、theirs 版本已不再引用或已删除 → LOW；其他 → MEDIUM。同一成员内的多处引用合并为一条（`moreReferences`）。
    - 反方向（ours 删除了字段/常量，而 theirs 新增/修改的代码仍需要它）由第 2 项依赖闭包报告为 `MISSING … OURS_REMOVED`（样例 G1c），因此两个方向都覆盖。
 5. **兄弟模块**（`--include-siblings`，默认 `deps`）：
    - 发现：读取每个版本（base/ours/theirs）的全部 `pom.xml`，从服务 pom 的 `<dependency>` 出发（忽略 `test` scope），按 `groupId:artifactId` 匹配仓库内的模块（groupId 写成 `${project.groupId}` 等属性时按唯一 artifactId 匹配），并沿兄弟模块自己的依赖传递；三个版本的结果取并集，再从每个版本加载这些模块的 `src/main/java`。

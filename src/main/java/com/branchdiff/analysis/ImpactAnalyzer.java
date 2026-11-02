@@ -145,8 +145,8 @@ public final class ImpactAnalyzer {
             sev = Severity.LOW;
             why = "caller unchanged in ours; theirs updated it, so a clean merge carries theirs' version";
         } else if (theirsCaller == null) {
-            sev = Severity.MEDIUM;
-            why = "caller unchanged in ours but removed/renamed in theirs";
+            sev = Severity.LOW;
+            why = "caller unchanged in ours but removed/renamed in theirs, so a clean merge removes it too (re-check if you only cherry-pick)";
         } else {
             sev = Severity.MEDIUM;
             why = "caller unchanged in ours and theirs still appears to call the old form (check overloads)";

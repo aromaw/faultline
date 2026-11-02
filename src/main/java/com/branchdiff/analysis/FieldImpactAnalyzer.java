@@ -209,8 +209,8 @@ public final class FieldImpactAnalyzer {
                 sev = Severity.LOW;
                 why = "referencing method unchanged in ours; theirs updated it, so a clean merge carries theirs' version";
             } else if (theirsCaller == null) {
-                sev = Severity.MEDIUM;
-                why = "referencing method unchanged in ours but removed/renamed in theirs";
+                sev = Severity.LOW;
+                why = "referencing method unchanged in ours but removed/renamed in theirs, so a clean merge removes it too (re-check if you only cherry-pick)";
             } else {
                 sev = Severity.MEDIUM;
                 why = "referencing method unchanged in ours and theirs' version still mentions '" + r.field.name + "' (check what it refers to)";
@@ -229,8 +229,8 @@ public final class FieldImpactAnalyzer {
                 sev = Severity.LOW;
                 why = "referencing declaration unchanged in ours; theirs updated it, so a clean merge carries theirs' version";
             } else if (tm == null) {
-                sev = Severity.MEDIUM;
-                why = "referencing declaration unchanged in ours but removed in theirs";
+                sev = Severity.LOW;
+                why = "referencing declaration unchanged in ours but removed in theirs, so a clean merge removes it too (re-check if you only cherry-pick)";
             } else {
                 sev = Severity.MEDIUM;
                 why = "referencing declaration unchanged in ours and theirs' version still mentions '" + r.field.name + "' (check what it refers to)";
