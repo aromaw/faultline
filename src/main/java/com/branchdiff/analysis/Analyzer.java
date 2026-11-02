@@ -129,6 +129,8 @@ public final class Analyzer {
             findings.sort(Comparator.comparing((Finding f) -> f.category).thenComparing(f -> f.severity)
                     .thenComparing(f -> f.confidence).thenComparing(f -> f.symbol));
 
+            for (int i = 0; i < findings.size(); i++) findings.get(i).id = i + 1;
+
             Report r = new Report();
             r.generatedAt = OffsetDateTime.now().toString();
             r.serviceDir = ours.serviceDir().isEmpty() ? "." : ours.serviceDir();
@@ -138,6 +140,18 @@ public final class Analyzer {
             r.findings = findings;
             r.warnings = warnings;
             r.predictedTextualConflicts = textualConflicts(base, ours, theirs);
+            long t0 = System.nanoTime();
+            try {
+                boolean libs = wsOurs.classpathOk && wsTheirs.classpathOk;
+                ContextBuilder cb = new ContextBuilder(iBase, iOurs, iTheirs, libs);
+                if (libs) cb.withJars(new JarArtifacts(wsTheirs.jars), new JarArtifacts(wsOurs.jars));
+                r.context = cb.build(findings);
+                log("context: " + r.context.nodes.size() + " nodes, " + r.context.chains.size() + " chains in "
+                        + (System.nanoTime() - t0) / 1_000_000 + " ms");
+            } catch (RuntimeException | StackOverflowError e) {
+                warnings.add("context view failed: " + e);
+                if (opt.verbose) e.printStackTrace();
+            }
             Map<String, Object> s = r.summary;
             s.put("theirsMethodChanges", counts(csTheirs));
             s.put("oursMethodChanges", counts(csOurs));

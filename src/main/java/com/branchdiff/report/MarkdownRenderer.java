@@ -115,6 +115,9 @@ public final class MarkdownRenderer {
         sb.append("## 6. Uncertain items (name-only matches or unconfirmed origin; verify manually)\n\n");
         table(sb, r, Finding::uncertain, true);
 
+        // 7. chains
+        chains(sb, r);
+
         // appendix
         sb.append("## Appendix: method-level change sets\n\n");
         for (var e : r.changeSets.entrySet()) {
@@ -127,6 +130,29 @@ public final class MarkdownRenderer {
             sb.append("\n</details>\n\n");
         }
         return sb.toString();
+    }
+
+    /** Findings grouped by dependency chain, with each chain's ordered checklist (the HTML report shows the trees). */
+    private static void chains(StringBuilder sb, Report r) {
+        if (r.context == null) return;
+        List<ContextModel.Chain> multi = new ArrayList<>();
+        for (ContextModel.Chain c : r.context.chains) if (c.findings.size() > 1) multi.add(c);
+        if (multi.isEmpty()) return;
+        sb.append("## 7. Dependency chains (findings that belong together; port / update in this order)\n\n");
+        for (ContextModel.Chain c : multi) {
+            ContextModel.Node root = r.context.nodes.get(c.root);
+            sb.append("### ").append(c.id).append(" (").append(c.direction).append(", findings ");
+            for (int i = 0; i < c.findings.size(); i++) sb.append(i > 0 ? ", " : "").append('#').append(c.findings.get(i));
+            sb.append(") rooted at `").append(esc(root != null ? root.symbol : c.root)).append("`\n\n");
+            for (ContextModel.ChecklistItem it : c.checklist) {
+                ContextModel.Node n = r.context.nodes.get(it.node());
+                ContextModel.Loc loc = n.loc.getOrDefault("theirs", n.loc.get("ours"));
+                sb.append(it.step()).append(". ").append(it.action()).append(": `").append(esc(n.symbol)).append("` (")
+                        .append(n.ours).append(" in ours").append(loc != null ? ", " + loc.location() : "").append(")")
+                        .append(it.why() == null || it.why().isEmpty() ? "" : " - " + it.why()).append('\n');
+            }
+            sb.append('\n');
+        }
     }
 
     /** Value-level findings (field initializers, MyBatis element bodies) rendered in section 4b. */

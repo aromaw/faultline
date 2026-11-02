@@ -68,9 +68,22 @@ java -jar target/branch-diff-tool.jar --repo . --theirs feature-x --service-dir 
 - **语法高亮**：Java、XML（标出 MyBatis 的 `#{}` / `${}`）、YAML、properties（内置的小型分词器）。
 - **键盘**：<kbd>↑</kbd>/<kbd>↓</kbd> 或 <kbd>j</kbd>/<kbd>k</kbd> 切换问题，<kbd>F7</kbd> / <kbd>Shift+F7</kbd> 跳到下一处 / 上一处改动。
 - **主题**：IDEA Light（默认）和类 Darcula 的深色主题。
-- **URL hash** 保存状态，例如 `report.html#finding=3&mode=2col&theme=dark`（`target=N` 选中该问题的第 N 个位置），方便分享链接和无头浏览器截图。
+- **URL hash** 保存状态，例如 `report.html#finding=3&mode=2col&theme=dark`（`target=N` 选中该问题的第 N 个位置；`tab=deps|impact|check|overview`、`node=<key>`、`group=chain`、`ov=all` 打开上下文视图），方便分享链接和无头浏览器截图。
 
 只嵌入问题涉及的文件，内容直接从 git 的三个版本读取；超过 1 MB 的版本不嵌入并给出说明。行级 diff（Myers 算法，[java-diff-utils](https://github.com/java-diff-utils/java-diff-utils)，Apache-2.0）在 Java 端计算后以 JSON 嵌入；三栏视图按 merge-base 区间把 ours 与 theirs 的改动分组，做法与 `diff3` 相同。`docs/sample-report.html` 是下文验证样例的报告。
+
+### 上下文与依赖链
+
+每个问题还带有代码上下文，由同一套三方索引计算（JSON 报告中的 `context` 字段，Markdown 第 7 节）：
+
+- **Dependency chain** 页签：从 theirs 中需要该符号的代码（例如 Controller 方法）到缺失或变化的符号，再到该符号*自身*的依赖，逐层展开（方法、构造器、字段与常量、类、Spring Bean、配置项、MyBatis 语句、第三方库类型及提供它的 Maven 构件）。每个节点显示种类、`文件:行号` 和在 ours 中的状态：`missing`（缺失）、`changed`（签名或类型不兼容）、`differs`（存在但 theirs 改过）、`present`、`unknown`，以及由哪一方修改。只展开 ours 缺失或有差异的节点（最多 4 层，环会标出并截断）；存在且未变的依赖折叠为“N more”。
+- **Reverse impact** 页签：对被删除、改名、改类型或改值的符号（SIGNATURE_IMPACT、CONSTANT_VALUE、BOTH_MODIFIED 等），列出 ours 中使用它们的代码，最多 3 层调用方，带 “uses it at L..” 链接。
+- **Port checklist** 页签：属于同一条链的问题会归为一组（`⛓ C1`，侧边栏 *By chain*），并给出一份按依赖优先排序的移植清单，每一步附动作（“Add constructor”、“Add the dependency to ours' pom.xml”、“Update this method in ours” 等）。勾选状态不保存。
+- **Overview** 页签：内联 SVG，展示该链（或全部链）涉及的文件，从需要方指向提供方，按最严重状态着色。
+- 点击任意节点，右侧并排显示它所在的完整成员（ours / merge-base / theirs），沿用原有的 diff 高亮；不包含该成员的版本不显示（变为一栏或两栏）。面板与代码之间的分隔条可拖动。
+
+![RuoYi-Vue 真实问题的依赖链](docs/html-report-deps.png)
+
 
 ## 检测内容
 
@@ -160,4 +173,5 @@ java -jar target/branch-diff-tool.jar --repo /workspace/branch-diff-sample \
 - 字段反向追踪：只处理"删除/改名"，不报告字段**类型变化**或 static/final 变化；改名识别依赖相同的非空初始化表达式，无初始化表达式的字段和无参枚举常量改名会报告为 `*_REMOVED`（不给出新名字）；字段移动到其他（非父类）类视为删除。方法内**局部类**（local class）中的引用、字符串形式的引用（反射、SpEL、MyBatis XML 中的 `#{field}`）不扫描。
 - 值变更：只比较初始化表达式 / XML 文本本身。初始化表达式未变、但引用了另一个已变常量的常量不单独报告（被引用的那个会报）；在 static 块或构造器中赋值、运行时计算的值，以及兄弟模块或服务目录之外的 XML 不在范围内。兄弟模块中仅 theirs 修改的值不报告（需把该模块作为 `--service-dir` 运行）。`<include>` 引用的片段按其自身的 `<sql>` 元素比较，不做内联展开。
 - HTML 报告：diff 基于整个文件的文本行（不是 AST），方法移动位置会显示为删除 + 新增；行内高亮是词级的，并把块内第 k 个改动行与另一侧第 k 行配对；三栏分组是 `diff3` 式的近似，个别边界情况可能与 `git merge-file` 不同（权威的文本冲突预测仍以卡片详情为准）。只嵌入问题涉及的文件；超大报告不分页。
+- 依赖链：沿用分析器的静态解析，名称匹配的调用标为不确定，反射、AOP、XML/字符串装配不跟踪；依赖树最多 4 层（反向影响最多 3 层调用方），每个节点最多 40 个子节点；反向影响只覆盖范围内的 ours 代码。第三方库类型只在两侧 Maven classpath 都解析成功时检测（`--no-maven` 下没有），且只有本地仓库布局下的 jar 才能映射到构件；ours 也能解析到的库类型（例如来自别的构件）不会报告。缺少 classpath 时，无法解析的继承调用（例如继承 commons-lang3 `StringUtils` 的工具类）可能产生误报，并被合并成一条大链。问题之间通过共同的调用方，或 ours 缺失/不兼容的依赖关联；仅内容不同的共享依赖不会把它们连成一条链。成员视图最多 1500 个成员，每个最多 400 行。
 - 未实现"对合并结果执行 `mvn compile`"的可选检查（需求中注明非必须）。

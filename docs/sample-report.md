@@ -7,7 +7,7 @@
 | ours | `ours (43c6a1825b63967f252d4a7a3a3681310cca85de)` |
 | theirs | `theirs (ab4163f5d43e82d5a66bedc65a83ded18af3ba1c)` |
 | mergeBase | `8b9a36de7eb117333574ea3c9a54c20e0f221538` |
-| generated | 2026-11-02T15:26:21.132594968+08:00 |
+| generated | 2026-11-02T18:15:30.981112404+08:00 |
 
 Legend: **origin** `THEIRS_NEW` = theirs introduced the symbol (port it together with the code that needs it; a full merge brings it only if its file merges cleanly) · `OURS_REMOVED`/`OURS_CHANGED` = the merge-base had it and ours removed/changed it (semantic conflict git will NOT report) · `THEIRS_CHANGED` = theirs changed an API ours still uses.
 
@@ -166,6 +166,59 @@ _none_
 ## 6. Uncertain items (name-only matches or unconfirmed origin; verify manually)
 
 _none_
+
+## 7. Dependency chains (findings that belong together; port / update in this order)
+
+### C1 (port, findings #1, #2, #3, #4, #6, #7, #8, #11, #12, #13, #14, #15, #16, #32) rooted at `com.example.order.service.impl.CachedOrderService#cancelOrder(Long)`
+
+1. Add field: `com.example.order.coupon.CouponService.auditEnabled` (MISSING in ours, order-service/src/main/java/com/example/order/coupon/CouponService.java:20) - needed by CouponService#releaseCoupons(Long)
+2. Add config key to ours' application config: `order.coupon.expire-days` (MISSING in ours, order-service/src/main/resources/application.yml:18) - needed by CouponService.expireDays
+3. Add field: `com.example.order.coupon.CouponService.expireDays` (MISSING in ours, order-service/src/main/java/com/example/order/coupon/CouponService.java:17) - needed by CouponService#releaseCoupons(Long)
+4. Add field: `com.example.order.coupon.CouponService.notifyChannel` (MISSING in ours, order-service/src/main/java/com/example/order/coupon/CouponService.java:23) - needed by CouponService#releaseCoupons(Long)
+5. Add method: `com.example.order.coupon.CouponService#releaseCoupons(Long)` (MISSING in ours, order-service/src/main/java/com/example/order/coupon/CouponService.java:29) - needed by OrderServiceImpl#refundOrder(Long,BigDecimal)
+6. Add method: `com.example.common.text.TextUtils#maskPhone(String)` (MISSING in ours, common/src/main/java/com/example/common/text/TextUtils.java:11) - needed by OrderServiceImpl#refundOrder(Long,BigDecimal)
+7. Add constant: `com.example.order.model.OrderStatus.REFUNDED` (MISSING in ours, order-service/src/main/java/com/example/order/model/OrderStatus.java:7) - needed by OrderServiceImpl#refundOrder(Long,BigDecimal)
+8. Add constant: `com.example.order.constants.OrderConstants.MAX_DISCOUNT_PERCENT` (MISSING in ours, order-service/src/main/java/com/example/order/constants/OrderConstants.java:13) - needed by PricingService#applyDiscount(BigDecimal,int,boolean)
+9. Align the method signature/type with theirs: `com.example.order.service.PricingService#applyDiscount(BigDecimal,int,boolean)` (CHANGED in ours, order-service/src/main/java/com/example/order/service/PricingService.java:23) - needed by PricingService#calculateFinalPrice(Order,String,int)
+10. Add the class (whole file): `com.example.order.coupon.CouponService` (MISSING in ours, order-service/src/main/java/com/example/order/coupon/CouponService.java:10) - needed by OrderServiceImpl.couponService
+11. Provide a bean of this type: `com.example.order.coupon.CouponService` (MISSING in ours, order-service/src/main/java/com/example/order/coupon/CouponService.java:10) - needed by OrderServiceImpl.couponService
+12. Add field: `com.example.order.service.impl.OrderServiceImpl.couponService` (MISSING in ours, order-service/src/main/java/com/example/order/service/impl/OrderServiceImpl.java:27) - needed by OrderServiceImpl#refundOrder(Long,BigDecimal)
+13. Add field: `com.example.order.service.impl.OrderServiceImpl.smsSender` (MISSING in ours, order-service/src/main/java/com/example/order/service/impl/OrderServiceImpl.java:31) - needed by OrderServiceImpl#refundOrder(Long,BigDecimal)
+14. Add method: `com.example.order.service.impl.OrderServiceImpl#refundOrder(Long,BigDecimal)` (MISSING in ours, order-service/src/main/java/com/example/order/service/impl/OrderServiceImpl.java:67) - needed by OrderServiceImpl#cancelOrder(Long)
+15. Port theirs' changes to this method: `com.example.order.service.impl.OrderServiceImpl#cancelOrder(Long)` (DIFFERS in ours, order-service/src/main/java/com/example/order/service/impl/OrderServiceImpl.java:55) - needed by CachedOrderService#cancelOrder(Long)
+16. Add method: `com.example.order.util.MoneyUtils#roundHalfUp(BigDecimal)` (MISSING in ours, order-service/src/main/java/com/example/order/util/MoneyUtils.java:14) - needed by PricingService#calculateFinalPrice(Order,String,int)
+17. Add constant: `com.example.order.constants.OrderConstants.DEFAULT_CURRENCY` (MISSING in ours, order-service/src/main/java/com/example/order/constants/OrderConstants.java:7) - needed by PricingService#calculateFinalPrice(Order,String,int)
+18. Port theirs' changes to this method: `com.example.order.service.PricingService#calculatePrice(Order)` (DIFFERS in ours, order-service/src/main/java/com/example/order/service/PricingService.java:15) - needed by PricingService#calculateFinalPrice(Order,String,int)
+19. Add method: `com.example.order.service.PricingService#calculateFinalPrice(Order,String,int)` (MISSING in ours, order-service/src/main/java/com/example/order/service/PricingService.java:30) - chain root
+20. Add field: `com.example.order.coupon.CouponService.pricingService` (MISSING in ours, order-service/src/main/java/com/example/order/coupon/CouponService.java:14) - needed by CouponService#preview(BigDecimal,int)
+21. Add method: `com.example.order.coupon.CouponService#preview(BigDecimal,int)` (MISSING in ours, order-service/src/main/java/com/example/order/coupon/CouponService.java:25) - chain root
+22. Review bean (unknown in ours): `@Qualifier/@Resource("smsNotifier") NotificationSender` (UNKNOWN in ours) - chain root
+
+### C2 (port, findings #9, #22, #23, #24, #26, #28, #30) rooted at `com.example.order.export.OrderExportService#exportLine(Long)`
+
+1. Review constant (present in ours): `com.example.common.CommonConstants.LEGACY_TENANT` (PRESENT in ours, common/src/main/java/com/example/common/CommonConstants.java:6) - needed by OrderExportService#exportLine(Long)
+2. Review constant (present in ours): `com.example.order.constants.OrderConstants.EXPORT_SEPARATOR` (PRESENT in ours, order-service/src/main/java/com/example/order/constants/OrderConstants.java:11) - needed by OrderExportService#exportLine(Long)
+3. Review method (present in ours): `com.example.order.service.PricingService#applyDiscount(BigDecimal,int)` (PRESENT in ours, order-service/src/main/java/com/example/order/service/PricingService.java:20) - needed by OrderExportService#exportLine(Long)
+4. Review method (present in ours): `com.example.order.util.OrderNumberGenerator#generate(Long)` (PRESENT in ours, order-service/src/main/java/com/example/order/util/OrderNumberGenerator.java:9) - needed by OrderServiceImpl#createOrder(Order)
+5. Add method: `com.example.order.util.OrderNumberGenerator#nextOrderNo(Long)` (MISSING in ours, order-service/src/main/java/com/example/order/util/OrderNumberGenerator.java:9) - needed by OrderServiceImpl#createOrder(Order)
+6. Port theirs' changes to this method: `com.example.order.service.PricingService#calculatePrice(Order)` (DIFFERS in ours, order-service/src/main/java/com/example/order/service/PricingService.java:15) - needed by OrderServiceImpl#createOrder(Order)
+7. Port theirs' changes to this method: `com.example.order.service.impl.OrderServiceImpl#createOrder(Order)` (DIFFERS in ours, order-service/src/main/java/com/example/order/service/impl/OrderServiceImpl.java:39) - chain root
+
+### C3 (port, findings #10, #27, #29) rooted at `com.example.order.service.ShippingService#fee(Order)`
+
+1. Add field: `com.example.order.service.ShippingService.freeShippingThreshold` (MISSING in ours, order-service/src/main/java/com/example/order/service/ShippingService.java:8) - needed by ShippingService#fee(Order)
+2. Review field (present in ours): `com.example.order.service.ShippingService.freeThreshold` (PRESENT in ours, order-service/src/main/java/com/example/order/service/ShippingService.java:8) - needed by ShippingService#fee(Order)
+3. Port theirs' changes to this method: `com.example.order.service.ShippingService#fee(Order)` (DIFFERS in ours, order-service/src/main/java/com/example/order/service/ShippingService.java:10) - chain root
+
+### C4 (port, findings #5, #20) rooted at `com.example.order.service.impl.OrderServiceImpl#listCustomerOrders(Long)`
+
+1. Add the mapper XML statement: `com.example.order.mapper.OrderMapper#selectByCustomerId` (MISSING in ours, order-service/src/main/resources/mapper/OrderMapper.xml:22) - needed by OrderMapper#selectByCustomerId(Long)
+2. Add method: `com.example.order.mapper.OrderMapper#selectByCustomerId(Long)` (MISSING in ours, order-service/src/main/java/com/example/order/mapper/OrderMapper.java:18) - needed by OrderServiceImpl#listCustomerOrders(Long)
+3. Add method: `com.example.order.service.impl.OrderServiceImpl#listCustomerOrders(Long)` (MISSING in ours, order-service/src/main/java/com/example/order/service/impl/OrderServiceImpl.java:73) - chain root
+
+### C5 (port, findings #18, #19) rooted at `com.example.order.service.impl.CachedOrderService`
+
+1. Add method: `com.example.order.service.OrderService#refundOrder(Long,BigDecimal)` (MISSING in ours, order-service/src/main/java/com/example/order/service/OrderService.java:14) - needed by CachedOrderService
 
 ## Appendix: method-level change sets
 

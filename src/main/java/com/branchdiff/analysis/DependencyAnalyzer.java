@@ -91,11 +91,18 @@ public final class DependencyAnalyzer {
     // ------------------------------------------------------------------ collection
 
     Map<Dep, Integer> collect(MethodInfo m) {
+        return collect(m.node, m.owner, m.node);
+    }
+
+    /**
+     * Dependencies of any declaration or expression {@code node} written inside class {@code ctx} of the index this
+     * analyzer treats as "theirs" (callers may pass the same index three times to collect dependencies of ours).
+     * {@code callable} supplies method type variables and locals; it may be null (field initializers, whole types).
+     */
+    Map<Dep, Integer> collect(Node node, ClassInfo ctx, CallableDeclaration<?> callable) {
         Map<Dep, Integer> out = new LinkedHashMap<>();
-        CallableDeclaration<?> node = m.node;
-        ClassInfo ctx = m.owner;
-        Set<String> tvars = Scopes.typeVars(ctx, node);
-        Scopes scopes = new Scopes(theirs, ctx, node, tvars);
+        Set<String> tvars = Scopes.typeVars(ctx, callable);
+        Scopes scopes = new Scopes(theirs, ctx, callable != null ? callable : node, tvars);
 
         for (MethodCallExpr call : node.findAll(MethodCallExpr.class)) collectCall(call, scopes, out);
         for (ObjectCreationExpr oce : node.findAll(ObjectCreationExpr.class)) collectNew(oce, ctx, tvars, out);

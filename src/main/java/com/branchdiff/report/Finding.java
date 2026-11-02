@@ -19,6 +19,8 @@ public final class Finding {
     public record Usage(String by, String location) {
     }
 
+    /** 1-based position in the report (assigned after sorting); the context view refers to findings by it */
+    public int id;
     public Category category;
     public Severity severity;
     public Confidence confidence;

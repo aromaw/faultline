@@ -19,4 +19,6 @@ public final class Report {
     /** method change sets: side -> list of {kind, symbol, location} */
     public Map<String, List<Map<String, String>>> changeSets = new LinkedHashMap<>();
     public List<String> predictedTextualConflicts = new ArrayList<>();
+    /** dependency / impact trees, chains and port checklists (null when context building failed) */
+    public ContextModel context;
 }

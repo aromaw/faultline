@@ -121,6 +121,75 @@ tr.fold td:hover { color: var(--accent); }
 .tk-var { color: var(--var); font-weight: 600; } .tk-key { color: var(--key); } .tk-ent { color: var(--ent); }
 body.dark .tk-kw { font-weight: 400; }
 .hint { font-size: 11px; color: var(--muted); }
+/* ---- context view: tabs, dependency / impact trees, checklist, overview */
+#tabs { display: flex; gap: 2px; padding: 0 10px; background: var(--panel); border-bottom: 1px solid var(--border); }
+#tabs button { border: 0; background: none; padding: 6px 12px 5px; cursor: pointer; font-size: 12.5px; color: var(--muted); border-bottom: 2px solid transparent; }
+#tabs button:hover { color: var(--fg); }
+#tabs button.on { color: var(--fg); border-bottom-color: var(--accent); font-weight: 600; }
+#tabs button .cnt { font-size: 11px; color: var(--muted); font-weight: 400; margin-left: 3px; }
+#work { flex: 1; min-height: 0; display: flex; }
+#ctx { width: 40%; min-width: 240px; overflow: auto; border-right: 1px solid var(--border); padding: 6px 0 24px; display: none; }
+#ctx.wide { width: 58%; }
+body.ctxmode #ctx { display: block; }
+#split { display: none; width: 5px; flex: none; cursor: col-resize; background: var(--border); opacity: .5; }
+#split:hover, #split.drag { opacity: 1; background: var(--accent); }
+body.ctxmode #split { display: block; }
+#viewer { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.chainbar { margin: 2px 10px 8px; padding: 6px 9px; border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 4px; background: var(--panel); font-size: 12px; line-height: 1.6; }
+.chainbar b { font-family: var(--mono); }
+.sec { padding: 4px 10px 2px; font-weight: 600; font-size: 12.5px; display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.sec .hint { font-weight: 400; }
+.slegend { display: flex; gap: 6px; flex-wrap: wrap; padding: 2px 10px 6px; }
+.tn { display: flex; align-items: center; gap: 5px; padding: 2px 8px 2px 0; cursor: pointer; white-space: nowrap; font-size: 12px; border-left: 3px solid transparent; min-width: max-content; }
+.tn:hover { background: var(--hover); }
+.tn.sel { background: var(--sel); color: var(--sel-fg); border-left-color: var(--accent); }
+.tn.subject .lbl { font-weight: 700; text-decoration: underline; text-decoration-color: var(--accent); text-underline-offset: 3px; }
+.tn .tw { width: 12px; flex: none; text-align: center; color: var(--muted); font-size: 9px; }
+.tn .lbl { font-family: var(--mono); font-size: 12px; max-width: 52ch; overflow: hidden; text-overflow: ellipsis; }
+.tn .chg, .tn .loc { color: var(--muted); font-size: 11px; }
+.tn.sel .chg, .tn.sel .loc { color: inherit; opacity: .85; }
+.tn .at { color: var(--accent); font-size: 11px; text-decoration: none; border-bottom: 1px dotted var(--accent); }
+.tn.sel .at { color: inherit; border-bottom-color: currentColor; }
+.tn .flag { font-size: 10.5px; padding: 0 4px; border-radius: 3px; border: 1px dashed var(--border); color: var(--muted); }
+.tn.more { color: var(--muted); font-style: italic; }
+.tc.shut { display: none; }
+.kb { display: inline-block; min-width: 26px; text-align: center; font: 700 10px/15px var(--mono); border-radius: 3px; padding: 0 3px; color: #fff; flex: none; }
+.k-cls { background: #3d7fd9; } .k-mth { background: #8250c4; } .k-fld { background: #c2741e; } .k-bean { background: #2f8a5a; }
+.k-cfg { background: #6b7280; } .k-sql { background: #b3437a; } .k-lib { background: #7d6b2d; } .k-mvn { background: #a33b3b; }
+.st { font: 700 10px/15px var(--ui-font); padding: 0 5px; border-radius: 8px; text-transform: lowercase; flex: none; border: 1px solid transparent; }
+.st-PRESENT { color: var(--low); border-color: var(--low); } .st-MISSING { background: var(--high); color: #fff; }
+.st-CHANGED { background: var(--medium); color: #fff; } .st-DIFFERS { color: var(--accent); border-color: var(--accent); }
+.st-UNKNOWN { color: var(--unc); border-color: var(--unc); border-style: dashed; }
+.fchip { font: 600 10.5px var(--mono); padding: 0 4px; border-radius: 3px; background: var(--panel2); border: 1px solid var(--border); cursor: pointer; color: var(--fg); }
+.fchip.cur { background: var(--accent); color: #fff; border-color: var(--accent); }
+.nl { color: var(--accent); cursor: pointer; font-family: var(--mono); }
+ol.check { list-style: none; margin: 0; padding: 0 6px; }
+ol.check li { display: grid; grid-template-columns: 26px 18px 1fr; gap: 2px 6px; padding: 5px 6px; border-bottom: 1px solid var(--border); cursor: pointer; align-items: start; }
+ol.check li:hover { background: var(--hover); }
+ol.check li.sel { background: var(--sel); color: var(--sel-fg); }
+ol.check li.done .what { text-decoration: line-through; opacity: .6; }
+ol.check .stepn { font: 700 12px var(--mono); color: var(--muted); text-align: right; padding-top: 1px; }
+ol.check li.sel .stepn { color: inherit; }
+ol.check .what { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+ol.check .act { grid-column: 3; font-size: 12px; }
+ol.check .why { grid-column: 3; font-size: 11px; color: var(--muted); }
+ol.check li.sel .why { color: inherit; opacity: .85; }
+.ovr svg { display: block; margin: 4px 10px; }
+.ovr .fnode rect { fill: var(--bg); stroke: var(--border); stroke-width: 1.2; }
+.ovr .fnode { cursor: pointer; }
+.ovr .fnode:hover rect { fill: var(--hover); }
+.ovr .fnode.sel rect { stroke: var(--accent); stroke-width: 2.2; }
+.ovr .fnode text { font: 12px var(--ui-font); fill: var(--fg); }
+.ovr .fnode text.mod { font-size: 10.5px; fill: var(--muted); }
+.ovr .edge { fill: none; stroke: var(--muted); stroke-width: 1.3; opacity: .8; }
+.ovr .mcol { font: 600 11px var(--ui-font); fill: var(--muted); }
+.ovr .bar { stroke: none; }
+.limits { margin: 14px 10px 0; font-size: 11px; color: var(--muted); }
+.limits li { margin: 2px 0; }
+#groupSeg { margin-top: 6px; }
+.ctag { font: 600 10px var(--mono); color: var(--accent); margin-left: 4px; }
+.item.sel .ctag { color: inherit; }
+.chainline { margin: 4px 0 0; font-size: 12px; }
 kbd { font: 10.5px var(--mono); border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 3px; padding: 0 3px; background: var(--bg); }
 </style>
 </head>
@@ -137,13 +206,18 @@ kbd { font: 10.5px var(--mono); border: 1px solid var(--border); border-bottom-w
     <div class="search">
       <input id="search" type="search" placeholder="Search symbol, file, message..." autocomplete="off">
       <div id="filters"></div>
+      <div class="seg" id="groupSeg"><button data-group="sev">By severity</button><button data-group="chain">By chain</button></div>
     </div>
     <div id="tree"></div>
   </aside>
   <section id="content">
     <div id="card"></div>
-    <div id="filebar"></div>
-    <div id="diff"></div>
+    <nav id="tabs"><button data-tab="code">Code</button><button data-tab="deps">Dependency chain</button><button data-tab="impact">Reverse impact</button><button data-tab="check">Port checklist</button><button data-tab="overview">Overview</button></nav>
+    <div id="work">
+      <div id="ctx"></div>
+      <div id="split" title="drag to resize"></div>
+      <div id="viewer"><div id="filebar"></div><div id="diff"></div></div>
+    </div>
   </section>
 </div>
 <script type="application/json" id="faultline-data">"__FAULTLINE_DATA__"</script>
@@ -152,10 +226,18 @@ kbd { font: 10.5px var(--mono); border: 1px solid var(--border); border-bottom-w
   "use strict";
   var DATA = JSON.parse(document.getElementById("faultline-data").textContent);
   var GROUPS = ["HIGH", "MEDIUM", "LOW", "UNCERTAIN"];
-  var CTX = 3;
-  var state = { sel: null, target: 0, path: null, mode: "3col", theme: "light", hidden: {}, q: "", expanded: {}, collapsed: {}, hunk: -1 };
+  var CONTEXT_LINES = 3; // unchanged lines kept around each hunk
+  var state = { sel: null, target: 0, path: null, mode: "3col", theme: "light", hidden: {}, q: "", expanded: {}, collapsed: {}, hunk: -1,
+    tab: "code", node: null, nodeTarget: null, groupBy: "sev", done: {}, ovScope: "chain", ovFile: null };
   var byId = {};
   DATA.findings.forEach(function (f) { byId[f.id] = f; });
+  // code-context view (dependency / impact trees, chains, checklists); null when the analysis could not build it
+  var CTX = DATA.context || null;
+  var CHAINS = {};
+  if (CTX) CTX.chains.forEach(function (c) { CHAINS[c.id] = c; });
+  function fctx(f) { return CTX && f ? CTX.findings[f.id] || CTX.findings[String(f.id)] : null; }
+  function chainOf(f) { var c = fctx(f); return c && c.chain ? CHAINS[c.chain] : null; }
+  function nodeOf(key) { return CTX ? CTX.nodes[key] : null; }
 
   function $(id) { return document.getElementById(id); }
   function esc(s) { return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
@@ -202,7 +284,31 @@ kbd { font: 10.5px var(--mono); border: 1px solid var(--border); border-bottom-w
       f.targets.map(function (t) { return t.path + ":" + t.line; }).join(" ")).toLowerCase();
     return state.q.split(/\s+/).every(function (w) { return hay.indexOf(w) >= 0; });
   }
+  function itemHtml(f) {
+    var c = chainOf(f), tag = c && c.findings.length > 1 ? '<span class="ctag" title="part of dependency chain ' + c.id + '">\u26D3' + c.id + "</span>" : "";
+    return '<div class="item' + (state.sel === f.id ? " sel" : "") + '" data-id="' + f.id + '" title="' + esc(f.symbol) + '"><div class="l1"><span class="num">' + f.id + '</span><span class="sym">' + esc(shortSymbol(f)) + "</span>" + tag + '</div><div class="l2">' + esc(f.status + " \u00B7 " + primaryLoc(f)) + "</div></div>";
+  }
+  function chainTree() {
+    var html = "", singles = [];
+    CTX.chains.forEach(function (c) {
+      var fs = c.findings.map(function (id) { return byId[id]; }).filter(function (f) { return f && matches(f); });
+      if (!fs.length) return;
+      if (c.findings.length < 2) { singles = singles.concat(fs); return; }
+      var key = "chain/" + c.id, root = nodeOf(c.root);
+      html += '<div class="grp' + (state.collapsed[key] ? " collapsed" : "") + '" data-g="' + key + '"><div class="gh" title="' + esc(root ? root.symbol : "") + '"><span class="caret">' + (state.collapsed[key] ? "\u25B6" : "\u25BC") + '</span><span style="flex:none;white-space:nowrap">\u26D3 ' + c.id + '</span><span class="sym" style="flex:1;min-width:0;white-space:nowrap;font:400 11.5px var(--mono);overflow:hidden;text-overflow:ellipsis">' + esc(root ? root.label : c.root) + '</span><span class="count">' + fs.length + '</span></div><div class="items">';
+      fs.forEach(function (f) { html += itemHtml(f); });
+      html += "</div></div>";
+    });
+    if (singles.length) {
+      var k = "chain/standalone";
+      html += '<div class="grp' + (state.collapsed[k] ? " collapsed" : "") + '" data-g="' + k + '"><div class="gh"><span class="caret">' + (state.collapsed[k] ? "\u25B6" : "\u25BC") + '</span>Standalone findings<span class="count">' + singles.length + '</span></div><div class="items">';
+      singles.sort(function (a, b) { return a.id - b.id; }).forEach(function (f) { html += itemHtml(f); });
+      html += "</div></div>";
+    }
+    $("tree").innerHTML = html || '<div class="empty">No findings match.</div>';
+  }
   function tree() {
+    if (state.groupBy === "chain" && CTX) { chainTree(); return; }
     var html = "";
     GROUPS.forEach(function (g) {
       var fs = DATA.findings.filter(function (f) { return f.group === g && matches(f); });
@@ -213,9 +319,7 @@ kbd { font: 10.5px var(--mono); border: 1px solid var(--border); border-bottom-w
       cats.forEach(function (c) {
         var key = g + "/" + c, items = fs.filter(function (f) { return f.category === c; });
         html += '<div class="cat' + (state.collapsed[key] ? " collapsed" : "") + '" data-c="' + key + '"><div class="ch"><span class="caret">' + (state.collapsed[key] ? "\u25B6" : "\u25BC") + "</span>" + c + '<span class="count">' + items.length + '</span></div><div class="items">';
-        items.forEach(function (f) {
-          html += '<div class="item' + (state.sel === f.id ? " sel" : "") + '" data-id="' + f.id + '" title="' + esc(f.symbol) + '"><div class="l1"><span class="num">' + f.id + '</span><span class="sym">' + esc(shortSymbol(f)) + '</span></div><div class="l2">' + esc(f.status + " \u00B7 " + primaryLoc(f)) + "</div></div>";
-        });
+        items.forEach(function (f) { html += itemHtml(f); });
         html += "</div></div>";
       });
       html += "</div></div>";
@@ -239,7 +343,17 @@ kbd { font: 10.5px var(--mono); border: 1px solid var(--border); border-bottom-w
     }).join("");
     $("card").innerHTML = '<div class="row1">' + sevBadge + '<span class="tag">' + esc(f.category) + '</span><span class="tag">' + esc(f.status) + '</span><span class="tag">' + esc(f.kind) + '</span><span class="tag">origin: ' + esc(f.origin) + '</span><span class="hint" style="margin-left:auto">#' + f.id + " \u00B7 <kbd>\u2191</kbd><kbd>\u2193</kbd> findings \u00B7 <kbd>F7</kbd>/<kbd>Shift+F7</kbd> changes</span></div>" +
       '<div class="symbol">' + esc(f.symbol) + '</div><div class="msg">' + esc(f.message) + "</div>" +
-      (dl ? "<dl>" + dl + "</dl>" : "") + (jumps ? '<div class="jumps">' + jumps + "</div>" : "");
+      chainLine(f) + (dl ? "<dl>" + dl + "</dl>" : "") + (jumps && state.tab === "code" ? '<div class="jumps">' + jumps + "</div>" : "");
+  }
+  function chainLine(f) {
+    var c = chainOf(f);
+    if (!c) return "";
+    var root = nodeOf(c.root), others = c.findings.filter(function (id) { return id !== f.id; });
+    if (!others.length && c.root === fctx(f).node) return "";
+    return '<div class="chainline">\u26D3 ' + (others.length ? "Part of chain <b>" + c.id + "</b> (" + c.findings.length + " findings)" : "Chain <b>" + c.id + "</b>") +
+      ' rooted at <span class="nl" data-node="' + esc(c.root) + '" title="' + esc(root ? root.symbol : "") + '">' + esc(root ? root.label : c.root) + "</span>" +
+      (others.length ? " \u00B7 with " + others.map(function (id) { return '<span class="fchip" data-fid="' + id + '">#' + id + "</span>"; }).join(" ") : "") +
+      ' \u00B7 <span class="nl" data-tab="deps">dependency tree</span> \u00B7 <span class="nl" data-tab="check">port checklist</span></div>';
   }
 
   // ------------------------------------------------------------------ syntax highlighting
@@ -401,8 +515,16 @@ kbd { font: 10.5px var(--mono); border: 1px solid var(--border); border-bottom-w
 
   // ------------------------------------------------------------------ rows
   // A row has one cell per column: {side, idx (0-based line or -1), kind}; hunk rows carry the hunk index.
+  // the two versions a 2-column view compares: ours | theirs, or the two versions a member exists in
+  function pairOf(file) { return file.pair || ["ours", "theirs"]; }
   function buildRows(file, mode) {
-    var cols = mode === "2col" ? ["ours", "theirs"] : ["ours", "base", "theirs"];
+    if (mode.indexOf("1col:") === 0) {
+      var only = mode.slice(5), L1 = {};
+      L1[only] = splitLines(file[only]);
+      return { cols: [only], lines: L1, rows: L1[only].map(function (x, i) { return { hunk: -1, cells: [{ side: only, idx: i, kind: "eq" }] }; }) };
+    }
+    var cols = mode === "2col" ? pairOf(file) : ["ours", "base", "theirs"];
+    var A = cols[0], B = cols[1];
     var L = {}; cols.forEach(function (s) { L[s] = splitLines(file[s]); });
     var rows = [], p = { ours: 0, base: 0, theirs: 0 };
     function equalRun(count) {
@@ -413,17 +535,17 @@ kbd { font: 10.5px var(--mono); border: 1px solid var(--border); border-bottom-w
     }
     if (mode === "2col") {
       file.hunks2.forEach(function (h, hi) {
-        equalRun(h.l[0] - p.ours);
+        equalRun(h.l[0] - p[A]);
         var lo = h.l[1] - h.l[0], lt = h.r[1] - h.r[0], n = Math.max(lo, lt);
         for (var k = 0; k < n; k++) {
           rows.push({ hunk: hi, cells: [
-            k < lo ? { side: "ours", idx: h.l[0] + k, kind: lt === 0 ? "del" : "mod", pair: k < lt ? h.r[0] + k : -1 } : { side: "ours", idx: -1, kind: lo === 0 ? "delpad" : "pad" },
-            k < lt ? { side: "theirs", idx: h.r[0] + k, kind: lo === 0 ? "add" : "mod", pair: k < lo ? h.l[0] + k : -1 } : { side: "theirs", idx: -1, kind: lt === 0 ? "delpad" : "pad" }
+            k < lo ? { side: A, idx: h.l[0] + k, kind: lt === 0 ? "del" : "mod", pair: k < lt ? h.r[0] + k : -1 } : { side: A, idx: -1, kind: lo === 0 ? "delpad" : "pad" },
+            k < lt ? { side: B, idx: h.r[0] + k, kind: lo === 0 ? "add" : "mod", pair: k < lo ? h.l[0] + k : -1 } : { side: B, idx: -1, kind: lt === 0 ? "delpad" : "pad" }
           ] });
         }
-        p.ours = h.l[1]; p.theirs = h.r[1];
+        p[A] = h.l[1]; p[B] = h.r[1];
       });
-      equalRun(Math.max(0, L.ours.length - p.ours));
+      equalRun(Math.max(0, L[A].length - p[A]));
       return { cols: cols, rows: rows, lines: L };
     }
     file.hunks3.forEach(function (h, hi) {
@@ -464,48 +586,72 @@ kbd { font: 10.5px var(--mono); border: 1px solid var(--border); border-bottom-w
     var m = DATA.meta, r = s === "base" ? { ref: "merge-base", sha: m.refs.mergeBase } : refParts(m.refs[s]);
     return (s === "base" ? "merge-base" : s + (r.ref ? " \u2014 " + r.ref : "")) + " (" + short(r.sha) + ")";
   }
+  // the file (or "@node" member pseudo-file) currently drawn in the viewer
+  var curPath = null;
+  function offsetOf(file, side) { return file && file.offset && file.offset[side] ? file.offset[side] : 0; }
   function renderDiff(f) {
+    if (state.tab !== "code") { renderMember(); return; }
     var targets = f ? f.targets : [];
     var t = targets[state.target];
     var paths = [];
     targets.forEach(function (x) { if (paths.indexOf(x.path) < 0) paths.push(x.path); });
     if (!state.path || paths.indexOf(state.path) < 0) state.path = t ? t.path : paths[0];
-    var file = state.path ? DATA.files[state.path] : null;
-    var fb = "";
+    var title = "";
     if (state.path) {
-      fb += '<span class="path">' + esc(state.path) + "</span>";
-      if (paths.length > 1) fb += '<span class="seg" id="fileSeg">' + paths.map(function (p) { return '<button data-path="' + esc(p) + '" class="' + (p === state.path ? "on" : "") + '">' + esc(p.split("/").pop()) + "</button>"; }).join("") + "</span>";
+      title = '<span class="path">' + esc(state.path) + "</span>";
+      if (paths.length > 1) title += '<span class="seg" id="fileSeg">' + paths.map(function (p) { return '<button data-path="' + esc(p) + '" class="' + (p === state.path ? "on" : "") + '">' + esc(p.split("/").pop()) + "</button>"; }).join("") + "</span>";
+    }
+    drawFile(state.path, t && t.path === state.path ? t : null, title, f ? "This finding has no file location." : "Select a finding.");
+  }
+  // Draws one embedded file (or member pseudo-file) as a diff; t = {side, line} is the line to mark and scroll to.
+  // Member pseudo-files drop the versions the member does not exist in: one column when only one version has it,
+  // ours | theirs when the merge-base lacks it; regular files always follow the user's choice.
+  function effectiveMode(file) {
+    if (!file || !file.member) return state.mode;
+    var present = ["ours", "base", "theirs"].filter(function (s) { return file[s] != null; });
+    if (present.length === 1) return "1col:" + present[0];
+    if (present.length === 2) return "2col";
+    return state.mode;
+  }
+  function drawFile(path, t, title, emptyMsg) {
+    curPath = path;
+    var file = path ? DATA.files[path] : null;
+    var fb = "";
+    if (path) {
+      fb += title;
       fb += '<button class="btn" id="prevCh" title="Previous change (Shift+F7)">\u25B2</button><button class="btn" id="nextCh" title="Next change (F7)">\u25BC</button><button class="btn" id="expandAll">Expand all</button>';
-      fb += '<span class="legend"><span><i style="background:var(--add)"></i>added</span><span><i style="background:var(--mod)"></i>changed</span><span><i style="background:var(--del)"></i>deleted</span><span><i style="background:var(--conf)"></i>conflict</span><span><i style="background:var(--target);border-color:var(--target-bd)"></i>finding</span></span>';
+      fb += '<span class="legend"><span><i style="background:var(--add)"></i>added</span><span><i style="background:var(--mod)"></i>changed</span><span><i style="background:var(--del)"></i>deleted</span><span><i style="background:var(--conf)"></i>conflict</span><span><i style="background:var(--target);border-color:var(--target-bd)"></i>' + (file && file.member ? "selected" : "finding") + "</span></span>";
     }
     $("filebar").innerHTML = fb;
-    if (!file) { $("diff").innerHTML = '<div class="empty">' + (f ? "This finding has no file location." : "Select a finding.") + "</div>"; view = null; return; }
-    var cols = state.mode === "2col" ? ["ours", "theirs"] : ["ours", "base", "theirs"];
+    if (!file) { $("diff").innerHTML = '<div class="empty">' + esc(emptyMsg) + "</div>"; view = null; return; }
+    var mode = effectiveMode(file);
+    var cols = mode.indexOf("1col:") === 0 ? [mode.slice(5)] : mode === "2col" ? pairOf(file) : ["ours", "base", "theirs"];
     if (cols.every(function (s) { return file[s] == null; })) {
-      $("diff").innerHTML = '<div class="empty">File content not available' + (file.notes && file.notes.length ? ": " + esc(file.notes.join("; ")) : "") + ".</div>";
+      $("diff").innerHTML = '<div class="empty">' + (file.member ? "Not present in the shown versions." : "File content not available") + (file.notes && file.notes.length ? ": " + esc(file.notes.join("; ")) : "") + ".</div>";
       view = null; return;
     }
-    var built = buildRows(file, state.mode);
+    var built = buildRows(file, mode);
     var tk = {};
-    cols.forEach(function (s) { tk[s] = tokenizeFile(state.path, s, file[s], file.lang); });
+    cols.forEach(function (s) { tk[s] = tokenizeFile(path, s, file[s], file.lang); });
     var baseLines = splitLines(file.base), oursLines = built.lines.ours, theirsLines = built.lines.theirs;
     // target row: the row showing the target's line on the target's side (base targets fall back to ours in 2-col)
-    var tSide = t && t.path === state.path ? t.side : null, tLine = t && t.path === state.path ? t.line - 1 : -1;
-    if (tSide === "base" && state.mode === "2col") tSide = null;
+    var tSide = t ? t.side : null, tLine = t ? t.line - 1 - offsetOf(file, t.side) : -1;
+    if (tSide === "base" && mode === "2col") tSide = null;
     var targetRow = -1;
     built.rows.forEach(function (r, ri) { r.cells.forEach(function (c) { if (c.side === tSide && c.idx === tLine && targetRow < 0) targetRow = ri; }); });
     // folding: keep rows near hunks and near the target
     var keep = new Uint8Array(built.rows.length);
     built.rows.forEach(function (r, ri) {
-      if (r.hunk >= 0 || ri === targetRow) for (var k = Math.max(0, ri - (ri === targetRow ? 6 : CTX)); k <= Math.min(built.rows.length - 1, ri + (ri === targetRow ? 6 : CTX)); k++) keep[k] = 1;
+      if (r.hunk >= 0 || ri === targetRow) for (var k = Math.max(0, ri - (ri === targetRow ? 6 : CONTEXT_LINES)); k <= Math.min(built.rows.length - 1, ri + (ri === targetRow ? 6 : CONTEXT_LINES)); k++) keep[k] = 1;
     });
-    var exp = state.expanded[state.path + "|" + state.mode] || {};
+    var exp = state.expanded[path + "|" + mode] || {};
     var html = "<table class=\"diff\"><colgroup>";
     cols.forEach(function (s, i) { if (i) html += '<col class="gap">'; html += '<col class="ln"><col>'; });
     html += "</colgroup><thead><tr>";
     cols.forEach(function (s, i) {
       if (i) html += '<th class="gap"></th>';
-      html += '<th colspan="2">' + esc(sideTitle(s)) + (file[s] == null ? ' <span class="absent">(file absent)</span>' : "") + "</th>";
+      var sub = file.member && file.paths && file.paths[s] ? ' <span class="absent" style="font-style:normal">' + esc(file.paths[s].split("/").pop()) + ":" + (offsetOf(file, s) + 1) + "</span>" : "";
+      html += '<th colspan="2" title="' + esc(file.paths && file.paths[s] ? file.paths[s] : path) + '">' + esc(sideTitle(s)) + sub + (file[s] == null ? ' <span class="absent">(' + (file.member ? "not in this version" : "file absent") + ")</span>" : "") + "</th>";
     });
     html += "</tr></thead><tbody>";
     var ri = 0, n = built.rows.length, hunkFirstRow = {};
@@ -527,13 +673,13 @@ kbd { font: 10.5px var(--mono); border: 1px solid var(--border); border-bottom-w
         var text = built.lines[c.side] ? built.lines[c.side][c.idx] : baseLines[c.idx];
         var ranges = null;
         if ((c.kind === "mod" || c.kind === "conf") && c.pair != null && c.pair >= 0) {
-          var other = state.mode === "2col" ? (c.side === "ours" ? theirsLines[c.pair] : oursLines[c.pair]) : baseLines[c.pair];
+          var other = mode === "2col" ? built.lines[c.side === cols[0] ? cols[1] : cols[0]][c.pair] : baseLines[c.pair];
           if (other != null) { var wr = wordRanges(other, text); ranges = wr[1]; }
         } else if (c.kind === "basechg" && c.pair != null && c.pair >= 0) {
           var changed = built.lines[c.pairSide][c.pair];
           if (changed != null) ranges = wordRanges(text, changed)[0];
         }
-        html += '<td class="ln' + ts + '">' + (c.idx + 1) + '</td><td class="code k-' + c.kind + ts + '">' + (lineHtml(tk[c.side][c.idx] || [[text, ""]], ranges) || " ") + "</td>";
+        html += '<td class="ln' + ts + '">' + (c.idx + 1 + offsetOf(file, c.side)) + '</td><td class="code k-' + c.kind + ts + '">' + (lineHtml(tk[c.side][c.idx] || [[text, ""]], ranges) || " ") + "</td>";
       });
       html += "</tr>";
       ri++;
@@ -571,6 +717,211 @@ kbd { font: 10.5px var(--mono); border: 1px solid var(--border); border-bottom-w
     document.querySelectorAll('#diff tr[data-h="' + h + '"]').forEach(function (r) { r.classList.remove("flash"); void r.offsetWidth; r.classList.add("flash"); });
   }
 
+  // ------------------------------------------------------------------ context view (dependency chain, impact, checklist, overview)
+  var KIND = { "class": ["C", "k-cls"], method: ["m", "k-mth"], constructor: ["new", "k-mth"], field: ["f", "k-fld"], constant: ["K", "k-fld"],
+    bean: ["bean", "k-bean"], config: ["cfg", "k-cfg"], mapper: ["sql", "k-sql"], library: ["lib", "k-lib"], maven: ["mvn", "k-mvn"] };
+  var STATUS_HELP = { PRESENT: "ours has it, same as theirs (or only ours changed it)", DIFFERS: "ours has it, but theirs changed it since the merge-base",
+    CHANGED: "ours has it with an incompatible signature / type", MISSING: "ours does not have it", UNKNOWN: "not found in the analyzed sources" };
+  function kindBadge(n) { var k = KIND[n.kind] || ["?", "k-cfg"]; return '<span class="kb ' + k[1] + '" title="' + esc(n.kind) + '">' + k[0] + "</span>"; }
+  function statusPill(n) { return '<span class="st st-' + esc(n.ours) + '" title="in ours: ' + esc(STATUS_HELP[n.ours] || n.ours) + '">' + esc(n.ours) + "</span>"; }
+  function mainSide(n) { return n.loc.theirs ? "theirs" : n.loc.ours ? "ours" : n.loc.base ? "base" : null; }
+  function nodeLoc(n) { var s = mainSide(n), l = s ? n.loc[s] : null; return l ? l.path.split("/").pop() + ":" + l.line : ""; }
+  function parseAt(at) { var m = /^(.*):(\d+)(?:-\d+)?$/.exec(at || ""); return m ? { path: m[1], line: +m[2] } : null; }
+  function fchips(ids, cur) { return (ids || []).map(function (id) { return '<span class="fchip' + (id === cur ? " cur" : "") + '" data-fid="' + id + '" title="finding #' + id + '">#' + id + "</span>"; }).join(""); }
+  function statusLegend() {
+    return '<div class="slegend">' + ["MISSING", "CHANGED", "DIFFERS", "PRESENT", "UNKNOWN"].map(function (s) { return '<span class="st st-' + s + '" title="' + esc(STATUS_HELP[s]) + '">' + s + "</span>"; }).join("") +
+      '<span class="hint">status of each symbol in ours \u00B7 click a node to see its declaration side by side</span></div>';
+  }
+  function chainBanner(f) {
+    var c = chainOf(f);
+    if (!c) return "";
+    var root = nodeOf(c.root);
+    return '<div class="chainbar">\u26D3 Chain <b>' + c.id + "</b> \u00B7 " + (c.direction === "port" ? "port chain (what theirs' code needs from ours)" : "impact chain (ours code affected by theirs' change)") +
+      "<br>rooted at " + (root ? kindBadge(root) + ' <span class="nl" data-node="' + esc(c.root) + '" title="' + esc(root.symbol) + '">' + esc(root.label) + "</span>" : esc(c.root)) +
+      (c.roots.length > 1 ? ' <span class="hint">(+' + (c.roots.length - 1) + " more root" + (c.roots.length > 2 ? "s" : "") + ")</span>" : "") +
+      " \u00B7 " + c.findings.length + " finding" + (c.findings.length > 1 ? "s " : " ") + fchips(c.findings, f.id) + "</div>";
+  }
+  // a leaf that needs no attention: shown folded under "+N present" in dependency trees
+  function plainLeaf(t) { var n = nodeOf(t.node); return n && n.ours === "PRESENT" && !t.children.length && !n.findings.length && !t.cycle; }
+  var treeSeq = 0;
+  var expanded = {}; // nodes whose subtree was already drawn in the current view
+  function treeHtml(t, depth, mode, parent, subject, cur) {
+    var n = nodeOf(t.node);
+    if (!n) return "";
+    var kids = t.children || [], main = mode === "deps" ? kids.filter(function (c) { return !plainLeaf(c); }) : kids, plain = mode === "deps" ? kids.filter(plainLeaf) : [];
+    var at = parseAt(t.at), atHtml = "";
+    if (at) atHtml = mode === "deps"
+      ? '<span class="at" data-atnode="' + esc(parent || "") + '" data-atline="' + at.line + '" data-atside="theirs" title="show where ' + esc(parent ? (nodeOf(parent) || {}).label : "") + " uses it (theirs, " + esc(t.at) + ')">used at L' + at.line + "</span>"
+      : '<span class="at" data-atnode="' + esc(t.node) + '" data-atline="' + at.line + '" data-atside="ours" title="show where it uses ' + esc(parent ? (nodeOf(parent) || {}).label : "") + " (ours, " + esc(t.at) + ')">uses it at L' + at.line + "</span>";
+    var flags = (t.cycle ? '<span class="flag" title="already on this path: not expanded again">\u21BB cycle</span>' : "") +
+      (t.truncated ? '<span class="flag" title="depth limit reached: further dependencies not shown">\u22EF depth limit</span>' : "") +
+      (t.uncertain ? '<span class="flag" title="matched by name (the symbol solver could not resolve it)">? name-matched</span>' : "") +
+      (t.omitted ? '<span class="flag">+' + t.omitted + " more</span>" : "") + (n.note ? '<span class="flag" title="' + esc(n.note) + '">note</span>' : "");
+    var has = main.length || plain.length, again = has && expanded[t.node];
+    if (again) {
+      flags += '<span class="flag" title="this node\'s dependencies are already expanded earlier in this view">\u2191 expanded above</span>';
+      has = 0;
+    }
+    if (has) expanded[t.node] = true;
+    var html = '<div class="tn' + (state.node === t.node ? " sel" : "") + (t.node === subject ? " subject" : "") + '" data-node="' + esc(t.node) + '" data-mode="' + mode + '"' + (at ? ' data-line="' + at.line + '"' : "") +
+      ' style="padding-left:' + (6 + depth * 18) + 'px" title="' + esc(n.symbol + (n.note ? "\n" + n.note : "")) + '">' +
+      '<span class="tw">' + (has ? "\u25BC" : "") + "</span>" + kindBadge(n) + statusPill(n) + '<span class="lbl">' + esc(n.label) + "</span>" +
+      '<span class="chg">' + esc(n.change || "") + "</span>" + '<span class="loc">' + esc(nodeLoc(n)) + "</span>" + atHtml + fchips(n.findings, cur) + flags + "</div>";
+    if (!has) return html;
+    html += '<div class="tc">';
+    main.forEach(function (c) { html += treeHtml(c, depth + 1, mode, t.node, subject, cur); });
+    if (plain.length) {
+      var id = "pl" + (treeSeq++);
+      html += '<div class="tn more" data-more="' + id + '" style="padding-left:' + (6 + (depth + 1) * 18) + 'px"><span class="tw">\u25B6</span>' + plain.length + " more dependenc" + (plain.length > 1 ? "ies" : "y") + " present and unchanged in ours</div>" +
+        '<div class="tc shut" id="' + id + '">';
+      plain.forEach(function (c) { html += treeHtml(c, depth + 1, mode, t.node, subject, cur); });
+      html += "</div>";
+    }
+    return html + "</div>";
+  }
+  function renderCtx(f) {
+    var box = $("ctx");
+    document.body.classList.toggle("ctxmode", state.tab !== "code");
+    box.classList.toggle("wide", state.tab === "overview");
+    box.style.width = state.tab === "overview" ? "" : (state.ctxWidth || "");
+    if (state.tab === "code") return;
+    var fc = fctx(f);
+    expanded = {};
+    if (!CTX || !fc) { box.innerHTML = '<div class="empty">' + (CTX ? "No context for this finding." : "This report has no context data.") + "</div>"; return; }
+    var subject = fc.node, html = chainBanner(f), c = chainOf(f);
+    if (state.tab === "deps") {
+      html += '<div class="sec">Dependency tree <span class="hint">what theirs\' code needs, transitively; only nodes ours lacks or that differ are expanded (max depth ' + CTX.maxDepth + ")</span></div>" + statusLegend();
+      fc.dependencies.forEach(function (t) { html += treeHtml(t, 0, "deps", null, subject, f.id); });
+    } else if (state.tab === "impact") {
+      var sn = nodeOf(subject);
+      html += '<div class="sec">Reverse impact <span class="hint">who in ours depends on ' + esc(sn ? sn.label : subject) + " (callers, up to " + CTX.maxImpactDepth + " levels)</span></div>" + statusLegend();
+      html += treeHtml(fc.impact, 0, "impact", null, subject, f.id);
+      if (!fc.impact.children.length) html += '<div class="empty" style="padding:8px 12px">No usages found in ours (in-scope code of the service directory).</div>';
+    } else if (state.tab === "check") {
+      html += '<div class="sec">' + (c && c.direction === "impact" ? "Update checklist" : "Port checklist") + ' <span class="hint">' + (c && c.direction === "impact" ? "changed symbols first, then the ours code that uses them" : "carry these over together, dependencies first") + "</span></div>";
+      html += '<ol class="check">' + (c ? c.checklist : []).map(function (it) {
+        var n = nodeOf(it.node) || { kind: "?", label: it.node, ours: "UNKNOWN", loc: {}, findings: [] };
+        return '<li class="' + (state.node === it.node ? "sel " : "") + (state.done[it.node] ? "done" : "") + '" data-node="' + esc(it.node) + '"><span class="stepn">' + it.step + '.</span><input type="checkbox" data-done="' + esc(it.node) + '"' + (state.done[it.node] ? " checked" : "") + ' title="mark as done (not saved)">' +
+          '<span class="what">' + kindBadge(n) + '<span class="lbl mono">' + esc(n.label) + "</span>" + statusPill(n) + '<span class="hint">' + esc(nodeLoc(n)) + "</span>" + fchips(n.findings, f.id) + "</span>" +
+          '<span class="act">' + esc(it.action) + '</span><span class="why">' + esc(it.why || "") + "</span></li>";
+      }).join("") + "</ol>";
+      if (c && !c.checklist.length) html += '<div class="empty" style="padding:8px 12px">Nothing to carry over in this chain.</div>';
+    } else if (state.tab === "overview") {
+      html += overview(f);
+    }
+    if (CTX.limitations && CTX.limitations.length && state.tab !== "check") html += '<ul class="limits">' + CTX.limitations.map(function (l) { return "<li>" + esc(l) + "</li>"; }).join("") + "</ul>";
+    box.innerHTML = html;
+    var sel = box.querySelector(".tn.sel, li.sel");
+    if (sel) sel.scrollIntoView({ block: "nearest" });
+  }
+  function renderMember() {
+    var key = state.node, n = nodeOf(key);
+    if (!n) { drawFile(null, null, "", "Select a node on the left to see its declaration in ours / merge-base / theirs."); return; }
+    var path = DATA.files["@" + key] ? "@" + key : null;
+    var t = state.nodeTarget, side = mainSide(n);
+    if (!t && side) t = { side: side, line: n.loc[side].line };
+    if (t && t.side === "base" && state.mode === "2col") t = null;
+    var where = ["ours", "base", "theirs"].filter(function (s) { return n.loc[s]; }).map(function (s) { var l = n.loc[s]; return s + " " + l.path.split("/").pop() + ":" + l.start + (l.end > l.start ? "-" + l.end : ""); }).join(" \u00B7 ");
+    var title = kindBadge(n) + '<span class="path" title="' + esc(n.symbol) + '">' + esc(n.label) + "</span>" + statusPill(n) + '<span class="hint">' + esc(n.change || "") + (where ? " \u00B7 " + esc(where) : "") + "</span>";
+    drawFile(path, t, title, "No source location for this " + n.kind + " (" + n.ours.toLowerCase() + " in ours" + (n.note ? "; " + n.note : "") + ").");
+  }
+  // ---- overview: file-level graph of the chain(s), layered from roots (left) to dependencies (right)
+  function fileOf(key) { var n = nodeOf(key), s = n ? mainSide(n) : null; return s ? n.loc[s].path : null; }
+  function moduleOf(path) { var i = path.indexOf("/src/"); return i > 0 ? path.slice(0, i) : path.indexOf("/") > 0 ? path.split("/")[0] : "."; }
+  var RANK = { MISSING: 4, CHANGED: 3, DIFFERS: 2, UNKNOWN: 1, PRESENT: 0 };
+  function overview(f) {
+    var cur = chainOf(f), chains = state.ovScope === "all" ? CTX.chains : (cur ? [cur] : []);
+    var files = {}, order = [], edges = {};
+    function addFile(p, key) {
+      if (!files[p]) { files[p] = { path: p, nodes: [], worst: "PRESENT", findings: [] }; order.push(p); }
+      var F = files[p], n = nodeOf(key);
+      if (F.nodes.indexOf(key) < 0) F.nodes.push(key);
+      if (n && RANK[n.ours] > RANK[F.worst]) F.worst = n.ours;
+      if (n) n.findings.forEach(function (id) { if (F.findings.indexOf(id) < 0) F.findings.push(id); });
+    }
+    chains.forEach(function (c) {
+      c.nodes.forEach(function (k) { var p = fileOf(k); if (p) addFile(p, k); });
+      c.edges.forEach(function (e) { var a = fileOf(e[0]), b = fileOf(e[1]); if (a && b && a !== b) edges[a + "\u0000" + b] = [a, b]; });
+    });
+    var E = Object.keys(edges).map(function (k) { return edges[k]; });
+    // longest-path layering (bounded, so cycles terminate)
+    var layer = {};
+    order.forEach(function (p) { layer[p] = 0; });
+    for (var it = 0; it < order.length; it++) {
+      var moved = false;
+      E.forEach(function (e) { if (layer[e[1]] < layer[e[0]] + 1 && layer[e[0]] + 1 < order.length) { layer[e[1]] = layer[e[0]] + 1; moved = true; } });
+      if (!moved) break;
+    }
+    var cols = {};
+    order.forEach(function (p) { (cols[layer[p]] = cols[layer[p]] || []).push(p); });
+    var W = 230, H = 50, GX = 70, GY = 16, X0 = 10, Y0 = 34, pos = {}, maxRow = 0, ncol = 0;
+    Object.keys(cols).forEach(function (l) {
+      cols[l].sort(function (a, b) { return moduleOf(a).localeCompare(moduleOf(b)) || a.localeCompare(b); });
+      cols[l].forEach(function (p, i) { pos[p] = { x: X0 + l * (W + GX), y: Y0 + i * (H + GY) }; maxRow = Math.max(maxRow, i); });
+      ncol = Math.max(ncol, +l + 1);
+    });
+    var width = X0 * 2 + ncol * W + (ncol - 1) * GX, height = Y0 + (maxRow + 1) * (H + GY) + 10;
+    var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + Math.max(width, 300) + '" height="' + height + '" role="img" aria-label="file-level dependency overview">' +
+      '<defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" style="fill:var(--muted)"></path></marker></defs>';
+    for (var l = 0; l < ncol; l++) svg += '<text class="mcol" x="' + (X0 + l * (W + GX)) + '" y="18">' + (l === 0 ? "roots (needing code)" : "dependency level " + l) + "</text>";
+    E.forEach(function (e) {
+      var a = pos[e[0]], b = pos[e[1]];
+      if (!a || !b) return;
+      var x1 = a.x + W, y1 = a.y + H / 2, x2 = b.x, y2 = b.y + H / 2, d;
+      if (x2 > x1) d = "M" + x1 + "," + y1 + " C" + (x1 + GX / 2) + "," + y1 + " " + (x2 - GX / 2) + "," + y2 + " " + x2 + "," + y2;
+      else { x1 = a.x + W / 2; y1 = a.y + H; x2 = b.x + W / 2; y2 = b.y + H; d = "M" + x1 + "," + y1 + " C" + x1 + "," + (y1 + 40) + " " + x2 + "," + (y2 + 40) + " " + x2 + "," + y2; }
+      svg += '<path class="edge" style="color:var(--muted)" d="' + d + '" marker-end="url(#arr)"></path>';
+    });
+    var COLOR = { MISSING: "var(--high)", CHANGED: "var(--medium)", DIFFERS: "var(--accent)", PRESENT: "var(--low)", UNKNOWN: "var(--unc)" };
+    order.forEach(function (p) {
+      var q = pos[p], F = files[p], name = p.split("/").pop();
+      if (name.length > 30) name = name.slice(0, 29) + "\u2026";
+      svg += '<g class="fnode' + (state.ovFile === p ? " sel" : "") + '" data-file="' + esc(p) + '"><title>' + esc(p + "\n" + F.nodes.map(function (k) { var n = nodeOf(k); return (n ? n.ours + "  " + n.label : k); }).join("\n")) + "</title>" +
+        '<rect x="' + q.x + '" y="' + q.y + '" width="' + W + '" height="' + H + '" rx="5"></rect><rect class="bar" x="' + q.x + '" y="' + q.y + '" width="5" height="' + H + '" rx="2" style="fill:' + COLOR[F.worst] + '"></rect>' +
+        '<text x="' + (q.x + 12) + '" y="' + (q.y + 20) + '">' + esc(name) + '</text><text class="mod" x="' + (q.x + 12) + '" y="' + (q.y + 38) + '">' + esc(moduleOf(p)) + " \u00B7 " + F.nodes.length + " symbol" + (F.nodes.length > 1 ? "s" : "") + (F.findings.length ? " \u00B7 #" + F.findings.join(" #") : "") + "</text></g>";
+    });
+    svg += "</svg>";
+    var html = '<div class="sec">File-level overview <span class="seg" id="ovSeg"><button data-ov="chain" class="' + (state.ovScope !== "all" ? "on" : "") + '">This chain</button><button data-ov="all" class="' + (state.ovScope === "all" ? "on" : "") + '">All chains</button></span>' +
+      '<span class="hint">arrows point from the code that needs something to the file that provides it; the bar shows the worst status in ours</span></div>';
+    html += order.length ? '<div class="ovr">' + svg + "</div>" : '<div class="empty" style="padding:8px 12px">No file locations in this chain.</div>';
+    var sf = state.ovFile && files[state.ovFile] ? files[state.ovFile] : null;
+    if (sf) {
+      html += '<div class="sec">' + esc(sf.path) + "</div>";
+      sf.nodes.forEach(function (k) { var n = nodeOf(k); if (n) html += '<div class="tn' + (state.node === k ? " sel" : "") + '" data-node="' + esc(k) + '" data-mode="overview" style="padding-left:12px"><span class="tw"></span>' + kindBadge(n) + '<span class="lbl">' + esc(n.label) + "</span>" + statusPill(n) + '<span class="chg">' + esc(n.change || "") + '</span><span class="loc">' + esc(nodeLoc(n)) + "</span>" + fchips(n.findings, f.id) + "</div>"; });
+    } else if (order.length) html += '<div class="hint" style="padding:2px 12px">Click a file to list its symbols.</div>';
+    return html;
+  }
+  function selectNode(key, target) {
+    state.node = key;
+    state.nodeTarget = target || null;
+    document.querySelectorAll("#ctx .tn.sel, #ctx li.sel").forEach(function (e) { e.classList.remove("sel"); });
+    document.querySelectorAll("#ctx [data-node]").forEach(function (e) { if (e.getAttribute("data-node") === key && (e.classList.contains("tn") || e.tagName === "LI")) e.classList.add("sel"); });
+    renderMember();
+    writeHash();
+  }
+  function setTab(tab) {
+    state.tab = ["code", "deps", "impact", "check", "overview"].indexOf(tab) >= 0 ? tab : "code";
+    document.querySelectorAll("#tabs button").forEach(function (b) { b.classList.toggle("on", b.getAttribute("data-tab") === state.tab); });
+    var f = byId[state.sel];
+    if (f && state.tab !== "code" && !state.node) { var fc = fctx(f); state.node = fc ? fc.node : null; state.nodeTarget = null; }
+    if (f) card(f);
+    renderCtx(f);
+    renderDiff(f);
+    writeHash();
+  }
+  function tabCounts(f) {
+    var fc = fctx(f), c = chainOf(f);
+    function count(t) { var n = 0; (t.children || []).forEach(function (k) { n += 1 + count(k); }); return n; }
+    var labels = { code: "Code", deps: "Dependency chain", impact: "Reverse impact", check: "Port checklist", overview: "Overview" };
+    var extra = { deps: fc ? fc.dependencies.reduce(function (a, t) { return a + 1 + count(t); }, 0) : 0, impact: fc ? count(fc.impact) : 0, check: c ? c.checklist.length : 0 };
+    if (c && c.direction === "impact") labels.check = "Update checklist";
+    document.querySelectorAll("#tabs button").forEach(function (b) {
+      var t = b.getAttribute("data-tab");
+      b.innerHTML = labels[t] + (extra[t] != null && CTX ? '<span class="cnt">' + extra[t] + "</span>" : "");
+      b.disabled = t !== "code" && !CTX;
+    });
+  }
+
   // ------------------------------------------------------------------ selection / state
   function select(id, opts) {
     opts = opts || {};
@@ -579,16 +930,21 @@ kbd { font: 10.5px var(--mono); border: 1px solid var(--border); border-bottom-w
     var changed = state.sel !== id;
     state.sel = id;
     if (changed && opts.target == null) { state.target = 0; state.path = null; }
+    if (changed) { var fc0 = fctx(f); state.node = opts.node || (fc0 ? fc0.node : null); state.nodeTarget = null; state.ovFile = null; }
     if (opts.target != null) { state.target = opts.target; state.path = f.targets[opts.target] ? f.targets[opts.target].path : null; }
     document.querySelectorAll("#tree .item.sel").forEach(function (e) { e.classList.remove("sel"); });
     var it = document.querySelector('#tree .item[data-id="' + id + '"]');
     if (it) { it.classList.add("sel"); if (!opts.noScroll) it.scrollIntoView({ block: "nearest" }); }
     card(f);
+    tabCounts(f);
+    renderCtx(f);
     renderDiff(f);
     writeHash();
   }
   function writeHash() {
-    var h = "finding=" + (state.sel || "") + "&mode=" + state.mode + "&theme=" + state.theme + (state.target ? "&target=" + state.target : "");
+    var h = "finding=" + (state.sel || "") + "&mode=" + state.mode + "&theme=" + state.theme + (state.target ? "&target=" + state.target : "") +
+      (state.tab !== "code" ? "&tab=" + state.tab + (state.node ? "&node=" + encodeURIComponent(state.node) : "") : "") + (state.groupBy === "chain" ? "&group=chain" : "") +
+      (state.tab === "overview" && state.ovScope === "all" ? "&ov=all" : "");
     try { history.replaceState(null, "", "#" + h); } catch (e) { /* file:// in some browsers */ }
   }
   function readHash() {
@@ -607,6 +963,20 @@ kbd { font: 10.5px var(--mono); border: 1px solid var(--border); border-bottom-w
   }
 
   // ------------------------------------------------------------------ events
+  // drag the bar between the context panel and the code viewer (width kept for the session, not saved)
+  $("split").addEventListener("mousedown", function (e) {
+    var work = $("work"), ctx = $("ctx"), bar = e.currentTarget, left = work.getBoundingClientRect().left;
+    bar.classList.add("drag");
+    e.preventDefault();
+    function move(ev) {
+      var w = Math.max(240, Math.min(work.clientWidth - 320, ev.clientX - left));
+      state.ctxWidth = w + "px";
+      ctx.style.width = state.tab === "overview" ? "" : state.ctxWidth;
+    }
+    function up() { bar.classList.remove("drag"); document.removeEventListener("mousemove", move); document.removeEventListener("mouseup", up); }
+    document.addEventListener("mousemove", move);
+    document.addEventListener("mouseup", up);
+  });
   $("tree").addEventListener("click", function (e) {
     var it = e.target.closest(".item");
     if (it) { select(+it.getAttribute("data-id"), { noScroll: true }); return; }
@@ -615,20 +985,59 @@ kbd { font: 10.5px var(--mono); border: 1px solid var(--border); border-bottom-w
   });
   $("card").addEventListener("click", function (e) {
     var j = e.target.closest(".jump");
-    if (j) select(state.sel, { target: +j.getAttribute("data-t") });
+    if (j) { select(state.sel, { target: +j.getAttribute("data-t") }); return; }
+    var fc = e.target.closest(".fchip");
+    if (fc) { select(+fc.getAttribute("data-fid")); return; }
+    var nl = e.target.closest(".nl");
+    if (nl && nl.getAttribute("data-tab")) { setTab(nl.getAttribute("data-tab")); return; }
+    if (nl && nl.getAttribute("data-node")) { state.node = nl.getAttribute("data-node"); state.nodeTarget = null; if (state.tab === "code") setTab("deps"); else { renderCtx(byId[state.sel]); renderMember(); writeHash(); } }
+  });
+  $("tabs").addEventListener("click", function (e) {
+    var b = e.target.closest("button[data-tab]");
+    if (b && !b.disabled) setTab(b.getAttribute("data-tab"));
+  });
+  $("ctx").addEventListener("click", function (e) {
+    var t = e.target;
+    var fc = t.closest(".fchip");
+    if (fc) { var id = +fc.getAttribute("data-fid"); if (id !== state.sel) select(id); return; }
+    if (t.matches && t.matches("input[data-done]")) { var k = t.getAttribute("data-done"); state.done[k] = t.checked; t.closest("li").classList.toggle("done", t.checked); return; }
+    var ov = t.closest("#ovSeg button");
+    if (ov) { state.ovScope = ov.getAttribute("data-ov"); state.ovFile = null; renderCtx(byId[state.sel]); writeHash(); return; }
+    var fn = t.closest(".fnode");
+    if (fn) { state.ovFile = fn.getAttribute("data-file"); renderCtx(byId[state.sel]); return; }
+    var more = t.closest(".tn.more");
+    if (more) { var box = $(more.getAttribute("data-more")); var open = box.classList.toggle("shut"); more.querySelector(".tw").textContent = open ? "\u25B6" : "\u25BC"; return; }
+    var at = t.closest(".at");
+    if (at && at.getAttribute("data-atnode")) { selectNode(at.getAttribute("data-atnode"), { side: at.getAttribute("data-atside"), line: +at.getAttribute("data-atline") }); return; }
+    var row = t.closest(".tn, li[data-node]");
+    if (!row) { var nl = t.closest(".nl[data-node]"); if (nl) selectNode(nl.getAttribute("data-node")); return; }
+    if (t.closest(".tw") && row.nextElementSibling && row.nextElementSibling.classList.contains("tc")) {
+      var shut = row.nextElementSibling.classList.toggle("shut");
+      row.querySelector(".tw").textContent = shut ? "\u25B6" : "\u25BC";
+      return;
+    }
+    // impact rows: show the caller at the line where it uses its parent
+    var line = row.getAttribute("data-line"), mode = row.getAttribute("data-mode");
+    selectNode(row.getAttribute("data-node"), mode === "impact" && line ? { side: "ours", line: +line } : null);
+  });
+  $("groupSeg").addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    state.groupBy = b.getAttribute("data-group");
+    document.querySelectorAll("#groupSeg button").forEach(function (x) { x.classList.toggle("on", x === b); });
+    tree(); writeHash();
   });
   $("filebar").addEventListener("click", function (e) {
     var b = e.target.closest("button");
     if (!b) return;
     if (b.id === "nextCh") jumpHunk(1);
     else if (b.id === "prevCh") jumpHunk(-1);
-    else if (b.id === "expandAll") { var all = {}; for (var i = 0; i < 100000; i++) all[i] = 1; state.expanded[state.path + "|" + state.mode] = all; renderDiff(byId[state.sel]); }
+    else if (b.id === "expandAll") { var all = {}; for (var i = 0; i < 100000; i++) all[i] = 1; state.expanded[curPath + "|" + state.mode] = all; renderDiff(byId[state.sel]); }
     else if (b.getAttribute("data-path")) { state.path = b.getAttribute("data-path"); renderDiff(byId[state.sel]); }
   });
   $("diff").addEventListener("click", function (e) {
     var tr = e.target.closest("tr.fold");
     if (!tr) return;
-    var key = state.path + "|" + state.mode, exp = state.expanded[key] || (state.expanded[key] = {});
+    var key = curPath + "|" + state.mode, exp = state.expanded[key] || (state.expanded[key] = {});
     for (var i = +tr.getAttribute("data-from"); i < +tr.getAttribute("data-to"); i++) exp[i] = 1;
     var top = $("diff").scrollTop;
     renderDiff(byId[state.sel]);
@@ -660,9 +1069,15 @@ kbd { font: 10.5px var(--mono); border: 1px solid var(--border); border-bottom-w
   var q = readHash();
   setTheme(q.theme || "light");
   setMode(q.mode || "3col");
+  state.groupBy = q.group === "chain" && CTX ? "chain" : "sev";
+  if (!CTX) $("groupSeg").style.display = "none";
+  document.querySelectorAll("#groupSeg button").forEach(function (x) { x.classList.toggle("on", x.getAttribute("data-group") === state.groupBy); });
+  state.tab = CTX && ["deps", "impact", "check", "overview"].indexOf(q.tab) >= 0 ? q.tab : "code";
+  state.ovScope = q.ov === "all" ? "all" : "chain";
+  document.querySelectorAll("#tabs button").forEach(function (b) { b.classList.toggle("on", b.getAttribute("data-tab") === state.tab); });
   tree();
   var first = +q.finding || (DATA.findings.find(function (f) { return f.group === "HIGH"; }) || DATA.findings[0] || {}).id;
-  if (first) select(first, q.target ? { target: +q.target } : {});
+  if (first) select(first, Object.assign(q.target ? { target: +q.target } : {}, q.node ? { node: q.node } : {}));
   else { $("card").innerHTML = '<div class="empty">No findings.</div>'; renderDiff(null); }
 })();
 </script>

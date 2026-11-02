@@ -57,7 +57,7 @@ class HtmlRendererTest {
         return new Snapshot[] {BASE, ours, theirs};
     }
 
-    static JsonNode embedded(String html) throws Exception {
+    public static JsonNode embedded(String html) throws Exception {
         Matcher m = Pattern.compile("<script type=\"application/json\" id=\"faultline-data\">(.*?)</script>", Pattern.DOTALL).matcher(html);
         assertTrue(m.find(), "data script present");
         return new ObjectMapper().readTree(m.group(1));

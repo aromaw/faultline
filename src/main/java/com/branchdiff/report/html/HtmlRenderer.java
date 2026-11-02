@@ -2,6 +2,7 @@ package com.branchdiff.report.html;
 
 import com.branchdiff.git.GitRunner;
 import com.branchdiff.model.Snapshot;
+import com.branchdiff.report.ContextModel;
 import com.branchdiff.report.Finding;
 import com.branchdiff.report.Report;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -124,6 +125,8 @@ public final class HtmlRenderer {
         d.put("meta", meta);
         d.put("findings", findings);
         d.put("files", files);
+        d.put("context", r.context);
+        if (r.context != null) members(r.context, src, files);
         return d;
     }
 
@@ -218,6 +221,65 @@ public final class HtmlRenderer {
         file.put("hunks2", h2);
         files.put(path, file);
         return file;
+    }
+
+    // ------------------------------------------------------------------ member views of context nodes
+
+    /** prefix of the pseudo-file that holds one context node's declaration in each version */
+    public static final String MEMBER_PREFIX = "@";
+    static final int MAX_MEMBERS = 1500;
+    static final int MAX_MEMBER_LINES = 400;
+
+    /**
+     * For every context node with a source range, embeds a pseudo-file {@code "@" + nodeKey} holding just that
+     * declaration (method, field, class header, config block, mapper statement, pom dependency) of each version, with
+     * the line offset of each slice, so the viewer shows the enclosing member side by side without switching files.
+     */
+    static void members(ContextModel ctx, FileSource src, Map<String, Map<String, Object>> files) {
+        Map<String, List<String>> cache = new LinkedHashMap<>();
+        int n = 0;
+        for (ContextModel.Node node : ctx.nodes.values()) {
+            if (node.loc.isEmpty()) continue;
+            if (n++ >= MAX_MEMBERS) break;
+            Map<String, Object> file = new LinkedHashMap<>();
+            String path = node.loc.values().iterator().next().path();
+            file.put("lang", lang(path));
+            file.put("member", true);
+            Map<String, Integer> offset = new LinkedHashMap<>();
+            Map<String, String> paths = new LinkedHashMap<>();
+            Map<String, List<String>> lines = new LinkedHashMap<>();
+            for (String side : List.of("ours", "base", "theirs")) {
+                ContextModel.Loc loc = node.loc.get(side);
+                List<String> all = loc == null ? null : cache.computeIfAbsent(side + "\u0000" + loc.path(),
+                        k -> LineHunks.lines(src.read(side, loc.path())));
+                if (loc == null || all == null || all.isEmpty()) {
+                    file.put(side, null);
+                    lines.put(side, List.of());
+                    continue;
+                }
+                int from = Math.max(1, Math.min(loc.start(), all.size())), to = Math.min(all.size(), Math.max(from, loc.end()));
+                to = Math.min(to, from + MAX_MEMBER_LINES - 1);
+                List<String> slice = all.subList(from - 1, to);
+                file.put(side, String.join("\n", slice) + "\n");
+                lines.put(side, slice);
+                offset.put(side, from - 1);
+                paths.put(side, loc.path());
+            }
+            file.put("offset", offset);
+            file.put("paths", paths);
+            file.put("notes", List.of());
+            List<Map<String, Object>> h3 = new ArrayList<>();
+            for (LineHunks.Hunk3 h : LineHunks.threeWay(lines.get("base"), lines.get("ours"), lines.get("theirs"))) h3.add(h.json());
+            // a member that exists in exactly two versions is compared between those two
+            List<String> present = new ArrayList<>(paths.keySet());
+            List<String> pair = present.size() == 2 ? present : List.of("ours", "theirs");
+            List<Map<String, Object>> h2 = new ArrayList<>();
+            for (LineHunks.Hunk2 h : LineHunks.twoWay(lines.get(pair.get(0)), lines.get(pair.get(1)))) h2.add(h.json());
+            file.put("pair", pair);
+            file.put("hunks3", h3);
+            file.put("hunks2", h2);
+            files.put(MEMBER_PREFIX + node.key, file);
+        }
     }
 
     static String lang(String path) {
