@@ -33,6 +33,12 @@
       <version>2.18.2</version>
     </dependency>
     <dependency>
+      <!-- Myers line diff for the HTML report (Apache License 2.0) -->
+      <groupId>io.github.java-diff-utils</groupId>
+      <artifactId>java-diff-utils</artifactId>
+      <version>4.12</version>
+    </dependency>
+    <dependency>
       <groupId>org.junit.jupiter</groupId>
       <artifactId>junit-jupiter</artifactId>
       <version>${junit.version}</version>

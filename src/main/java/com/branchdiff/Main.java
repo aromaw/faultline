@@ -5,6 +5,7 @@ import com.branchdiff.git.SiblingModules;
 import com.branchdiff.report.Finding;
 import com.branchdiff.report.MarkdownRenderer;
 import com.branchdiff.report.Report;
+import com.branchdiff.report.html.HtmlRenderer;
 import com.fasterxml.jackson.annotation.JsonAutoDetect;
 import com.fasterxml.jackson.annotation.PropertyAccessor;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -27,8 +28,10 @@ public final class Main {
               --ours <ref>           our branch/commit (default: HEAD)
               --theirs <ref>         branch/commit being migrated into ours (required)
               --service-dir <dir>    service sub-directory inside the repo (default: repo root)
-              --format md|json       report format (default: md)
+              --format md|json|html  report format (default: md)
               --json                 shorthand for --format json
+              --html                 shorthand for --format html: one self-contained HTML file with an IDE-like
+                                     merge view (ours | merge-base | theirs) of every file a finding refers to
               --output, -o <file>    write report to file instead of stdout
               --no-maven             do not run 'mvn dependency:build-classpath' (faster, more UNCERTAIN items)
               --mvn <cmd>            maven executable (default: mvn)
@@ -67,8 +70,14 @@ public final class Main {
             return;
         }
         try {
-            Report r = new Analyzer(o).runFromGit();
-            String out = o.format.equals("json") ? toJson(r) : MarkdownRenderer.render(r);
+            Analyzer analyzer = new Analyzer(o);
+            Report r = analyzer.runFromGit();
+            String out = switch (o.format) {
+                case "json" -> toJson(r);
+                case "html" -> HtmlRenderer.render(r, HtmlRenderer.source(analyzer.lastBase, analyzer.lastOurs,
+                        analyzer.lastTheirs, analyzer.lastGit));
+                default -> MarkdownRenderer.render(r);
+            };
             if (o.output != null) {
                 if (o.output.toAbsolutePath().getParent() != null) Files.createDirectories(o.output.toAbsolutePath().getParent());
                 Files.writeString(o.output, out, StandardCharsets.UTF_8);
@@ -113,6 +122,7 @@ public final class Main {
                 case "--service-dir" -> o.serviceDir = val(args, ++i, a);
                 case "--format" -> o.format = val(args, ++i, a);
                 case "--json" -> o.format = "json";
+                case "--html" -> o.format = "html";
                 case "--output", "-o" -> o.output = Path.of(val(args, ++i, a));
                 case "--no-maven" -> o.useMaven = false;
                 case "--mvn" -> o.mvnCmd = val(args, ++i, a);
@@ -130,7 +140,9 @@ public final class Main {
             }
         }
         if (o.theirs == null) throw new IllegalArgumentException("--theirs is required");
-        if (!o.format.equals("md") && !o.format.equals("json")) throw new IllegalArgumentException("--format must be md or json");
+        if (!o.format.equals("md") && !o.format.equals("json") && !o.format.equals("html")) {
+            throw new IllegalArgumentException("--format must be md, json or html");
+        }
         return o;
     }
 

@@ -31,6 +31,9 @@ java -jar target/branch-diff-tool.jar \
 
 # JSON 输出
 java -jar target/branch-diff-tool.jar --repo . --theirs feature-x --json -o report.json
+
+# 自包含的 HTML 报告（IDEA 风格的 diff 视图，见下文）
+java -jar target/branch-diff-tool.jar --repo . --theirs feature-x --html -o report.html
 ```
 
 | 参数 | 说明 |
@@ -38,7 +41,7 @@ java -jar target/branch-diff-tool.jar --repo . --theirs feature-x --json -o repo
 | `--repo <path>` | git 仓库路径（默认 `.`） |
 | `--ours <ref>` / `--theirs <ref>` | 两个分支/提交，merge-base 自动计算 |
 | `--service-dir <dir>` | 只分析该子目录（其他目录的变化不会进入报告） |
-| `--format md\|json`, `--json` | 输出格式，默认 Markdown |
+| `--format md\|json\|html`, `--json`, `--html` | 输出格式，默认 Markdown；`html` 为单个自包含页面（见 [HTML 报告](#html-报告)） |
 | `-o, --output <file>` | 输出文件 |
 | `--no-maven` | 不执行 `mvn dependency:build-classpath`（更快，但第三方库类型无法解析，更多条目会变成 UNCERTAIN） |
 | `--mvn <cmd>` / `--maven-timeout <sec>` | Maven 命令与超时（默认 `mvn`、600 秒） |
@@ -47,6 +50,27 @@ java -jar target/branch-diff-tool.jar --repo . --theirs feature-x --json -o repo
 | `--no-siblings` | 等同 `--include-siblings none` |
 | `--fail-on-findings` | 存在 HIGH 且确定的问题时退出码为 2（可用于 CI） |
 | `--keep-temp`, `-v` | 保留临时目录 / 输出进度 |
+
+## HTML 报告
+
+`--html`（等同 `--format html`）生成**一个自包含的 `.html` 文件**，界面仿 IntelliJ IDEA 的 diff/merge 视图。所有 CSS 和 JavaScript 都内联：不依赖 CDN、不访问网络，可离线打开，也可以直接附到工单或邮件里。
+
+```bash
+java -jar target/branch-diff-tool.jar --repo . --theirs feature-x --service-dir order-service --html -o report.html
+```
+
+![HTML 报告：双方都修改的方法，三栏视图](docs/html-report.png)
+
+- **侧边栏**：按严重级别（HIGH / MEDIUM / LOW / UNCERTAIN）再按类别分组的问题树，带计数、按组过滤开关和搜索框（符号、文件、消息、状态）。
+- **顶栏**：仓库、服务目录、ours / merge-base / theirs 的引用与提交，以及各级别数量。
+- **问题卡片**：严重级别、状态、种类、符号、来源、说明、详情，以及所有位置（`needed by` / `used at` / ours / theirs / base），点击即跳转，必要时自动切换文件。
+- **差异视图**：三栏 `ours | merge-base | theirs`（可切换为两栏 `ours | theirs`），带行号；所有栏位在同一个滚动容器中，同步滚动；新增（绿）、修改（蓝）、删除（灰）、冲突（红，双方改了同一段 base 行）分块着色，并有词级行内高亮；未改动区域折叠为“expand N lines”行（也可 *Expand all*）。当前问题所在行会高亮并自动滚动到视野中央。
+- **语法高亮**：Java、XML（标出 MyBatis 的 `#{}` / `${}`）、YAML、properties（内置的小型分词器）。
+- **键盘**：<kbd>↑</kbd>/<kbd>↓</kbd> 或 <kbd>j</kbd>/<kbd>k</kbd> 切换问题，<kbd>F7</kbd> / <kbd>Shift+F7</kbd> 跳到下一处 / 上一处改动。
+- **主题**：IDEA Light（默认）和类 Darcula 的深色主题。
+- **URL hash** 保存状态，例如 `report.html#finding=3&mode=2col&theme=dark`（`target=N` 选中该问题的第 N 个位置），方便分享链接和无头浏览器截图。
+
+只嵌入问题涉及的文件，内容直接从 git 的三个版本读取；超过 1 MB 的版本不嵌入并给出说明。行级 diff（Myers 算法，[java-diff-utils](https://github.com/java-diff-utils/java-diff-utils)，Apache-2.0）在 Java 端计算后以 JSON 嵌入；三栏视图按 merge-base 区间把 ours 与 theirs 的改动分组，做法与 `diff3` 相同。`docs/sample-report.html` 是下文验证样例的报告。
 
 ## 检测内容
 
@@ -135,4 +159,5 @@ java -jar target/branch-diff-tool.jar --repo /workspace/branch-diff-sample \
 - 方法级匹配基于简单类型名（擦除泛型），同名不同包的参数类型可能误判为相同；类整体改包/改名会表现为"删除 + 新增"。
 - 字段反向追踪：只处理"删除/改名"，不报告字段**类型变化**或 static/final 变化；改名识别依赖相同的非空初始化表达式，无初始化表达式的字段和无参枚举常量改名会报告为 `*_REMOVED`（不给出新名字）；字段移动到其他（非父类）类视为删除。方法内**局部类**（local class）中的引用、字符串形式的引用（反射、SpEL、MyBatis XML 中的 `#{field}`）不扫描。
 - 值变更：只比较初始化表达式 / XML 文本本身。初始化表达式未变、但引用了另一个已变常量的常量不单独报告（被引用的那个会报）；在 static 块或构造器中赋值、运行时计算的值，以及兄弟模块或服务目录之外的 XML 不在范围内。兄弟模块中仅 theirs 修改的值不报告（需把该模块作为 `--service-dir` 运行）。`<include>` 引用的片段按其自身的 `<sql>` 元素比较，不做内联展开。
+- HTML 报告：diff 基于整个文件的文本行（不是 AST），方法移动位置会显示为删除 + 新增；行内高亮是词级的，并把块内第 k 个改动行与另一侧第 k 行配对；三栏分组是 `diff3` 式的近似，个别边界情况可能与 `git merge-file` 不同（权威的文本冲突预测仍以卡片详情为准）。只嵌入问题涉及的文件；超大报告不分页。
 - 未实现"对合并结果执行 `mvn compile`"的可选检查（需求中注明非必须）。

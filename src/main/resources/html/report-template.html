@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>faultline report</title>
+<style>
+:root {
+  --ui-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+  --mono: "JetBrains Mono", "SF Mono", Menlo, Consolas, "DejaVu Sans Mono", "Liberation Mono", monospace;
+}
+body.light {
+  --bg: #ffffff; --fg: #1f1f1f; --muted: #6f737a; --panel: #f7f8fa; --panel2: #ebecf0; --border: #d3d5db;
+  --sel: #d5e1ff; --sel-fg: #000; --hover: #e8ecf5; --accent: #3574f0; --gutter: #f7f8fa; --gutter-fg: #9a9da3;
+  --add: #d6f5d6; --add-in: #a8e3a8; --mod: #dce7fb; --mod-in: #b2cbf5; --del: #e6e6e6; --del-in: #cfcfcf;
+  --conf: #fadcdc; --conf-in: #f2b0b0; --basechg: #f1f3f6; --pad: #f4f4f4; --target: #fff6c8; --target-bd: #e0b000;
+  --high: #d93838; --medium: #e08a00; --low: #3d8f3d; --unc: #8a8f98;
+  --kw: #0033b3; --str: #067d17; --cm: #8c8c8c; --ann: #9e880d; --num: #1750eb; --tag: #0033b3; --attr: #174ad4;
+  --var: #871094; --key: #0033b3; --ent: #1750eb;
+}
+body.dark {
+  --bg: #2b2b2b; --fg: #a9b7c6; --muted: #8c8f94; --panel: #3c3f41; --panel2: #313335; --border: #4b4e50;
+  --sel: #2f65ca; --sel-fg: #fff; --hover: #45494a; --accent: #589df6; --gutter: #313335; --gutter-fg: #606366;
+  --add: #294436; --add-in: #3d6b50; --mod: #2c4058; --mod-in: #3d5b80; --del: #3f4142; --del-in: #55585a;
+  --conf: #573434; --conf-in: #7a4545; --basechg: #323436; --pad: #2f3133; --target: #4d4630; --target-bd: #c9a227;
+  --high: #ff6b68; --medium: #e6a23c; --low: #6abf69; --unc: #9da0a5;
+  --kw: #cc7832; --str: #6a8759; --cm: #808080; --ann: #bbb529; --num: #6897bb; --tag: #e8bf6a; --attr: #bababa;
+  --var: #9876aa; --key: #cc7832; --ent: #6897bb;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body { background: var(--bg); color: var(--fg); font: 13px/1.45 var(--ui-font); overflow: hidden; }
+code, .mono { font-family: var(--mono); font-size: 12px; }
+button { font: inherit; color: inherit; }
+#top { display: flex; align-items: center; gap: 16px; padding: 6px 12px; background: var(--panel); border-bottom: 1px solid var(--border); height: 52px; }
+#top .brand { font-weight: 700; font-size: 15px; letter-spacing: .2px; }
+#top .brand span { color: var(--muted); font-weight: 400; font-size: 12px; margin-left: 6px; }
+#top .refs { display: grid; grid-template-columns: auto auto auto; column-gap: 14px; row-gap: 0; font-size: 12px; color: var(--muted); flex: 1; min-width: 0; }
+#top .refs b { color: var(--fg); font-weight: 600; }
+#top .refs div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chips { display: flex; gap: 6px; }
+.chip { display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; border-radius: 10px; background: var(--panel2); border: 1px solid var(--border); font-size: 12px; white-space: nowrap; }
+.dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex: none; }
+.g-HIGH { background: var(--high); } .g-MEDIUM { background: var(--medium); } .g-LOW { background: var(--low); } .g-UNCERTAIN { background: var(--unc); }
+.seg { display: inline-flex; border: 1px solid var(--border); border-radius: 5px; overflow: hidden; }
+.seg button { border: 0; background: var(--bg); padding: 3px 10px; cursor: pointer; font-size: 12px; }
+.seg button.on { background: var(--accent); color: #fff; }
+.btn { border: 1px solid var(--border); background: var(--bg); border-radius: 5px; padding: 3px 10px; cursor: pointer; font-size: 12px; }
+.btn:hover { background: var(--hover); }
+#main { display: flex; height: calc(100% - 52px); }
+#side { width: 330px; flex: none; display: flex; flex-direction: column; background: var(--panel); border-right: 1px solid var(--border); }
+#side .search { padding: 8px; border-bottom: 1px solid var(--border); }
+#search { width: 100%; padding: 5px 8px; border: 1px solid var(--border); border-radius: 5px; background: var(--bg); color: var(--fg); font: inherit; }
+#filters { display: flex; gap: 4px; margin-top: 6px; flex-wrap: wrap; }
+#filters label { display: inline-flex; align-items: center; gap: 4px; padding: 1px 7px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg); cursor: pointer; font-size: 11.5px; user-select: none; }
+#filters input { margin: 0; }
+#tree { overflow: auto; flex: 1; padding: 4px 0 20px; }
+.grp > .gh { display: flex; align-items: center; gap: 6px; padding: 4px 8px; font-weight: 600; cursor: pointer; user-select: none; }
+.cat > .ch { display: flex; align-items: center; gap: 6px; padding: 2px 8px 2px 22px; color: var(--muted); cursor: pointer; user-select: none; font-size: 12px; }
+.count { margin-left: auto; color: var(--muted); font-weight: 400; font-size: 11.5px; }
+.caret { width: 10px; display: inline-block; color: var(--muted); font-size: 10px; }
+.collapsed > .items, .collapsed > .cats { display: none; }
+.item { padding: 3px 8px 3px 38px; cursor: pointer; display: flex; flex-direction: column; border-left: 3px solid transparent; }
+.item:hover { background: var(--hover); }
+.item.sel { background: var(--sel); color: var(--sel-fg); border-left-color: var(--accent); }
+.item .l1 { display: flex; gap: 6px; align-items: center; min-width: 0; }
+.item .sym { font-family: var(--mono); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.item .l2 { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.item.sel .l2 { color: inherit; opacity: .8; }
+.num { color: var(--muted); font-size: 11px; min-width: 22px; }
+.item.sel .num { color: inherit; }
+#content { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+#card { padding: 10px 14px; border-bottom: 1px solid var(--border); max-height: 40%; overflow: auto; }
+#card .row1 { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.badge { font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 4px; color: #fff; }
+.badge.HIGH { background: var(--high); } .badge.MEDIUM { background: var(--medium); } .badge.LOW { background: var(--low); } .badge.UNC { background: var(--unc); }
+.tag { font-size: 11.5px; padding: 1px 6px; border-radius: 4px; background: var(--panel2); border: 1px solid var(--border); }
+#card .symbol { font-family: var(--mono); font-size: 13.5px; font-weight: 600; margin: 6px 0 2px; word-break: break-all; }
+#card .msg { margin: 4px 0; }
+#card dl { display: grid; grid-template-columns: max-content 1fr; gap: 1px 10px; margin: 4px 0; font-size: 12px; }
+#card dt { color: var(--muted); }
+#card dd { margin: 0; word-break: break-word; font-family: var(--mono); font-size: 11.5px; }
+.jumps { display: flex; flex-direction: column; gap: 2px; margin-top: 6px; }
+.jump { display: flex; gap: 8px; align-items: baseline; cursor: pointer; padding: 1px 4px; border-radius: 4px; font-size: 12px; }
+.jump:hover { background: var(--hover); }
+.jump.on { background: var(--sel); color: var(--sel-fg); }
+.jump .side { font-size: 10.5px; font-weight: 700; text-transform: uppercase; min-width: 52px; color: var(--accent); }
+.jump.on .side { color: inherit; }
+.jump .loc { font-family: var(--mono); font-size: 11.5px; }
+.jump .lbl { color: var(--muted); }
+.jump.on .lbl { color: inherit; opacity: .85; }
+#filebar { display: flex; align-items: center; gap: 8px; padding: 5px 10px; background: var(--panel); border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+#filebar .path { font-family: var(--mono); font-size: 12px; font-weight: 600; }
+.legend { display: flex; gap: 8px; margin-left: auto; font-size: 11px; color: var(--muted); align-items: center; }
+.legend i { display: inline-block; width: 12px; height: 10px; border: 1px solid var(--border); vertical-align: -1px; margin-right: 3px; }
+#diff { flex: 1; overflow: auto; position: relative; }
+table.diff { border-collapse: collapse; width: 100%; table-layout: fixed; font-family: var(--mono); font-size: 12px; line-height: 18px; }
+table.diff col.ln { width: 46px; } table.diff col.gap { width: 8px; }
+table.diff thead th { position: sticky; top: 0; z-index: 2; background: var(--panel); border-bottom: 1px solid var(--border); font: 600 12px var(--ui-font); text-align: left; padding: 4px 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+table.diff thead th.gap { padding: 0; }
+td.ln { background: var(--gutter); color: var(--gutter-fg); text-align: right; padding: 0 6px 0 0; vertical-align: top; user-select: none; border-right: 1px solid var(--border); }
+td.code { padding: 0 8px; white-space: pre-wrap; word-break: break-all; vertical-align: top; tab-size: 4; }
+td.gap { padding: 0; background: var(--bg); border-left: 1px solid var(--border); }
+td.gap.h { background: var(--border); }
+td.k-add { background: var(--add); } td.k-mod { background: var(--mod); } td.k-del { background: var(--del); }
+td.k-conf { background: var(--conf); } td.k-basechg { background: var(--basechg); } td.k-baseconf { background: var(--conf); opacity: .85; }
+td.k-pad { background: var(--pad); } td.k-delpad { background: repeating-linear-gradient(135deg, var(--del) 0 4px, var(--pad) 4px 8px); }
+td.k-add .in { background: var(--add-in); } td.k-mod .in { background: var(--mod-in); } td.k-conf .in { background: var(--conf-in); } td.k-del .in { background: var(--del-in); } td.k-basechg .in { background: var(--del-in); }
+.in { border-radius: 2px; }
+tr.target td.code.tside { box-shadow: inset 3px 0 0 var(--target-bd), inset 0 1px 0 var(--target-bd), inset 0 -1px 0 var(--target-bd); }
+tr.target td.ln.tside { background: var(--target); color: var(--fg); font-weight: 700; }
+tr.target td.code.tside.k-eq, tr.target td.code.tside.k-basechg { background: var(--target); }
+tr.flash td.code { animation: flash 1s ease-out; }
+@keyframes flash { from { filter: brightness(.85); } to { filter: none; } }
+tr.fold td { background: var(--panel); color: var(--muted); text-align: center; cursor: pointer; font: 11.5px var(--ui-font); padding: 2px; border-top: 1px dashed var(--border); border-bottom: 1px dashed var(--border); }
+tr.fold td:hover { color: var(--accent); }
+.empty { padding: 30px; color: var(--muted); }
+.absent { color: var(--muted); font-style: italic; }
+.tk-kw { color: var(--kw); font-weight: 600; } .tk-str { color: var(--str); } .tk-cm { color: var(--cm); font-style: italic; }
+.tk-ann { color: var(--ann); } .tk-num { color: var(--num); } .tk-tag { color: var(--tag); } .tk-attr { color: var(--attr); }
+.tk-var { color: var(--var); font-weight: 600; } .tk-key { color: var(--key); } .tk-ent { color: var(--ent); }
+body.dark .tk-kw { font-weight: 400; }
+.hint { font-size: 11px; color: var(--muted); }
+kbd { font: 10.5px var(--mono); border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 3px; padding: 0 3px; background: var(--bg); }
+</style>
+</head>
+<body class="light">
+<header id="top">
+  <div class="brand">faultline<span>merge gap report</span></div>
+  <div class="refs" id="refs"></div>
+  <div class="chips" id="chips"></div>
+  <div class="seg" id="modeSeg"><button data-mode="3col">ours | base | theirs</button><button data-mode="2col">ours | theirs</button></div>
+  <button class="btn" id="themeBtn" title="Toggle light / dark theme">Dark</button>
+</header>
+<div id="main">
+  <aside id="side">
+    <div class="search">
+      <input id="search" type="search" placeholder="Search symbol, file, message..." autocomplete="off">
+      <div id="filters"></div>
+    </div>
+    <div id="tree"></div>
+  </aside>
+  <section id="content">
+    <div id="card"></div>
+    <div id="filebar"></div>
+    <div id="diff"></div>
+  </section>
+</div>
+<script type="application/json" id="faultline-data">"__FAULTLINE_DATA__"</script>
+<script>
+(function () {
+  "use strict";
+  var DATA = JSON.parse(document.getElementById("faultline-data").textContent);
+  var GROUPS = ["HIGH", "MEDIUM", "LOW", "UNCERTAIN"];
+  var CTX = 3;
+  var state = { sel: null, target: 0, path: null, mode: "3col", theme: "light", hidden: {}, q: "", expanded: {}, collapsed: {}, hunk: -1 };
+  var byId = {};
+  DATA.findings.forEach(function (f) { byId[f.id] = f; });
+
+  function $(id) { return document.getElementById(id); }
+  function esc(s) { return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
+  function short(sha) { return sha ? String(sha).slice(0, 8) : ""; }
+  function refParts(s) { var m = /^(.*) \(([0-9a-f]{7,})\)$/.exec(s || ""); return m ? { ref: m[1], sha: m[2] } : { ref: "", sha: s || "" }; }
+
+  // ------------------------------------------------------------------ header
+  function header() {
+    var m = DATA.meta, o = refParts(m.refs.ours), t = refParts(m.refs.theirs);
+    $("refs").innerHTML =
+      "<div>repo <b>" + esc(m.repo) + "</b></div><div>service dir <b>" + esc(m.serviceDir) + "</b></div><div>generated <b>" + esc((m.generatedAt || "").replace("T", " ").replace(/\.\d+/, "")) + "</b></div>" +
+      "<div>ours <b>" + esc(o.ref) + "</b> <code>" + short(o.sha) + "</code></div><div>merge-base <code>" + short(m.refs.mergeBase) + "</code></div><div>theirs <b>" + esc(t.ref) + "</b> <code>" + short(t.sha) + "</code></div>";
+    var counts = {};
+    DATA.findings.forEach(function (f) { counts[f.group] = (counts[f.group] || 0) + 1; });
+    $("chips").innerHTML = GROUPS.map(function (g) {
+      return '<span class="chip" title="' + g + '"><span class="dot g-' + g + '"></span>' + g.charAt(0) + g.slice(1).toLowerCase() + " <b>" + (counts[g] || 0) + "</b></span>";
+    }).join("") + '<span class="chip">Total <b>' + DATA.findings.length + "</b></span>";
+    $("filters").innerHTML = GROUPS.map(function (g) {
+      return '<label><input type="checkbox" data-g="' + g + '" checked><span class="dot g-' + g + '"></span>' + g + " " + (counts[g] || 0) + "</label>";
+    }).join("");
+  }
+
+  // ------------------------------------------------------------------ tree
+  function shortSymbol(f) {
+    var s = f.symbol || "";
+    if (f.category === "MAVEN_DEPENDENCY") return s.split(":").pop();
+    var hash = s.indexOf("#");
+    if (hash > 0) { var cls = s.slice(0, hash); return cls.slice(cls.lastIndexOf(".") + 1) + "#" + s.slice(hash + 1); }
+    if (/^[a-z][\w]*(\.[a-z][\w]*)+\.[A-Z]/.test(s)) {
+      var parts = s.split(".");
+      var i = parts.findIndex(function (p) { return /^[A-Z]/.test(p); });
+      return parts.slice(i).join(".");
+    }
+    return s;
+  }
+  function primaryLoc(f) {
+    var t = f.targets[0];
+    return t ? t.path.split("/").pop() + (t.line ? ":" + t.line : "") : "";
+  }
+  function matches(f) {
+    if (state.hidden[f.group]) return false;
+    if (!state.q) return true;
+    var hay = (f.symbol + " " + f.message + " " + f.status + " " + f.category + " " + f.kind + " " +
+      f.targets.map(function (t) { return t.path + ":" + t.line; }).join(" ")).toLowerCase();
+    return state.q.split(/\s+/).every(function (w) { return hay.indexOf(w) >= 0; });
+  }
+  function tree() {
+    var html = "";
+    GROUPS.forEach(function (g) {
+      var fs = DATA.findings.filter(function (f) { return f.group === g && matches(f); });
+      if (!fs.length) return;
+      var cats = [];
+      fs.forEach(function (f) { if (cats.indexOf(f.category) < 0) cats.push(f.category); });
+      html += '<div class="grp' + (state.collapsed[g] ? " collapsed" : "") + '" data-g="' + g + '"><div class="gh"><span class="caret">' + (state.collapsed[g] ? "\u25B6" : "\u25BC") + '</span><span class="dot g-' + g + '"></span>' + g + '<span class="count">' + fs.length + '</span></div><div class="cats">';
+      cats.forEach(function (c) {
+        var key = g + "/" + c, items = fs.filter(function (f) { return f.category === c; });
+        html += '<div class="cat' + (state.collapsed[key] ? " collapsed" : "") + '" data-c="' + key + '"><div class="ch"><span class="caret">' + (state.collapsed[key] ? "\u25B6" : "\u25BC") + "</span>" + c + '<span class="count">' + items.length + '</span></div><div class="items">';
+        items.forEach(function (f) {
+          html += '<div class="item' + (state.sel === f.id ? " sel" : "") + '" data-id="' + f.id + '" title="' + esc(f.symbol) + '"><div class="l1"><span class="num">' + f.id + '</span><span class="sym">' + esc(shortSymbol(f)) + '</span></div><div class="l2">' + esc(f.status + " \u00B7 " + primaryLoc(f)) + "</div></div>";
+        });
+        html += "</div></div>";
+      });
+      html += "</div></div>";
+    });
+    $("tree").innerHTML = html || '<div class="empty">No findings match.</div>';
+  }
+  function visibleIds() {
+    return Array.prototype.map.call(document.querySelectorAll("#tree .item"), function (e) { return +e.getAttribute("data-id"); });
+  }
+
+  // ------------------------------------------------------------------ card
+  function card(f) {
+    var sevBadge = '<span class="badge ' + f.severity + '">' + f.severity + "</span>" + (f.confidence === "UNCERTAIN" ? '<span class="badge UNC">UNCERTAIN</span>' : "");
+    var dl = "";
+    Object.keys(f.details).forEach(function (k) {
+      if (k.indexOf("diff") === 0) return;
+      dl += "<dt>" + esc(k) + "</dt><dd>" + esc(f.details[k]) + "</dd>";
+    });
+    var jumps = f.targets.map(function (t, i) {
+      return '<div class="jump' + (i === state.target ? " on" : "") + '" data-t="' + i + '"><span class="side">' + (t.side === "base" ? "base" : t.side) + '</span><span class="loc">' + esc(t.path + (t.line ? ":" + t.line : "")) + '</span><span class="lbl">' + esc(t.label) + "</span></div>";
+    }).join("");
+    $("card").innerHTML = '<div class="row1">' + sevBadge + '<span class="tag">' + esc(f.category) + '</span><span class="tag">' + esc(f.status) + '</span><span class="tag">' + esc(f.kind) + '</span><span class="tag">origin: ' + esc(f.origin) + '</span><span class="hint" style="margin-left:auto">#' + f.id + " \u00B7 <kbd>\u2191</kbd><kbd>\u2193</kbd> findings \u00B7 <kbd>F7</kbd>/<kbd>Shift+F7</kbd> changes</span></div>" +
+      '<div class="symbol">' + esc(f.symbol) + '</div><div class="msg">' + esc(f.message) + "</div>" +
+      (dl ? "<dl>" + dl + "</dl>" : "") + (jumps ? '<div class="jumps">' + jumps + "</div>" : "");
+  }
+
+  // ------------------------------------------------------------------ syntax highlighting
+  var JAVA_KW = {};
+  ("abstract assert boolean break byte case catch char class const continue default do double else enum extends final finally float for goto if implements import instanceof int interface long native new package private protected public return short static strictfp super switch synchronized this throw throws transient try void volatile while var record yield sealed permits true false null").split(" ").forEach(function (k) { JAVA_KW[k] = 1; });
+  var tokCache = {};
+  function tokenizeFile(path, side, text, lang) {
+    var key = path + "\u0000" + side;
+    if (tokCache[key]) return tokCache[key];
+    var lines = splitLines(text), st = {}, out = [];
+    for (var i = 0; i < lines.length; i++) out.push(tokLine(lines[i], st, lang));
+    tokCache[key] = out;
+    return out;
+  }
+  function splitLines(text) {
+    if (text == null || text === "") return [];
+    var t = text.replace(/\r\n?/g, "\n");
+    if (t.charAt(t.length - 1) === "\n") t = t.slice(0, -1);
+    return t.split("\n");
+  }
+  function tokLine(line, st, lang) {
+    if (lang === "java") return tokJava(line, st);
+    if (lang === "xml") return tokXml(line, st);
+    if (lang === "yaml") return tokYaml(line);
+    if (lang === "properties") return tokProps(line);
+    return [[line, ""]];
+  }
+  function tokJava(line, st) {
+    var out = [], i = 0, n = line.length, m;
+    function push(t, c) { if (t) out.push([t, c]); }
+    while (i < n) {
+      if (st.block) { var e = line.indexOf("*/", i); if (e < 0) { push(line.slice(i), "cm"); return out; } push(line.slice(i, e + 2), "cm"); i = e + 2; st.block = false; continue; }
+      if (st.text) { var e2 = line.indexOf('"""', i); if (e2 < 0) { push(line.slice(i), "str"); return out; } push(line.slice(i, e2 + 3), "str"); i = e2 + 3; st.text = false; continue; }
+      var ch = line.charAt(i), rest = line.slice(i);
+      if (ch === "/" && line.charAt(i + 1) === "*") { st.block = true; push("/*", "cm"); i += 2; continue; }
+      if (ch === "/" && line.charAt(i + 1) === "/") { push(rest, "cm"); return out; }
+      if (rest.indexOf('"""') === 0) { st.text = true; push('"""', "str"); i += 3; continue; }
+      if (ch === '"' || ch === "'") { var j = i + 1; while (j < n && line.charAt(j) !== ch) { if (line.charAt(j) === "\\") j++; j++; } push(line.slice(i, j + 1), "str"); i = j + 1; continue; }
+      if (ch === "@" && (m = /^@[A-Za-z_][\w.]*/.exec(rest))) { push(m[0], "ann"); i += m[0].length; continue; }
+      if ((m = /^(0[xX][\da-fA-F_]+|\d[\d_]*(\.\d+)?([eE][+-]?\d+)?)[lLfFdD]?/.exec(rest)) && !/[\w$]/.test(line.charAt(i - 1) || "")) { push(m[0], "num"); i += m[0].length; continue; }
+      if ((m = /^[A-Za-z_$][\w$]*/.exec(rest))) { push(m[0], JAVA_KW[m[0]] ? "kw" : ""); i += m[0].length; continue; }
+      m = /^[^\/"'@\w$]+|^./.exec(rest); push(m[0], ""); i += m[0].length;
+    }
+    return out;
+  }
+  function tokXml(line, st) {
+    var out = [], i = 0, n = line.length, m;
+    function push(t, c) { if (t) out.push([t, c]); }
+    while (i < n) {
+      var rest = line.slice(i);
+      if (st.comment) { var e = line.indexOf("-->", i); if (e < 0) { push(rest, "cm"); return out; } push(line.slice(i, e + 3), "cm"); i = e + 3; st.comment = false; continue; }
+      if (st.cdata) { var e3 = line.indexOf("]]>", i); if (e3 < 0) { push(rest, ""); return out; } push(line.slice(i, e3), ""); push("]]>", "tag"); i = e3 + 3; st.cdata = false; continue; }
+      if (st.tag) {
+        if ((m = /^\s+/.exec(rest))) { push(m[0], ""); i += m[0].length; continue; }
+        if ((m = /^\/?>|^\?>/.exec(rest))) { push(m[0], "tag"); i += m[0].length; st.tag = false; continue; }
+        if (rest.charAt(0) === '"' || rest.charAt(0) === "'") { var q = rest.charAt(0), j = rest.indexOf(q, 1); var s = j < 0 ? rest : rest.slice(0, j + 1); pushVars(out, s, "str"); i += s.length; continue; }
+        if ((m = /^[\w:.\-]+/.exec(rest))) { push(m[0], "attr"); i += m[0].length; continue; }
+        push(rest.charAt(0), ""); i++; continue;
+      }
+      if (rest.indexOf("<!--") === 0) { st.comment = true; push("<!--", "cm"); i += 4; continue; }
+      if (rest.indexOf("<![CDATA[") === 0) { st.cdata = true; push("<![CDATA[", "tag"); i += 9; continue; }
+      if ((m = /^<[?!\/]?[\w:.\-]*/.exec(rest)) && m[0].length > 1) { push(m[0], "tag"); i += m[0].length; st.tag = true; continue; }
+      if ((m = /^&[#\w]+;/.exec(rest))) { push(m[0], "ent"); i += m[0].length; continue; }
+      m = /^[^<&]+/.exec(rest) || [rest.charAt(0)];
+      pushVars(out, m[0], ""); i += m[0].length;
+    }
+    return out;
+  }
+  function pushVars(out, s, cls) {
+    var re = /[#$]\{[^}]*\}/g, last = 0, m;
+    while ((m = re.exec(s))) { if (m.index > last) out.push([s.slice(last, m.index), cls]); out.push([m[0], "var"]); last = m.index + m[0].length; }
+    if (last < s.length) out.push([s.slice(last), cls]);
+  }
+  function tokYaml(line) {
+    var out = [], m;
+    if (/^\s*#/.test(line)) return [[line, "cm"]];
+    var body = line, comment = "";
+    var cm = /\s#.*$/.exec(line);
+    if (cm && !/["'][^"']*\s#/.test(line)) { body = line.slice(0, cm.index); comment = line.slice(cm.index); }
+    if ((m = /^(\s*-?\s*)([^\s:#][^:]*?)(\s*:)(?=\s|$)/.exec(body))) {
+      out.push([m[1], ""]); out.push([m[2], "key"]); out.push([m[3], ""]); body = body.slice(m[0].length);
+    }
+    var v = /^(\s*)(.*)$/.exec(body);
+    if (v[1]) out.push([v[1], ""]);
+    var val = v[2];
+    if (/^(["']).*\1$/.test(val)) pushVars(out, val, "str");
+    else if (/^(true|false|null|~|-?\d+(\.\d+)?)$/.test(val)) out.push([val, "num"]);
+    else pushVars(out, val, "");
+    if (comment) out.push([comment, "cm"]);
+    return out;
+  }
+  function tokProps(line) {
+    if (/^\s*[#!]/.test(line)) return [[line, "cm"]];
+    var m = /^(\s*)((?:\\.|[^=:\s])+)(\s*[=:]\s*|\s+)?(.*)$/.exec(line);
+    if (!m) return [[line, ""]];
+    var out = [[m[1], ""], [m[2], "key"], [m[3] || "", ""]];
+    pushVars(out, m[4], "");
+    return out;
+  }
+
+  // ------------------------------------------------------------------ inline (word-level) diff
+  function wordRanges(a, b) {
+    var ta = a.match(/\w+|\s+|[^\w\s]/g) || [], tb = b.match(/\w+|\s+|[^\w\s]/g) || [];
+    var n = ta.length, m = tb.length;
+    if (!n || !m) return [[[0, a.length]], [[0, b.length]]];
+    if (n * m > 160000) return prefixSuffix(a, b);
+    var dp = new Array(n + 1);
+    for (var i = 0; i <= n; i++) dp[i] = new Uint16Array(m + 1);
+    for (i = n - 1; i >= 0; i--) for (var j = m - 1; j >= 0; j--) dp[i][j] = ta[i] === tb[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+    var ka = [], kb = [], pa = 0, pb = 0, same = 0;
+    i = 0; j = 0;
+    while (i < n && j < m) {
+      if (ta[i] === tb[j]) { pa += ta[i].length; pb += tb[j].length; if (/\S/.test(ta[i])) same += ta[i].length; i++; j++; }
+      else if (dp[i + 1][j] >= dp[i][j + 1]) { ka.push([pa, pa + ta[i].length]); pa += ta[i].length; i++; }
+      else { kb.push([pb, pb + tb[j].length]); pb += tb[j].length; j++; }
+    }
+    while (i < n) { ka.push([pa, pa + ta[i].length]); pa += ta[i++].length; }
+    while (j < m) { kb.push([pb, pb + tb[j].length]); pb += tb[j++].length; }
+    // lines that share almost nothing are shown as plain changed lines, without word highlights
+    if (same < 0.25 * Math.min(a.replace(/\s/g, "").length, b.replace(/\s/g, "").length)) return [[], []];
+    return [merge(ka), merge(kb)];
+  }
+  function prefixSuffix(a, b) {
+    var p = 0; while (p < a.length && p < b.length && a.charAt(p) === b.charAt(p)) p++;
+    var s = 0; while (s < a.length - p && s < b.length - p && a.charAt(a.length - 1 - s) === b.charAt(b.length - 1 - s)) s++;
+    return [[[p, a.length - s]], [[p, b.length - s]]];
+  }
+  function merge(rs) {
+    var out = [];
+    rs.forEach(function (r) { if (out.length && out[out.length - 1][1] >= r[0]) out[out.length - 1][1] = r[1]; else out.push([r[0], r[1]]); });
+    return out.filter(function (r) { return r[1] > r[0]; });
+  }
+  function lineHtml(tokens, ranges) {
+    var html = "", pos = 0, indent = 0;
+    ranges = ranges || [];
+    // indentation is non-breaking so wrapped lines never break right after the indent
+    var full = tokens.map(function (tk) { return tk[0]; }).join("");
+    indent = /^[ \t]*/.exec(full)[0].length;
+    if (indent === full.length) indent = 0;
+    tokens.forEach(function (tk) {
+      var t = tk[0], c = tk[1], k = 0;
+      while (k < t.length) {
+        var abs = pos + k, inR = false, next = pos + t.length;
+        for (var r = 0; r < ranges.length; r++) {
+          if (abs >= ranges[r][0] && abs < ranges[r][1]) { inR = true; next = Math.min(next, ranges[r][1]); }
+          else if (ranges[r][0] > abs) next = Math.min(next, ranges[r][0]);
+        }
+        var raw = t.slice(k, next - pos);
+        if (abs < indent) { var cut = Math.min(indent - abs, raw.length); raw = raw.slice(0, cut).replace(/\t/g, "    ").replace(/ /g, "\u00a0") + raw.slice(cut); }
+        var piece = esc(raw);
+        if (c) piece = '<span class="tk-' + c + '">' + piece + "</span>";
+        html += inR ? '<span class="in">' + piece + "</span>" : piece;
+        k = next - pos;
+      }
+      pos += t.length;
+    });
+    return html;
+  }
+
+  // ------------------------------------------------------------------ rows
+  // A row has one cell per column: {side, idx (0-based line or -1), kind}; hunk rows carry the hunk index.
+  function buildRows(file, mode) {
+    var cols = mode === "2col" ? ["ours", "theirs"] : ["ours", "base", "theirs"];
+    var L = {}; cols.forEach(function (s) { L[s] = splitLines(file[s]); });
+    var rows = [], p = { ours: 0, base: 0, theirs: 0 };
+    function equalRun(count) {
+      for (var k = 0; k < count; k++) {
+        rows.push({ hunk: -1, cells: cols.map(function (s) { return { side: s, idx: p[s] + k, kind: "eq" }; }) });
+      }
+      cols.forEach(function (s) { p[s] += count; });
+    }
+    if (mode === "2col") {
+      file.hunks2.forEach(function (h, hi) {
+        equalRun(h.l[0] - p.ours);
+        var lo = h.l[1] - h.l[0], lt = h.r[1] - h.r[0], n = Math.max(lo, lt);
+        for (var k = 0; k < n; k++) {
+          rows.push({ hunk: hi, cells: [
+            k < lo ? { side: "ours", idx: h.l[0] + k, kind: lt === 0 ? "del" : "mod", pair: k < lt ? h.r[0] + k : -1 } : { side: "ours", idx: -1, kind: lo === 0 ? "delpad" : "pad" },
+            k < lt ? { side: "theirs", idx: h.r[0] + k, kind: lo === 0 ? "add" : "mod", pair: k < lo ? h.l[0] + k : -1 } : { side: "theirs", idx: -1, kind: lt === 0 ? "delpad" : "pad" }
+          ] });
+        }
+        p.ours = h.l[1]; p.theirs = h.r[1];
+      });
+      equalRun(Math.max(0, L.ours.length - p.ours));
+      return { cols: cols, rows: rows, lines: L };
+    }
+    file.hunks3.forEach(function (h, hi) {
+      equalRun(h.b[0] - p.base);
+      var lb = h.b[1] - h.b[0], lo = h.o[1] - h.o[0], lt = h.t[1] - h.t[0], n = Math.max(lb, lo, lt);
+      var oCh = h.type !== "theirs", tCh = h.type !== "ours", conf = h.type === "conflict";
+      function sideCell(s, start, len, changed, k) {
+        if (k < len) {
+          if (!changed) return { side: s, idx: start + k, kind: "eq" };
+          return { side: s, idx: start + k, kind: conf ? "conf" : (lb === 0 ? "add" : "mod"), pair: k < lb ? h.b[0] + k : -1 };
+        }
+        return { side: s, idx: -1, kind: changed && len === 0 ? "delpad" : "pad" };
+      }
+      var allDeleted = (!oCh || lo === 0) && (!tCh || lt === 0);
+      // base lines are word-diffed against the side that changed them (ours when both made the same edit)
+      function baseCell(k) {
+        var c = { side: "base", idx: h.b[0] + k, kind: conf ? "baseconf" : (allDeleted ? "del" : "basechg") };
+        if (!conf && !allDeleted) { c.pairSide = oCh ? "ours" : "theirs"; c.pair = k < (oCh ? lo : lt) ? (oCh ? h.o[0] : h.t[0]) + k : -1; }
+        return c;
+      }
+      for (var k = 0; k < n; k++) {
+        rows.push({ hunk: hi, type: h.type, cells: [
+          sideCell("ours", h.o[0], lo, oCh, k),
+          k < lb ? baseCell(k) : { side: "base", idx: -1, kind: "pad" },
+          sideCell("theirs", h.t[0], lt, tCh, k)
+        ] });
+      }
+      p.base = h.b[1]; p.ours = h.o[1]; p.theirs = h.t[1];
+    });
+    equalRun(Math.max(0, L.base.length - p.base));
+    // the base may be shorter than a side that appended lines after the last hunk
+    return { cols: cols, rows: rows, lines: L };
+  }
+
+  // ------------------------------------------------------------------ diff view
+  var view = null;
+  function sideTitle(s) {
+    var m = DATA.meta, r = s === "base" ? { ref: "merge-base", sha: m.refs.mergeBase } : refParts(m.refs[s]);
+    return (s === "base" ? "merge-base" : s + (r.ref ? " \u2014 " + r.ref : "")) + " (" + short(r.sha) + ")";
+  }
+  function renderDiff(f) {
+    var targets = f ? f.targets : [];
+    var t = targets[state.target];
+    var paths = [];
+    targets.forEach(function (x) { if (paths.indexOf(x.path) < 0) paths.push(x.path); });
+    if (!state.path || paths.indexOf(state.path) < 0) state.path = t ? t.path : paths[0];
+    var file = state.path ? DATA.files[state.path] : null;
+    var fb = "";
+    if (state.path) {
+      fb += '<span class="path">' + esc(state.path) + "</span>";
+      if (paths.length > 1) fb += '<span class="seg" id="fileSeg">' + paths.map(function (p) { return '<button data-path="' + esc(p) + '" class="' + (p === state.path ? "on" : "") + '">' + esc(p.split("/").pop()) + "</button>"; }).join("") + "</span>";
+      fb += '<button class="btn" id="prevCh" title="Previous change (Shift+F7)">\u25B2</button><button class="btn" id="nextCh" title="Next change (F7)">\u25BC</button><button class="btn" id="expandAll">Expand all</button>';
+      fb += '<span class="legend"><span><i style="background:var(--add)"></i>added</span><span><i style="background:var(--mod)"></i>changed</span><span><i style="background:var(--del)"></i>deleted</span><span><i style="background:var(--conf)"></i>conflict</span><span><i style="background:var(--target);border-color:var(--target-bd)"></i>finding</span></span>';
+    }
+    $("filebar").innerHTML = fb;
+    if (!file) { $("diff").innerHTML = '<div class="empty">' + (f ? "This finding has no file location." : "Select a finding.") + "</div>"; view = null; return; }
+    var cols = state.mode === "2col" ? ["ours", "theirs"] : ["ours", "base", "theirs"];
+    if (cols.every(function (s) { return file[s] == null; })) {
+      $("diff").innerHTML = '<div class="empty">File content not available' + (file.notes && file.notes.length ? ": " + esc(file.notes.join("; ")) : "") + ".</div>";
+      view = null; return;
+    }
+    var built = buildRows(file, state.mode);
+    var tk = {};
+    cols.forEach(function (s) { tk[s] = tokenizeFile(state.path, s, file[s], file.lang); });
+    var baseLines = splitLines(file.base), oursLines = built.lines.ours, theirsLines = built.lines.theirs;
+    // target row: the row showing the target's line on the target's side (base targets fall back to ours in 2-col)
+    var tSide = t && t.path === state.path ? t.side : null, tLine = t && t.path === state.path ? t.line - 1 : -1;
+    if (tSide === "base" && state.mode === "2col") tSide = null;
+    var targetRow = -1;
+    built.rows.forEach(function (r, ri) { r.cells.forEach(function (c) { if (c.side === tSide && c.idx === tLine && targetRow < 0) targetRow = ri; }); });
+    // folding: keep rows near hunks and near the target
+    var keep = new Uint8Array(built.rows.length);
+    built.rows.forEach(function (r, ri) {
+      if (r.hunk >= 0 || ri === targetRow) for (var k = Math.max(0, ri - (ri === targetRow ? 6 : CTX)); k <= Math.min(built.rows.length - 1, ri + (ri === targetRow ? 6 : CTX)); k++) keep[k] = 1;
+    });
+    var exp = state.expanded[state.path + "|" + state.mode] || {};
+    var html = "<table class=\"diff\"><colgroup>";
+    cols.forEach(function (s, i) { if (i) html += '<col class="gap">'; html += '<col class="ln"><col>'; });
+    html += "</colgroup><thead><tr>";
+    cols.forEach(function (s, i) {
+      if (i) html += '<th class="gap"></th>';
+      html += '<th colspan="2">' + esc(sideTitle(s)) + (file[s] == null ? ' <span class="absent">(file absent)</span>' : "") + "</th>";
+    });
+    html += "</tr></thead><tbody>";
+    var ri = 0, n = built.rows.length, hunkFirstRow = {};
+    while (ri < n) {
+      if (!keep[ri] && !exp[ri]) {
+        var end = ri; while (end < n && !keep[end]) end++;
+        if (end - ri >= 4) {
+          html += '<tr class="fold" data-from="' + ri + '" data-to="' + end + '"><td colspan="' + (cols.length * 3 - 1) + '">\u22EF expand ' + (end - ri) + " unchanged lines</td></tr>";
+          ri = end; continue;
+        }
+      }
+      var r = built.rows[ri];
+      if (r.hunk >= 0 && hunkFirstRow[r.hunk] == null) hunkFirstRow[r.hunk] = ri;
+      html += '<tr data-r="' + ri + '"' + (r.hunk >= 0 ? ' data-h="' + r.hunk + '"' : "") + (ri === targetRow ? ' class="target"' : "") + ">";
+      r.cells.forEach(function (c, ci) {
+        if (ci) html += '<td class="gap' + (r.hunk >= 0 ? " h" : "") + '"></td>';
+        var ts = ri === targetRow && c.side === tSide ? " tside" : "";
+        if (c.idx < 0) { html += '<td class="ln' + ts + '"></td><td class="code k-' + c.kind + ts + '"></td>'; return; }
+        var text = built.lines[c.side] ? built.lines[c.side][c.idx] : baseLines[c.idx];
+        var ranges = null;
+        if ((c.kind === "mod" || c.kind === "conf") && c.pair != null && c.pair >= 0) {
+          var other = state.mode === "2col" ? (c.side === "ours" ? theirsLines[c.pair] : oursLines[c.pair]) : baseLines[c.pair];
+          if (other != null) { var wr = wordRanges(other, text); ranges = wr[1]; }
+        } else if (c.kind === "basechg" && c.pair != null && c.pair >= 0) {
+          var changed = built.lines[c.pairSide][c.pair];
+          if (changed != null) ranges = wordRanges(text, changed)[0];
+        }
+        html += '<td class="ln' + ts + '">' + (c.idx + 1) + '</td><td class="code k-' + c.kind + ts + '">' + (lineHtml(tk[c.side][c.idx] || [[text, ""]], ranges) || " ") + "</td>";
+      });
+      html += "</tr>";
+      ri++;
+    }
+    html += "</tbody></table>";
+    if (file.notes && file.notes.length) html = '<div class="empty" style="padding:6px 10px">' + esc(file.notes.join("; ")) + "</div>" + html;
+    $("diff").innerHTML = html;
+    view = { targetRow: targetRow, cur: targetRow >= 0 ? built.rows[targetRow].hunk : -1 };
+    var tr = targetRow >= 0 ? document.querySelector('#diff tr[data-r="' + targetRow + '"]') : null;
+    if (tr) scrollToRow(tr);
+    else { var first = document.querySelector("#diff tr[data-h]"); if (first) scrollToRow(first); else $("diff").scrollTop = 0; }
+  }
+  function scrollToRow(tr) {
+    var d = $("diff");
+    d.scrollTop = Math.max(0, tr.offsetTop - d.clientHeight / 2 + tr.offsetHeight / 2);
+  }
+  function jumpHunk(dir) {
+    var rows = Array.prototype.slice.call(document.querySelectorAll("#diff tr[data-h]"));
+    if (!rows.length || !view) return;
+    var starts = rows.filter(function (r, i) { return i === 0 || rows[i - 1].getAttribute("data-h") !== r.getAttribute("data-h"); });
+    var cur = -1;
+    starts.forEach(function (r, i) { if (+r.getAttribute("data-h") === view.cur) cur = i; });
+    var pick;
+    if (cur >= 0) pick = (cur + dir + starts.length) % starts.length;
+    else {
+      // no current change yet: take the first change below (or above) the middle of the viewport
+      var d = $("diff"), mid = d.scrollTop + d.clientHeight / 2;
+      pick = dir > 0 ? starts.findIndex(function (r) { return r.offsetTop > mid; }) : -1;
+      if (dir < 0) for (var i = starts.length - 1; i >= 0; i--) if (starts[i].offsetTop < mid) { pick = i; break; }
+      if (pick < 0) pick = dir > 0 ? 0 : starts.length - 1;
+    }
+    var row = starts[pick], h = row.getAttribute("data-h");
+    view.cur = +h;
+    scrollToRow(row);
+    document.querySelectorAll('#diff tr[data-h="' + h + '"]').forEach(function (r) { r.classList.remove("flash"); void r.offsetWidth; r.classList.add("flash"); });
+  }
+
+  // ------------------------------------------------------------------ selection / state
+  function select(id, opts) {
+    opts = opts || {};
+    var f = byId[id];
+    if (!f) return;
+    var changed = state.sel !== id;
+    state.sel = id;
+    if (changed && opts.target == null) { state.target = 0; state.path = null; }
+    if (opts.target != null) { state.target = opts.target; state.path = f.targets[opts.target] ? f.targets[opts.target].path : null; }
+    document.querySelectorAll("#tree .item.sel").forEach(function (e) { e.classList.remove("sel"); });
+    var it = document.querySelector('#tree .item[data-id="' + id + '"]');
+    if (it) { it.classList.add("sel"); if (!opts.noScroll) it.scrollIntoView({ block: "nearest" }); }
+    card(f);
+    renderDiff(f);
+    writeHash();
+  }
+  function writeHash() {
+    var h = "finding=" + (state.sel || "") + "&mode=" + state.mode + "&theme=" + state.theme + (state.target ? "&target=" + state.target : "");
+    try { history.replaceState(null, "", "#" + h); } catch (e) { /* file:// in some browsers */ }
+  }
+  function readHash() {
+    var q = {};
+    location.hash.replace(/^#/, "").split("&").forEach(function (kv) { var p = kv.split("="); if (p[0]) q[decodeURIComponent(p[0])] = decodeURIComponent(p[1] || ""); });
+    return q;
+  }
+  function setMode(m) {
+    state.mode = m === "2col" ? "2col" : "3col";
+    document.querySelectorAll("#modeSeg button").forEach(function (b) { b.classList.toggle("on", b.getAttribute("data-mode") === state.mode); });
+  }
+  function setTheme(t) {
+    state.theme = t === "dark" ? "dark" : "light";
+    document.body.className = state.theme;
+    $("themeBtn").textContent = state.theme === "dark" ? "Light" : "Dark";
+  }
+
+  // ------------------------------------------------------------------ events
+  $("tree").addEventListener("click", function (e) {
+    var it = e.target.closest(".item");
+    if (it) { select(+it.getAttribute("data-id"), { noScroll: true }); return; }
+    var gh = e.target.closest(".gh, .ch");
+    if (gh) { var box = gh.parentNode, key = box.getAttribute("data-g") || box.getAttribute("data-c"); state.collapsed[key] = !state.collapsed[key]; tree(); }
+  });
+  $("card").addEventListener("click", function (e) {
+    var j = e.target.closest(".jump");
+    if (j) select(state.sel, { target: +j.getAttribute("data-t") });
+  });
+  $("filebar").addEventListener("click", function (e) {
+    var b = e.target.closest("button");
+    if (!b) return;
+    if (b.id === "nextCh") jumpHunk(1);
+    else if (b.id === "prevCh") jumpHunk(-1);
+    else if (b.id === "expandAll") { var all = {}; for (var i = 0; i < 100000; i++) all[i] = 1; state.expanded[state.path + "|" + state.mode] = all; renderDiff(byId[state.sel]); }
+    else if (b.getAttribute("data-path")) { state.path = b.getAttribute("data-path"); renderDiff(byId[state.sel]); }
+  });
+  $("diff").addEventListener("click", function (e) {
+    var tr = e.target.closest("tr.fold");
+    if (!tr) return;
+    var key = state.path + "|" + state.mode, exp = state.expanded[key] || (state.expanded[key] = {});
+    for (var i = +tr.getAttribute("data-from"); i < +tr.getAttribute("data-to"); i++) exp[i] = 1;
+    var top = $("diff").scrollTop;
+    renderDiff(byId[state.sel]);
+    $("diff").scrollTop = top;
+  });
+  $("modeSeg").addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    setMode(b.getAttribute("data-mode")); renderDiff(byId[state.sel]); writeHash();
+  });
+  $("themeBtn").addEventListener("click", function () { setTheme(state.theme === "dark" ? "light" : "dark"); writeHash(); });
+  $("search").addEventListener("input", function () { state.q = this.value.trim().toLowerCase(); tree(); });
+  $("filters").addEventListener("change", function (e) {
+    var g = e.target.getAttribute("data-g"); if (!g) return;
+    state.hidden[g] = !e.target.checked; tree();
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.target && e.target.id === "search" && e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+    if (e.key === "F7") { e.preventDefault(); jumpHunk(e.shiftKey ? -1 : 1); return; }
+    var dir = (e.key === "ArrowDown" || e.key === "j") ? 1 : (e.key === "ArrowUp" || e.key === "k") ? -1 : 0;
+    if (!dir) return;
+    e.preventDefault();
+    var ids = visibleIds(); if (!ids.length) return;
+    var i = ids.indexOf(state.sel);
+    select(ids[i < 0 ? 0 : Math.min(ids.length - 1, Math.max(0, i + dir))]);
+  });
+
+  // ------------------------------------------------------------------ init
+  header();
+  var q = readHash();
+  setTheme(q.theme || "light");
+  setMode(q.mode || "3col");
+  tree();
+  var first = +q.finding || (DATA.findings.find(function (f) { return f.group === "HIGH"; }) || DATA.findings[0] || {}).id;
+  if (first) select(first, q.target ? { target: +q.target } : {});
+  else { $("card").innerHTML = '<div class="empty">No findings.</div>'; renderDiff(null); }
+})();
+</script>
+</body>
+</html>

@@ -31,6 +31,10 @@ import java.util.function.Supplier;
 public final class Analyzer {
     private final Options opt;
     private final List<String> warnings = new ArrayList<>();
+    /** the three versions of the last run (used by the HTML report to embed file contents) */
+    public Snapshot lastBase, lastOurs, lastTheirs;
+    /** git access of the last {@link #runFromGit()} (null for {@link #run} on in-memory snapshots) */
+    public GitRunner lastGit;
 
     public Analyzer(Options opt) {
         this.opt = opt;
@@ -42,6 +46,7 @@ public final class Analyzer {
 
     public Report runFromGit() {
         GitRunner git = new GitRunner(opt.repo.toAbsolutePath().normalize());
+        lastGit = git;
         git.run("rev-parse", "--git-dir");
         String oursC = git.resolveCommit(opt.ours);
         String theirsC = git.resolveCommit(opt.theirs);
@@ -64,6 +69,9 @@ public final class Analyzer {
     }
 
     public Report run(Snapshot base, Snapshot ours, Snapshot theirs) {
+        lastBase = base;
+        lastOurs = ours;
+        lastTheirs = theirs;
         Path tmp;
         try {
             tmp = Files.createTempDirectory("branchdiff-");

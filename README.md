@@ -34,6 +34,9 @@ java -jar target/branch-diff-tool.jar \
 
 # JSON output
 java -jar target/branch-diff-tool.jar --repo . --theirs feature-x --json -o report.json
+
+# self-contained HTML report (IDEA-style diff viewer, see below)
+java -jar target/branch-diff-tool.jar --repo . --theirs feature-x --html -o report.html
 ```
 
 `--ours` defaults to `HEAD`; `--theirs` is required; `--service-dir` defaults to the repo root; without `-o` the report goes to stdout.
@@ -43,7 +46,7 @@ java -jar target/branch-diff-tool.jar --repo . --theirs feature-x --json -o repo
 | `--repo <path>` | Path to the git repository (default `.`) |
 | `--ours <ref>` / `--theirs <ref>` | The two branches/commits; the merge-base is computed automatically |
 | `--service-dir <dir>` | Analyze only this subdirectory (changes in other directories do not enter the report) |
-| `--format md\|json`, `--json` | Output format, Markdown by default |
+| `--format md\|json\|html`, `--json`, `--html` | Output format, Markdown by default; `html` is a single self-contained page (see [HTML report](#html-report)) |
 | `-o, --output <file>` | Output file |
 | `--no-maven` | Skip `mvn dependency:build-classpath` (faster, but third-party library types cannot be resolved, so more entries become UNCERTAIN) |
 | `--mvn <cmd>` / `--maven-timeout <sec>` | Maven command and timeout (defaults `mvn`, 600 seconds) |
@@ -52,6 +55,27 @@ java -jar target/branch-diff-tool.jar --repo . --theirs feature-x --json -o repo
 | `--no-siblings` | Same as `--include-siblings none` |
 | `--fail-on-findings` | Exit code 2 when there are certain HIGH findings (useful in CI) |
 | `--keep-temp`, `-v` | Keep the temp directory / print progress |
+
+## HTML report
+
+`--html` (same as `--format html`) writes **one self-contained `.html` file** in the style of IntelliJ IDEA's diff/merge viewer. All CSS and JavaScript are inline: no CDN, no network access, it works offline and can be attached to a ticket or sent by mail.
+
+```bash
+java -jar target/branch-diff-tool.jar --repo . --theirs feature-x --service-dir order-service --html -o report.html
+```
+
+![HTML report: three-column view of a both-modified finding](docs/html-report.png)
+
+- **Sidebar**: findings grouped by severity (HIGH / MEDIUM / LOW / UNCERTAIN), then by category, with counts, per-group filter toggles and a search box (symbol, file, message, status).
+- **Header**: repo, service dir, ours / merge-base / theirs refs and summary counts.
+- **Finding card**: severity, status, kind, symbol, origin, message, details, and every location (`needed by` / `used at` / ours / theirs / base) as a clickable jump that switches file when needed.
+- **Diff view**: three columns `ours | merge-base | theirs` (toggle to two columns `ours | theirs`), line numbers, one scroll container so all columns scroll together, added (green), changed (blue), deleted (grey) and conflicting (red, both sides changed the same base lines) blocks, word-level inline highlights, unchanged regions collapsed with "expand N lines" rows (and *Expand all*). The finding's line is highlighted and scrolled into view.
+- **Syntax highlighting** for Java, XML (MyBatis `#{}` / `${}` marked), YAML and properties (small built-in tokenizer).
+- **Keyboard**: <kbd>↑</kbd>/<kbd>↓</kbd> or <kbd>j</kbd>/<kbd>k</kbd> move between findings, <kbd>F7</kbd> / <kbd>Shift+F7</kbd> next / previous change.
+- **Themes**: IDEA Light (default) and a Darcula-like dark theme.
+- **URL hash** holds the state, e.g. `report.html#finding=3&mode=2col&theme=dark` (`target=N` selects the N-th location of the finding), so links and headless screenshots can open a specific view.
+
+Only files referenced by findings are embedded, read from git at the three revisions; a version larger than 1 MB is skipped with a note. Line diffs (Myers, [java-diff-utils](https://github.com/java-diff-utils/java-diff-utils), Apache-2.0) are computed in Java and embedded as JSON; the three-column view groups ours and theirs changes per merge-base range the way `diff3` does. `docs/sample-report.html` is the report of the verification sample below.
 
 ## What it detects
 
@@ -140,4 +164,5 @@ java -jar target/branch-diff-tool.jar --repo /workspace/branch-diff-sample \
 - Method-level matching is based on simple type names (generics erased), so parameter types with the same name in different packages may be wrongly considered identical; moving/renaming a whole class shows up as "removed + added".
 - Field reverse tracking: only handles "removed/renamed"; does not report field **type changes** or static/final changes; rename detection relies on an identical non-empty initializer, so renames of fields without initializers and of enum constants without arguments are reported as `*_REMOVED` (no new name given); a field moved to another (non-superclass) class counts as removed. References inside method-**local classes** and string-form references (reflection, SpEL, `#{field}` in MyBatis XML) are not scanned.
 - Value changes: only literal initializer / XML text is compared. A constant whose initializer is unchanged but refers to another changed constant is not reported separately (the referenced one is); values assigned in static blocks or constructors, values computed at runtime, and XML in sibling modules or outside the service directory are not covered. Theirs-only value changes in sibling modules are not reported (run with that module as `--service-dir`). `<include>`d fragments are compared as their own `<sql>` element, not inlined.
+- HTML report: the diff is line-based on the full file versions (not the AST), so a moved method shows up as delete + add; inline highlights are word-level and pair the k-th changed line with the k-th line of the other side; the three-column grouping is a `diff3`-style approximation and may differ from `git merge-file` in edge cases (the authoritative textual-conflict prediction stays in the card details). Only files referenced by findings are embedded; very large reports are not paginated.
 - The optional check "run `mvn compile` on the merge result" is not implemented (the requirements marked it as optional).
