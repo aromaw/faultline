@@ -191,6 +191,63 @@ ol.check li.sel .why { color: inherit; opacity: .85; }
 .item.sel .ctag { color: inherit; }
 .chainline { margin: 4px 0 0; font-size: 12px; }
 kbd { font: 10.5px var(--mono); border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 3px; padding: 0 3px; background: var(--bg); }
+/* ---- conflict mode */
+.sidehdr { padding: 8px 8px 2px; font: 600 11px var(--ui-font); color: var(--muted); text-transform: uppercase; letter-spacing: .4px; }
+.item.hunk .l1 .sym { flex: 1; min-width: 0; }
+.mini { font: 700 9.5px/14px var(--ui-font); padding: 0 4px; border-radius: 3px; flex: none; border: 1px solid var(--border); color: var(--muted); }
+.mini.red { background: var(--high); color: #fff; border-color: transparent; }
+.mini.amb { background: var(--medium); color: #fff; border-color: transparent; }
+.mini.blu { color: var(--accent); border-color: var(--accent); }
+.item.sel .mini { border-color: currentColor; }
+.cat > .ch .fname { font-family: var(--mono); font-size: 11.5px; color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+tr.creg td.ln { background: var(--target); color: var(--fg); font-weight: 700; box-shadow: inset -3px 0 0 var(--target-bd); }
+tr.creg2 td.ln { box-shadow: inset -3px 0 0 var(--high); }
+.ptext { padding: 2px 12px 8px; font-size: 12.5px; line-height: 1.55; }
+.ptext.box { margin: 2px 10px 8px; padding: 6px 9px; border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 4px; background: var(--panel); }
+.ptext.warn { border-left-color: var(--medium); }
+table.ctable { width: calc(100% - 16px); margin: 2px 8px 10px; border-collapse: collapse; font-size: 12px; }
+table.ctable th { text-align: left; font-weight: 600; color: var(--muted); font-size: 11px; padding: 3px 6px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+table.ctable td { padding: 4px 6px; border-bottom: 1px solid var(--border); vertical-align: top; }
+table.ctable tr[data-node] { cursor: pointer; }
+table.ctable tr[data-node]:hover td { background: var(--hover); }
+table.ctable tr.sel td { background: var(--sel); color: var(--sel-fg); }
+table.ctable tr.faint td { opacity: .55; }
+table.ctable .sym { font-family: var(--mono); font-size: 11.5px; word-break: break-all; }
+table.ctable .det { color: var(--muted); font-size: 11px; }
+.og { font: 700 9.5px/15px var(--ui-font); padding: 0 5px; border-radius: 3px; border: 1px solid var(--border); white-space: nowrap; display: inline-block; }
+.og-ADDED_ON_MAINLINE, .og-LIBRARY { background: var(--high); color: #fff; border-color: transparent; }
+.og-RENAMED_ON_MAINLINE, .og-MOVED_ON_MAINLINE, .og-SIGNATURE_CHANGED_ON_MAINLINE, .og-CHANGED_BY_TENANT { background: var(--medium); color: #fff; border-color: transparent; }
+.og-IN_PICK, .og-IN_HUNK { color: var(--accent); border-color: var(--accent); }
+.og-PRESENT { color: var(--low); border-color: var(--low); }
+.sha { font: 11.5px var(--mono); color: var(--accent); white-space: nowrap; }
+.ev { display: grid; grid-template-columns: 76px 78px 1fr; gap: 0 8px; padding: 3px 12px; font-size: 12px; border-bottom: 1px solid var(--border); align-items: baseline; }
+.ev .k { font: 700 10px var(--ui-font); text-transform: lowercase; color: var(--muted); }
+.ev .s { color: var(--muted); font-size: 11.5px; }
+.ev .m { font-family: var(--mono); font-size: 11.5px; }
+.ev[data-node] { cursor: pointer; }
+.ev[data-node]:hover { background: var(--hover); }
+.blame { display: flex; flex-wrap: wrap; gap: 4px; padding: 2px 12px 8px; }
+.blame span { font: 11px var(--mono); padding: 1px 5px; border-radius: 3px; background: var(--panel2); border: 1px solid var(--border); }
+.blame span.new { border-color: var(--medium); }
+.ab { font: 700 10px/15px var(--ui-font); padding: 0 5px; border-radius: 3px; color: #fff; background: var(--unc); white-space: nowrap; }
+.ab-CONSIDER_COMMIT { background: #8250c4; } .ab-BRING, .ab-BRING_FILE { background: var(--high); } .ab-ADAPT { background: var(--medium); }
+.ab-RESOLVE { background: var(--accent); } .ab-CHECK_FINDING { background: var(--unc); }
+.hchip { font: 600 10.5px var(--mono); padding: 0 4px; border-radius: 3px; background: var(--panel2); border: 1px solid var(--border); cursor: pointer; white-space: nowrap; }
+.hchip.cur { background: var(--accent); color: #fff; border-color: var(--accent); }
+ol.check li.mine { box-shadow: inset 3px 0 0 var(--accent); }
+.eproute { font: 600 12px var(--mono); }
+.needs { margin: 2px 8px 10px; border-top: 1px solid var(--border); }
+.need { padding: 5px 6px; border-bottom: 1px solid var(--border); cursor: pointer; font-size: 12px; border-left: 3px solid transparent; }
+.need:hover { background: var(--hover); }
+.need.sel { background: var(--sel); color: var(--sel-fg); border-left-color: var(--accent); }
+.need.faint { opacity: .55; }
+.need .n1 { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.need .n2 { margin: 2px 0 0 32px; }
+.need .sym { font-family: var(--mono); font-size: 11.5px; word-break: break-all; }
+.need .det { color: var(--muted); font-size: 11px; }
+.need.sel .det { color: inherit; opacity: .85; }
+.epath { display: flex; flex-wrap: wrap; gap: 3px; align-items: center; margin-top: 2px; }
+.epath .nl { font-size: 11px; }
 </style>
 </head>
 <body class="light">
@@ -228,7 +285,8 @@ kbd { font: 10.5px var(--mono); border: 1px solid var(--border); border-bottom-w
   var GROUPS = ["HIGH", "MEDIUM", "LOW", "UNCERTAIN"];
   var CONTEXT_LINES = 3; // unchanged lines kept around each hunk
   var state = { sel: null, target: 0, path: null, mode: "3col", theme: "light", hidden: {}, q: "", expanded: {}, collapsed: {}, hunk: -1,
-    tab: "code", node: null, nodeTarget: null, groupBy: "sev", done: {}, ovScope: "chain", ovFile: null };
+    tab: "code", node: null, nodeTarget: null, groupBy: "sev", done: {}, ovScope: "chain", ovFile: null,
+    kind: "finding", hid: null, ctab: "c-conflict", ctarget: null };
   var byId = {};
   DATA.findings.forEach(function (f) { byId[f.id] = f; });
   // code-context view (dependency / impact trees, chains, checklists); null when the analysis could not build it
@@ -305,7 +363,7 @@ kbd { font: 10.5px var(--mono); border: 1px solid var(--border); border-bottom-w
       singles.sort(function (a, b) { return a.id - b.id; }).forEach(function (f) { html += itemHtml(f); });
       html += "</div></div>";
     }
-    $("tree").innerHTML = html || '<div class="empty">No findings match.</div>';
+    $("tree").innerHTML = conflictTreeHtml() + (html || '<div class="empty">No findings match.</div>');
   }
   function tree() {
     if (state.groupBy === "chain" && CTX) { chainTree(); return; }
@@ -324,7 +382,7 @@ kbd { font: 10.5px var(--mono); border: 1px solid var(--border); border-bottom-w
       });
       html += "</div></div>";
     });
-    $("tree").innerHTML = html || '<div class="empty">No findings match.</div>';
+    $("tree").innerHTML = conflictTreeHtml() + (html || '<div class="empty">No findings match.</div>');
   }
   function visibleIds() {
     return Array.prototype.map.call(document.querySelectorAll("#tree .item"), function (e) { return +e.getAttribute("data-id"); });
@@ -583,6 +641,13 @@ kbd { font: 10.5px var(--mono); border: 1px solid var(--border); border-bottom-w
   // ------------------------------------------------------------------ diff view
   var view = null;
   function sideTitle(s) {
+    if (CONF) {
+      var hf = state.kind === "hunk" && HUNK_FILE[state.hid] ? HUNK_FILE[state.hid] : null;
+      var pc = hf ? stepCommit(hf) : CONF.theirs;
+      if (s === "ours") return "ours \u2014 tenant (" + short(CONF.ours.sha) + ")";
+      if (s === "base") return "base \u2014 pick parent" + (hf && hf.step > 1 ? " (of " + short(pc.sha) + ")" : " (" + short(CONF.base.sha) + ")");
+      return "theirs \u2014 pick (" + short(pc.sha) + ")";
+    }
     var m = DATA.meta, r = s === "base" ? { ref: "merge-base", sha: m.refs.mergeBase } : refParts(m.refs[s]);
     return (s === "base" ? "merge-base" : s + (r.ref ? " \u2014 " + r.ref : "")) + " (" + short(r.sha) + ")";
   }
@@ -590,6 +655,7 @@ kbd { font: 10.5px var(--mono); border: 1px solid var(--border); border-bottom-w
   var curPath = null;
   function offsetOf(file, side) { return file && file.offset && file.offset[side] ? file.offset[side] : 0; }
   function renderDiff(f) {
+    if (state.kind === "hunk") { renderHunkViewer(); return; }
     if (state.tab !== "code") { renderMember(); return; }
     var targets = f ? f.targets : [];
     var t = targets[state.target];
@@ -606,12 +672,18 @@ kbd { font: 10.5px var(--mono); border: 1px solid var(--border); border-bottom-w
   // Draws one embedded file (or member pseudo-file) as a diff; t = {side, line} is the line to mark and scroll to.
   // Member pseudo-files drop the versions the member does not exist in: one column when only one version has it,
   // ours | theirs when the merge-base lacks it; regular files always follow the user's choice.
+  // In conflict mode the context panel takes ~40% of the width when a non-Conflict tab is open; three code columns
+  // would wrap every line, so the viewer drops to ours | theirs there unless the user picked a layout explicitly.
+  function userMode() {
+    if (state.kind === "hunk" && !state.modeLocked && state.mode === "3col" && document.body.classList.contains("ctxmode")) return "2col";
+    return state.mode;
+  }
   function effectiveMode(file) {
-    if (!file || !file.member) return state.mode;
+    if (!file || !file.member) return userMode();
     var present = ["ours", "base", "theirs"].filter(function (s) { return file[s] != null; });
     if (present.length === 1) return "1col:" + present[0];
     if (present.length === 2) return "2col";
-    return state.mode;
+    return userMode();
   }
   function drawFile(path, t, title, emptyMsg) {
     curPath = path;
@@ -620,7 +692,7 @@ kbd { font: 10.5px var(--mono); border: 1px solid var(--border); border-bottom-w
     if (path) {
       fb += title;
       fb += '<button class="btn" id="prevCh" title="Previous change (Shift+F7)">\u25B2</button><button class="btn" id="nextCh" title="Next change (F7)">\u25BC</button><button class="btn" id="expandAll">Expand all</button>';
-      fb += '<span class="legend"><span><i style="background:var(--add)"></i>added</span><span><i style="background:var(--mod)"></i>changed</span><span><i style="background:var(--del)"></i>deleted</span><span><i style="background:var(--conf)"></i>conflict</span><span><i style="background:var(--target);border-color:var(--target-bd)"></i>' + (file && file.member ? "selected" : "finding") + "</span></span>";
+      fb += '<span class="legend"><span><i style="background:var(--add)"></i>added</span><span><i style="background:var(--mod)"></i>changed</span><span><i style="background:var(--del)"></i>deleted</span><span><i style="background:var(--conf)"></i>conflict</span><span><i style="background:var(--target);border-color:var(--target-bd)"></i>' + (file && file.member ? "selected" : file && file.conflict ? "selected hunk" : "finding") + "</span>" + (file && file.conflict ? '<span><i style="border-color:var(--high);border-width:0 3px 0 0"></i>other hunks</span>' : "") + "</span>";
     }
     $("filebar").innerHTML = fb;
     if (!file) { $("diff").innerHTML = '<div class="empty">' + esc(emptyMsg) + "</div>"; view = null; return; }
@@ -639,10 +711,24 @@ kbd { font: 10.5px var(--mono); border: 1px solid var(--border); border-bottom-w
     if (tSide === "base" && mode === "2col") tSide = null;
     var targetRow = -1;
     built.rows.forEach(function (r, ri) { r.cells.forEach(function (c) { if (c.side === tSide && c.idx === tLine && targetRow < 0) targetRow = ri; }); });
+    // conflict files: rows inside a conflict region (the selected hunk is marked "creg", the others "creg2")
+    var regClass = [];
+    if (file.conflict && file.regions) {
+      var RK = { ours: "o", base: "b", theirs: "t" };
+      built.rows.forEach(function (r, ri) {
+        r.cells.forEach(function (c) {
+          if (c.idx < 0) return;
+          file.regions.forEach(function (g) {
+            var rg = g[RK[c.side]];
+            if (rg && c.idx + 1 >= rg[0] && c.idx + 1 <= rg[1]) regClass[ri] = g.id === state.hid && state.kind === "hunk" ? "creg" : (regClass[ri] || "creg2");
+          });
+        });
+      });
+    }
     // folding: keep rows near hunks and near the target
     var keep = new Uint8Array(built.rows.length);
     built.rows.forEach(function (r, ri) {
-      if (r.hunk >= 0 || ri === targetRow) for (var k = Math.max(0, ri - (ri === targetRow ? 6 : CONTEXT_LINES)); k <= Math.min(built.rows.length - 1, ri + (ri === targetRow ? 6 : CONTEXT_LINES)); k++) keep[k] = 1;
+      if (r.hunk >= 0 || ri === targetRow || regClass[ri]) for (var k = Math.max(0, ri - (ri === targetRow ? 6 : CONTEXT_LINES)); k <= Math.min(built.rows.length - 1, ri + (ri === targetRow ? 6 : CONTEXT_LINES)); k++) keep[k] = 1;
     });
     var exp = state.expanded[path + "|" + mode] || {};
     var html = "<table class=\"diff\"><colgroup>";
@@ -665,7 +751,8 @@ kbd { font: 10.5px var(--mono); border: 1px solid var(--border); border-bottom-w
       }
       var r = built.rows[ri];
       if (r.hunk >= 0 && hunkFirstRow[r.hunk] == null) hunkFirstRow[r.hunk] = ri;
-      html += '<tr data-r="' + ri + '"' + (r.hunk >= 0 ? ' data-h="' + r.hunk + '"' : "") + (ri === targetRow ? ' class="target"' : "") + ">";
+      var rc = (ri === targetRow && !regClass[ri] ? "target " : "") + (regClass[ri] || "");
+      html += '<tr data-r="' + ri + '"' + (r.hunk >= 0 ? ' data-h="' + r.hunk + '"' : "") + (rc ? ' class="' + rc.trim() + '"' : "") + ">";
       r.cells.forEach(function (c, ci) {
         if (ci) html += '<td class="gap' + (r.hunk >= 0 ? " h" : "") + '"></td>';
         var ts = ri === targetRow && c.side === tSide ? " tside" : "";
@@ -820,9 +907,9 @@ kbd { font: 10.5px var(--mono); border: 1px solid var(--border); border-bottom-w
     var path = DATA.files["@" + key] ? "@" + key : null;
     var t = state.nodeTarget, side = mainSide(n);
     if (!t && side) t = { side: side, line: n.loc[side].line };
-    if (t && t.side === "base" && state.mode === "2col") t = null;
+    if (t && t.side === "base" && userMode() === "2col") t = null;
     var where = ["ours", "base", "theirs"].filter(function (s) { return n.loc[s]; }).map(function (s) { var l = n.loc[s]; return s + " " + l.path.split("/").pop() + ":" + l.start + (l.end > l.start ? "-" + l.end : ""); }).join(" \u00B7 ");
-    var title = kindBadge(n) + '<span class="path" title="' + esc(n.symbol) + '">' + esc(n.label) + "</span>" + statusPill(n) + '<span class="hint">' + esc(n.change || "") + (where ? " \u00B7 " + esc(where) : "") + "</span>";
+    var title = (state.kind === "hunk" ? '<button class="btn" id="backConf" title="show the conflict hunk again">\u2190 hunk</button>' : "") + kindBadge(n) + '<span class="path" title="' + esc(n.symbol) + '">' + esc(n.label) + "</span>" + statusPill(n) + '<span class="hint">' + esc(n.change || "") + (where ? " \u00B7 " + esc(where) : "") + "</span>";
     drawFile(path, t, title, "No source location for this " + n.kind + " (" + n.ours.toLowerCase() + " in ours" + (n.note ? "; " + n.note : "") + ").");
   }
   // ---- overview: file-level graph of the chain(s), layered from roots (left) to dependencies (right)
@@ -900,6 +987,7 @@ kbd { font: 10.5px var(--mono); border: 1px solid var(--border); border-bottom-w
     writeHash();
   }
   function setTab(tab) {
+    if (CONF && tab && tab.indexOf("c-") === 0) { setCTab(tab); return; }
     state.tab = ["code", "deps", "impact", "check", "overview"].indexOf(tab) >= 0 ? tab : "code";
     document.querySelectorAll("#tabs button").forEach(function (b) { b.classList.toggle("on", b.getAttribute("data-tab") === state.tab); });
     var f = byId[state.sel];
@@ -927,6 +1015,13 @@ kbd { font: 10.5px var(--mono); border: 1px solid var(--border); border-bottom-w
     opts = opts || {};
     var f = byId[id];
     if (!f) return;
+    if (state.kind === "hunk") {
+      state.kind = "finding";
+      $("tabs").innerHTML = FIND_TABS;
+      state.tab = "code";
+      state.sel = null;
+      tree();
+    }
     var changed = state.sel !== id;
     state.sel = id;
     if (changed && opts.target == null) { state.target = 0; state.path = null; }
@@ -942,6 +1037,11 @@ kbd { font: 10.5px var(--mono); border: 1px solid var(--border); border-bottom-w
     writeHash();
   }
   function writeHash() {
+    if (state.kind === "hunk") {
+      var hh = "hunk=" + encodeURIComponent(state.hid) + "&ctab=" + state.ctab + (state.modeLocked ? "&mode=" + state.mode : "") + "&theme=" + state.theme + (state.node ? "&node=" + encodeURIComponent(state.node) : "");
+      try { history.replaceState(null, "", "#" + hh); } catch (e) { /* file:// in some browsers */ }
+      return;
+    }
     var h = "finding=" + (state.sel || "") + "&mode=" + state.mode + "&theme=" + state.theme + (state.target ? "&target=" + state.target : "") +
       (state.tab !== "code" ? "&tab=" + state.tab + (state.node ? "&node=" + encodeURIComponent(state.node) : "") : "") + (state.groupBy === "chain" ? "&group=chain" : "") +
       (state.tab === "overview" && state.ovScope === "all" ? "&ov=all" : "");
@@ -979,12 +1079,14 @@ kbd { font: 10.5px var(--mono); border: 1px solid var(--border); border-bottom-w
   });
   $("tree").addEventListener("click", function (e) {
     var it = e.target.closest(".item");
+    if (it && it.getAttribute("data-hid")) { selectHunk(it.getAttribute("data-hid"), { noScroll: true }); return; }
     if (it) { select(+it.getAttribute("data-id"), { noScroll: true }); return; }
     var gh = e.target.closest(".gh, .ch");
     if (gh) { var box = gh.parentNode, key = box.getAttribute("data-g") || box.getAttribute("data-c"); state.collapsed[key] = !state.collapsed[key]; tree(); }
   });
   $("card").addEventListener("click", function (e) {
     var j = e.target.closest(".jump");
+    if (j && j.getAttribute("data-cside")) { state.ctarget = j.getAttribute("data-cside"); state.node = null; if (state.ctab !== "c-conflict") setCTab("c-conflict"); hunkCard(HUNKS[state.hid]); renderHunkViewer(); return; }
     if (j) { select(state.sel, { target: +j.getAttribute("data-t") }); return; }
     var fc = e.target.closest(".fchip");
     if (fc) { select(+fc.getAttribute("data-fid")); return; }
@@ -998,6 +1100,15 @@ kbd { font: 10.5px var(--mono); border: 1px solid var(--border); border-bottom-w
   });
   $("ctx").addEventListener("click", function (e) {
     var t = e.target;
+    var hc = t.closest(".hchip[data-hid]");
+    if (hc) { selectHunk(hc.getAttribute("data-hid"), { ctab: "c-conflict" }); return; }
+    var crow = t.closest(".epath .nl[data-node], tr[data-node], .ev[data-node], .need[data-node]");
+    if (crow && !t.closest(".fchip") && crow.getAttribute("data-node")) {
+      selectNode(crow.getAttribute("data-node"));
+      document.querySelectorAll("#ctx tr.sel, #ctx .need.sel").forEach(function (x) { x.classList.remove("sel"); });
+      if (crow.tagName === "TR" || crow.classList.contains("need")) crow.classList.add("sel");
+      return;
+    }
     var fc = t.closest(".fchip");
     if (fc) { var id = +fc.getAttribute("data-fid"); if (id !== state.sel) select(id); return; }
     if (t.matches && t.matches("input[data-done]")) { var k = t.getAttribute("data-done"); state.done[k] = t.checked; t.closest("li").classList.toggle("done", t.checked); return; }
@@ -1029,6 +1140,7 @@ kbd { font: 10.5px var(--mono); border: 1px solid var(--border); border-bottom-w
   $("filebar").addEventListener("click", function (e) {
     var b = e.target.closest("button");
     if (!b) return;
+    if (b.id === "backConf") { state.node = null; document.querySelectorAll("#ctx .sel").forEach(function (x) { x.classList.remove("sel"); }); renderHunkViewer(); writeHash(); return; }
     if (b.id === "nextCh") jumpHunk(1);
     else if (b.id === "prevCh") jumpHunk(-1);
     else if (b.id === "expandAll") { var all = {}; for (var i = 0; i < 100000; i++) all[i] = 1; state.expanded[curPath + "|" + state.mode] = all; renderDiff(byId[state.sel]); }
@@ -1045,7 +1157,7 @@ kbd { font: 10.5px var(--mono); border: 1px solid var(--border); border-bottom-w
   });
   $("modeSeg").addEventListener("click", function (e) {
     var b = e.target.closest("button"); if (!b) return;
-    setMode(b.getAttribute("data-mode")); renderDiff(byId[state.sel]); writeHash();
+    state.modeLocked = true; setMode(b.getAttribute("data-mode")); renderDiff(byId[state.sel]); writeHash();
   });
   $("themeBtn").addEventListener("click", function () { setTheme(state.theme === "dark" ? "light" : "dark"); writeHash(); });
   $("search").addEventListener("input", function () { state.q = this.value.trim().toLowerCase(); tree(); });
@@ -1059,15 +1171,259 @@ kbd { font: 10.5px var(--mono); border: 1px solid var(--border); border-bottom-w
     var dir = (e.key === "ArrowDown" || e.key === "j") ? 1 : (e.key === "ArrowUp" || e.key === "k") ? -1 : 0;
     if (!dir) return;
     e.preventDefault();
-    var ids = visibleIds(); if (!ids.length) return;
-    var i = ids.indexOf(state.sel);
-    select(ids[i < 0 ? 0 : Math.min(ids.length - 1, Math.max(0, i + dir))]);
+    var items = Array.prototype.slice.call(document.querySelectorAll("#tree .item"));
+    if (!items.length) return;
+    var i = items.findIndex(function (x) { return x.classList.contains("sel"); });
+    var nx = items[i < 0 ? 0 : Math.min(items.length - 1, Math.max(0, i + dir))];
+    if (nx.getAttribute("data-hid")) selectHunk(nx.getAttribute("data-hid"), nx.getAttribute("data-hid") === "__check" ? {} : { ctab: state.ctab === "c-check" ? "c-conflict" : state.ctab });
+    else select(+nx.getAttribute("data-id"));
   });
+
+  // ------------------------------------------------------------------ conflict mode (faultline conflicts)
+  // When the report comes from `faultline conflicts`, the sidebar lists the conflict hunks first (grouped by file) and a
+  // selected hunk gets its own tabs: Conflict / Why / Take theirs / Take ours / Checklist.
+  var CONF = DATA.conflicts || null;
+  var HUNKS = {}, HUNK_FILE = {}, HUNK_ORDER = [];
+  if (CONF) CONF.files.forEach(function (f) { f.hunks.forEach(function (h) { HUNKS[h.id] = h; HUNK_FILE[h.id] = f; HUNK_ORDER.push(h.id); }); });
+  var CTABS = [["c-conflict", "Conflict"], ["c-why", "Why"], ["c-theirs", "Take theirs"], ["c-ours", "Take ours"], ["c-check", "Checklist"]];
+  function rng(r) { return !r ? "" : r.end < r.start ? "(insert at " + r.start + ")" : r.start === r.end ? "L" + r.start : "L" + r.start + "\u2013" + r.end; }
+  function sha8(c) { return c ? '<span class="sha" title="' + esc(c.sha + "\n" + (c.date || "") + "\n" + c.subject) + '">' + esc(c.sha.slice(0, 10)) + "</span>" : ""; }
+  function day(d) { return d ? String(d).slice(0, 10) : ""; }
+  function hunkTitle(h) {
+    var ms = (h.members.theirs || h.members.ours || h.members.base || []).filter(function (m) { return m.kind !== "class"; });
+    if (!ms.length) ms = h.members.theirs || h.members.ours || h.members.base || [];
+    return ms.length ? ms.map(function (m) { return m.kind === "imports" ? "import section" : m.label; }).slice(0, 2).join(", ") + (ms.length > 2 ? " +" + (ms.length - 2) : "") : "lines " + rng(h.base);
+  }
+  function needsAttention(h) {
+    return (h.takeTheirs.needs || []).filter(function (n) { return n.origin !== "IN_HUNK" && n.origin !== "IN_PICK" && (n.ours === "MISSING" || n.ours === "CHANGED"); }).length;
+  }
+  function hunkMatches(h) {
+    if (!state.q) return true;
+    var hay = (h.id + " " + hunkTitle(h) + " " + (h.why || "")).toLowerCase();
+    return state.q.split(/\s+/).every(function (w) { return hay.indexOf(w) >= 0; });
+  }
+  function conflictTreeHtml() {
+    if (!CONF) return "";
+    var html = '<div class="sidehdr">Cherry-pick conflicts</div>';
+    html += '<div class="item' + (state.kind === "hunk" && state.ctab === "c-check" ? " sel" : "") + '" data-hid="__check" style="padding-left:14px"><div class="l1"><span class="sym">\u2611 Migration checklist</span><span class="count">' + CONF.checklist.length + ' steps</span></div><div class="l2">' +
+      esc(CONF.bringAlong.length + " mainline commit(s) to consider \u00B7 " + CONF.summary.symbolsToBringOrAdapt + " symbol(s) to bring or adapt") + "</div></div>";
+    var total = 0;
+    var body = "";
+    CONF.files.forEach(function (f) {
+      var hs = f.hunks.filter(hunkMatches);
+      if (!hs.length) return;
+      total += hs.length;
+      var key = "conf/" + f.step + "/" + f.path;
+      body += '<div class="cat' + (state.collapsed[key] ? " collapsed" : "") + '" data-c="' + esc(key) + '"><div class="ch" title="' + esc(f.path + "\n" + (f.explanation || "")) + '"><span class="caret">' + (state.collapsed[key] ? "\u25B6" : "\u25BC") + '</span><span class="fname">' + esc(f.path.split("/").pop()) + "</span>" +
+        (f.kind !== "CONTENT" ? '<span class="mini amb" title="' + esc(f.kind) + '">' + esc(f.kind.toLowerCase().replace(/_/g, " ")) + "</span>" : "") + (f.eol ? '<span class="mini amb" title="' + esc(f.eol) + '">eol</span>' : "") +
+        (f.merged && f.merged.needs.length ? '<span class="mini red" title="lines git merged automatically need symbols the tenant lacks">auto-merged \u2717' + f.merged.needs.length + "</span>" : "") +
+        '<span class="count">' + hs.length + '</span></div><div class="items">';
+      hs.forEach(function (h) {
+        var miss = needsAttention(h), ep = (h.takeOurs.entryPoints || []).length;
+        body += '<div class="item hunk' + (state.kind === "hunk" && state.hid === h.id && state.ctab !== "c-check" ? " sel" : "") + '" data-hid="' + esc(h.id) + '" title="' + esc(h.id) + '"><div class="l1"><span class="num">#' + h.index + '</span><span class="sym">' + esc(hunkTitle(h)) + "</span>" +
+          (h.tenant.length ? '<span class="mini blu" title="the tenant edited this code since the fork">tenant</span>' : "") +
+          (h.mainline.length ? '<span class="mini" title="mainline commits that changed this code between the fork and the pick">' + commitsOfHunk(h).length + " ml</span>" : "") +
+          (miss ? '<span class="mini red" title="symbols taking theirs needs that the tenant lacks">\u2717' + miss + "</span>" : "") + '</div><div class="l2">' +
+          esc("ours " + rng(h.ours) + " \u00B7 theirs " + rng(h.theirs) + (ep ? " \u00B7 " + ep + " entry point" + (ep > 1 ? "s" : "") : "")) + "</div></div>";
+      });
+      body += "</div></div>";
+    });
+    html += '<div class="grp' + (state.collapsed.conf ? " collapsed" : "") + '" data-g="conf"><div class="gh"><span class="caret">' + (state.collapsed.conf ? "\u25B6" : "\u25BC") + '</span>Conflict hunks<span class="count">' + total + '</span></div><div class="cats">' + body + "</div></div>";
+    if (CONF.cleanFiles.length) html += '<div class="hint" style="padding:2px 10px 4px 22px">' + CONF.cleanFiles.length + " file(s) of the pick merged cleanly" + (Object.keys(CONF.cleanNeeds || {}).length ? " (" + Object.keys(CONF.cleanNeeds).length + " need symbols the tenant lacks \u2013 see Checklist)" : "") + "</div>";
+    html += '<div class="sidehdr" style="margin-top:6px">Findings of the picked change</div>';
+    return html;
+  }
+  function commitsOfHunk(h) {
+    var seen = {}, out = [];
+    h.mainline.forEach(function (e) { if (!seen[e.commit.sha]) { seen[e.commit.sha] = 1; out.push(e.commit); } });
+    return out;
+  }
+  function stepCommit(f) { return CONF.picks[(f ? f.step : 1) - 1] || CONF.theirs; }
+  function conflictHeader() {
+    var c = CONF;
+    $("refs").innerHTML =
+      "<div>tenant (ours) <b>" + esc(c.ours.subject) + "</b> <code>" + short(c.ours.sha) + "</code></div>" +
+      "<div>pick" + (c.picks.length > 1 ? "s" : "") + " " + c.picks.map(function (p) { return "<code>" + short(p.sha) + "</code>"; }).join(" ") + " <b>" + esc(c.picks[0] ? c.picks[0].subject : "") + "</b></div>" +
+      "<div>mode <b>" + esc(c.mode) + "</b></div>" +
+      "<div>fork <code>" + short(c.fork.sha) + "</code> " + esc(day(c.fork.date)) + (c.mainline ? " (merge-base with <b>" + esc(c.mainline) + "</b>)" : "") + "</div>" +
+      "<div>pick parent <code>" + short(c.base.sha) + "</code> " + esc(day(c.base.date)) + "</div>" +
+      "<div>window <b>" + c.mainlineCommitsInWindow + "</b> mainline / <b>" + c.tenantCommitsSinceFork + "</b> tenant commits</div>";
+    $("top").querySelector(".brand span").textContent = "cherry-pick conflict report";
+    var counts = {};
+    DATA.findings.forEach(function (f) { counts[f.group] = (counts[f.group] || 0) + 1; });
+    $("chips").innerHTML = '<span class="chip" title="conflict hunks"><span class="dot g-HIGH"></span>Hunks <b>' + c.summary.conflictHunks + '</b></span><span class="chip" title="symbols to bring over or adapt">To bring <b>' + c.summary.symbolsToBringOrAdapt + '</b></span><span class="chip" title="findings of the regular analysis of the picked change">Findings <b>' + DATA.findings.length + "</b></span>";
+  }
+  function recommendationOf(h) {
+    var it = CONF.checklist.filter(function (i) { return i.action === "RESOLVE" && i.hunks.indexOf(h.id) >= 0; })[0];
+    return it ? it.why : "";
+  }
+  function hunkCard(h) {
+    var f = HUNK_FILE[h.id];
+    var row = '<div class="row1"><span class="badge ' + (needsAttention(h) || f.kind !== "CONTENT" ? "HIGH" : "MEDIUM") + '">CONFLICT</span><span class="tag">' + esc(f.kind) + "</span>" +
+      (CONF.picks.length > 1 ? '<span class="tag">step ' + f.step + " \u00B7 " + esc(short(stepCommit(f).sha)) + "</span>" : "") +
+      '<span class="tag">hunk ' + h.index + " of " + f.hunks.length + " in this file</span>" + (f.eol ? '<span class="tag" title="' + esc(f.eol) + '">line endings differ</span>' : "") +
+      '<span class="hint" style="margin-left:auto"><kbd>\u2191</kbd><kbd>\u2193</kbd> hunks / findings</span></div>';
+    var jumps = ["ours", "base", "theirs"].map(function (s) {
+      var r = h[s], ms = (h.members[s] || []).map(function (m) { return m.kind === "imports" ? "imports" : m.label; }).join(", ");
+      var lbl = s === "ours" ? "tenant" : s === "base" ? "pick parent" : "pick";
+      return '<div class="jump' + (state.ctarget === s ? " on" : "") + '" data-cside="' + s + '"><span class="side">' + s + '</span><span class="loc">' + esc(rng(r)) + '</span><span class="lbl">' + esc(lbl + (h.members[s] ? " \u00B7 " + (ms || "\u2013") : " \u00B7 file absent")) + "</span></div>";
+    }).join("");
+    $("card").innerHTML = row + '<div class="symbol">' + esc(f.path) + ' <span class="hint">#' + h.index + "</span></div>" +
+      '<div class="msg"><b>Suggested:</b> ' + esc(recommendationOf(h)) + "</div>" + '<div class="jumps">' + jumps + "</div>";
+  }
+  function conflictTabs() {
+    $("tabs").innerHTML = CTABS.map(function (t) {
+      var h = HUNKS[state.hid], cnt = "";
+      if (h && t[0] === "c-why") cnt = commitsOfHunk(h).length + h.tenant.length;
+      if (h && t[0] === "c-theirs") cnt = needsAttention(h);
+      if (h && t[0] === "c-ours") cnt = (h.takeOurs.entryPoints || []).length;
+      if (t[0] === "c-check") cnt = CONF.checklist.length;
+      return '<button data-tab="' + t[0] + '" class="' + (state.ctab === t[0] ? "on" : "") + '">' + t[1] + (cnt !== "" ? '<span class="cnt">' + cnt + "</span>" : "") + "</button>";
+    }).join("");
+  }
+  function selectHunk(id, opts) {
+    opts = opts || {};
+    if (id === "__check") { id = state.hid && HUNKS[state.hid] ? state.hid : HUNK_ORDER[0]; opts.ctab = "c-check"; }
+    var h = HUNKS[id];
+    if (!h) return;
+    var changed = state.hid !== id || state.kind !== "hunk";
+    state.kind = "hunk";
+    state.hid = id;
+    if (opts.ctab) state.ctab = opts.ctab;
+    else if (!state.ctab || state.ctab === "c-check") state.ctab = "c-conflict";
+    if (changed) { state.node = opts.node || null; state.nodeTarget = null; state.ctarget = null; }
+    tree();
+    var it = document.querySelector('#tree .item.sel');
+    if (it && !opts.noScroll) it.scrollIntoView({ block: "nearest" });
+    hunkCard(h);
+    conflictTabs();
+    renderHunkCtx();
+    renderHunkViewer();
+    writeHash();
+  }
+  function setCTab(tab) {
+    state.ctab = tab;
+    state.node = null;
+    state.nodeTarget = null;
+    tree();
+    conflictTabs();
+    renderHunkCtx();
+    renderHunkViewer();
+    writeHash();
+  }
+  function renderHunkViewer() {
+    var h = HUNKS[state.hid];
+    if (!h) return;
+    if (state.ctab !== "c-conflict" && state.node) { renderMember(); return; }
+    var f = HUNK_FILE[h.id], file = DATA.files[f.viewKey] || {};
+    var side = state.ctarget;
+    if (!side) side = file.ours != null && h.ours.end >= h.ours.start ? "ours" : file.theirs != null && h.theirs.end >= h.theirs.start ? "theirs" : file.base != null ? "base" : "theirs";
+    var r = h[side];
+    var title = '<span class="path">' + esc(f.path) + '</span><span class="hint">hunk #' + h.index + " \u00B7 ours " + esc(rng(h.ours)) + " \u00B7 base " + esc(rng(h.base)) + " \u00B7 theirs " + esc(rng(h.theirs)) + "</span>";
+    drawFile(f.viewKey, { side: side, line: Math.max(1, r.start) }, title, "No content for this file.");
+  }
+  function stepBase(f) { return f.step > 1 ? "parent of " + short(stepCommit(f).sha) : short(CONF.base.sha); }
+  // one block per needed symbol (the context panel is narrow: no multi-column table)
+  function needRows(needs, showPresent) {
+    var rows = needs.slice().sort(function (a, b) { return (a.ours === "PRESENT") - (b.ours === "PRESENT"); }).filter(function (n) { return showPresent || n.ours !== "PRESENT"; });
+    if (!rows.length) return "";
+    return '<div class="needs">' + rows.map(function (n) {
+      var nd = nodeOf(n.node) || { kind: n.kind, label: n.symbol };
+      return '<div class="need' + (n.ours === "PRESENT" ? " faint" : "") + (state.node === n.node ? " sel" : "") + '" data-node="' + esc(n.node || "") + '"><div class="n1">' + kindBadge(nd) +
+        '<span class="st st-' + esc(n.ours) + '">' + esc(n.ours) + (n.uncertain ? " ?" : "") + '</span><span class="og og-' + esc(n.origin) + '">' + esc((n.origin || "").toLowerCase().replace(/_/g, " ")) + "</span>" +
+        '<span class="sym" title="' + esc(n.symbol) + '">' + esc(nd.label || n.symbol) + "</span>" + (n.line ? '<span class="det">L' + n.line + "</span>" : "") + "</div>" +
+        (n.tenantName ? '<div class="n2">tenant has <span class="sym">' + esc(n.tenantName) + "</span>" + (n.tenantLocation ? ' <span class="det">' + esc(n.tenantLocation) + "</span>" : "") + "</div>" : "") +
+        (n.introducedBy && n.introducedBy.length ? '<div class="n2">introduced by ' + n.introducedBy.map(function (c) { return sha8(c) + ' <span class="det">' + esc(day(c.date) + " " + c.subject) + "</span>"; }).join(", ") + "</div>" : "") +
+        (n.detail ? '<div class="n2 det">' + esc(n.detail) + "</div>" : "") + "</div>";
+    }).join("") + "</div>";
+  }
+  function eventRows(es) {
+    return es.map(function (e) {
+      var nd = e.member ? nodeOf(e.member) : null;
+      var what = e.kind === "LINES" ? (e.detail || "") : (e.from && e.to && e.from !== e.to ? e.from + " \u2192 " + e.to : (e.to || e.from || "")) + (e.detail && e.kind !== "LINES" ? " (" + e.detail + ")" : "");
+      return '<div class="ev"' + (nd ? ' data-node="' + esc(e.member) + '"' : "") + ">" + sha8(e.commit) + '<span class="s">' + esc(day(e.commit.date)) + '</span><span><span class="k">' + esc(e.kind.toLowerCase().replace(/_/g, " ")) + '</span> <span class="m">' + esc(what) + '</span><br><span class="s">' + esc(e.commit.subject) + "</span></span></div>";
+    }).join("");
+  }
+  function renderHunkCtx() {
+    var box = $("ctx"), h = HUNKS[state.hid];
+    var on = state.ctab !== "c-conflict";
+    document.body.classList.toggle("ctxmode", on);
+    var em = userMode();
+    document.querySelectorAll("#modeSeg button").forEach(function (b) { b.classList.toggle("on", b.getAttribute("data-mode") === em); });
+    box.classList.toggle("wide", state.ctab === "c-check");
+    box.style.width = state.ctab === "c-check" ? "" : (state.ctxWidth || "");
+    if (!on || !h) return;
+    var f = HUNK_FILE[h.id], html = "";
+    expanded = {};
+    if (state.ctab === "c-why") {
+      if (f.explanation && (h.why || "").indexOf(f.explanation) < 0) html += '<div class="ptext box' + (f.eol ? " warn" : "") + '">' + esc(f.explanation) + "</div>";
+      html += '<div class="sec">Why this conflicts</div><div class="ptext">' + esc(h.why || "") + "</div>";
+      html += '<div class="sec">Mainline since the fork <span class="hint">fork ' + esc(short(CONF.fork.sha)) + " .. pick parent " + esc(short(stepBase(f))) + ": commits the tenant does not have</span></div>";
+      html += h.mainline.length ? eventRows(h.mainline) : '<div class="ptext hint">Mainline did not touch this code in the window.</div>';
+      html += '<div class="sec">Tenant since the fork <span class="hint">fork .. ours</span></div>';
+      html += h.tenant.length ? eventRows(h.tenant) : '<div class="ptext hint">The tenant did not edit this code since the fork.</div>';
+      if (h.baseBlame.length) {
+        html += '<div class="sec">Base lines by commit <span class="hint">git blame -w -M of the pick parent, limited to the window</span></div><div class="blame">' + h.baseBlame.map(function (b) {
+          return '<span class="' + (b.boundary ? "" : "new") + '" title="' + esc(b.commit.sha + " " + b.commit.subject) + '">L' + b.start + (b.end > b.start ? "\u2013" + b.end : "") + " " + (b.boundary ? "before fork" : esc(b.commit.sha.slice(0, 10))) + "</span>";
+        }).join("") + "</div>";
+      }
+      if (f.fileHistory.length) html += '<div class="sec">File history on mainline <span class="hint">every commit that touched ' + esc(f.path.split("/").pop()) + " in the window</span></div>" + eventRows(f.fileHistory);
+    } else if (state.ctab === "c-theirs") {
+      html += '<div class="sec">Taking theirs</div><div class="ptext">' + esc(h.takeTheirs.summary || "") + "</div>";
+      html += needRows(h.takeTheirs.needs || [], true) + statusLegend();
+      if (h.takeTheirs.trees.length) {
+        html += '<div class="sec">Transitive dependencies <span class="hint">what theirs\' code needs, depth ' + (CTX ? CTX.maxDepth : 4) + "; click a node to see it in tenant / pick parent / pick</span></div>";
+        h.takeTheirs.trees.forEach(function (t) { html += treeHtml(t, 0, "deps", null, null, null); });
+      }
+      if (f.merged) {
+        html += '<div class="sec">Lines git merged automatically in this file <span class="hint">applied whatever you choose here</span></div><div class="ptext">' + esc(f.merged.summary) + "</div>" + needRows(f.merged.needs, false);
+      }
+    } else if (state.ctab === "c-ours") {
+      var to = h.takeOurs;
+      html += '<div class="sec">Keeping ours</div><div class="ptext">' + esc(to.summary || "") + "</div>";
+      if (to.lost.length) html += '<div class="sec">What keeping ours drops</div><ul class="limits" style="margin-top:0">' + to.lost.map(function (l) { return "<li>" + esc(l) + "</li>"; }).join("") + "</ul>";
+      if (to.entryPoints.length) {
+        html += '<div class="sec">Tenant entry points reaching the ours-side code <span class="hint">retest these</span></div><div class="needs">' + to.entryPoints.map(function (e) {
+          return '<div class="need' + (state.node === e.node ? " sel" : "") + '" data-node="' + esc(e.node) + '"><div class="n1"><span class="og">' + esc(e.type) + '</span><span class="eproute">' + esc(e.route) + "</span>" + (e.permission ? '<span class="det">' + esc(e.permission) + "</span>" : "") + "</div>" +
+            '<div class="n2 det">' + esc(e.location || "") + "</div>" + (e.path.length > 1 ? '<div class="n2 epath">call path: ' + e.path.map(function (k, i) { var n = nodeOf(k); return (i ? "\u2192 " : "") + '<span class="nl" data-node="' + esc(k) + '">' + esc(n ? n.label : k) + "</span>"; }).join(" ") + "</div>" : '<div class="n2 det">the ours-side member is the entry point itself</div>') + "</div>";
+        }).join("") + "</div>";
+      }
+      if (to.orphans.length) {
+        html += '<div class="sec">Left dangling if you keep ours <span class="hint">code of the pick (other hunks, merged lines) using what only theirs\' side of this hunk declares</span></div><table class="ctable"><tbody>' + to.orphans.map(function (o) {
+          var a = nodeOf(o.usedBy), b = nodeOf(o.node);
+          return '<tr data-node="' + esc(o.usedBy) + '"><td><span class="sym">' + esc(a ? a.label : o.usedBy) + '</span> uses <span class="sym">' + esc(b ? b.label : o.node) + '</span><div class="det">' + esc(o.location + (o.note ? " \u00B7 " + o.note : "")) + "</div></td></tr>";
+        }).join("") + "</tbody></table>";
+      }
+      if (to.impact.length) {
+        html += '<div class="sec">Tenant callers <span class="hint">who in the tenant uses the ours-side members (up to ' + (CTX ? CTX.maxImpactDepth : 3) + " levels)</span></div>";
+        to.impact.forEach(function (t) { html += treeHtml(t, 0, "impact", null, null, null); });
+      }
+      if (h.findings.length) html += '<div class="sec">Related findings ' + fchips(h.findings, null) + "</div>";
+    } else if (state.ctab === "c-check") {
+      html += '<div class="sec">Migration checklist <span class="hint">dependencies first: commits to consider, symbols to bring, places to adapt, then each hunk</span></div>';
+      html += '<ol class="check">' + CONF.checklist.map(function (it) {
+        var key = "chk" + it.step, mine = it.hunks.indexOf(h.id) >= 0;
+        return '<li class="' + (state.done[key] ? "done " : "") + (mine ? "mine " : "") + '"' + (it.node ? ' data-node="' + esc(it.node) + '"' : "") + '><span class="stepn">' + it.step + '.</span><input type="checkbox" data-done="' + key + '"' + (state.done[key] ? " checked" : "") + ' title="mark as done (not saved)">' +
+          '<span class="what"><span class="ab ab-' + esc(it.action) + '">' + esc(it.action.replace(/_/g, " ").toLowerCase()) + '</span><span class="lbl mono">' + esc(it.target) + "</span></span>" +
+          '<span class="why">' + esc(it.why || "") + (it.hunks.length ? '<br>' + it.hunks.map(function (x) { return HUNKS[x] ? '<span class="hchip' + (x === h.id ? " cur" : "") + '" data-hid="' + esc(x) + '">' + esc(x.split("/").pop()) + "</span>" : '<span class="hint">' + esc(x.split("/").pop()) + "</span>"; }).join(" ") : "") + "</span></li>";
+      }).join("") + "</ol>";
+      if (CONF.bringAlong.length) {
+        html += '<div class="sec">Mainline commits the pick depends on <span class="hint">oldest first</span></div><table class="ctable"><thead><tr><th>commit</th><th>provides</th><th>needed by</th></tr></thead><tbody>' + CONF.bringAlong.map(function (c) {
+          return "<tr><td>" + sha8(c.commit) + ' <span class="det">' + esc(day(c.commit.date)) + "</span><div>" + esc(c.commit.subject) + '</div></td><td class="det">' + esc(c.provides.join(", ")) + '</td><td class="det">' + esc(c.neededBy.map(function (x) { return x.split("/").pop(); }).join(", ")) + "</td></tr>";
+        }).join("") + "</tbody></table>";
+      }
+      if (CONF.limitations.length) html += '<ul class="limits">' + CONF.limitations.map(function (l) { return "<li>" + esc(l) + "</li>"; }).join("") + "</ul>";
+    }
+    box.innerHTML = html;
+  }
 
   // ------------------------------------------------------------------ init
   header();
+  if (CONF) conflictHeader();
+  var FIND_TABS = $("tabs").innerHTML;
   var q = readHash();
   setTheme(q.theme || "light");
+  state.modeLocked = !!q.mode;
   setMode(q.mode || "3col");
   state.groupBy = q.group === "chain" && CTX ? "chain" : "sev";
   if (!CTX) $("groupSeg").style.display = "none";
@@ -1076,6 +1432,10 @@ kbd { font: 10.5px var(--mono); border: 1px solid var(--border); border-bottom-w
   state.ovScope = q.ov === "all" ? "all" : "chain";
   document.querySelectorAll("#tabs button").forEach(function (b) { b.classList.toggle("on", b.getAttribute("data-tab") === state.tab); });
   tree();
+  if (CONF && HUNK_ORDER.length && (q.hunk || !q.finding)) {
+    selectHunk(HUNKS[q.hunk] || q.hunk === "__check" ? q.hunk : HUNK_ORDER[0], { ctab: CTABS.some(function (t) { return t[0] === q.ctab; }) ? q.ctab : "c-conflict", node: q.node || null });
+    return;
+  }
   var first = +q.finding || (DATA.findings.find(function (f) { return f.group === "HIGH"; }) || DATA.findings[0] || {}).id;
   if (first) select(first, Object.assign(q.target ? { target: +q.target } : {}, q.node ? { node: q.node } : {}));
   else { $("card").innerHTML = '<div class="empty">No findings.</div>'; renderDiff(null); }

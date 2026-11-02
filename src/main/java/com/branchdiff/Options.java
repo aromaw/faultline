@@ -21,4 +21,12 @@ public final class Options {
     public boolean failOnFindings = false;
     /** which sibling modules of the repo to index for lookups (never reported by themselves) */
     public SiblingModules.Mode siblings = SiblingModules.Mode.DEPS;
+    /** "conflicts" (cherry-pick / merge conflict analysis) or "branch" (whole-branch comparison) */
+    public String command;
+    /** conflict mode, offline: tenant ref to simulate the pick onto */
+    public String onto;
+    /** conflict mode, offline: commit, comma separated commits, or range A..B to pick */
+    public String pick;
+    /** conflict mode: mainline ref; the tenant's fork point is merge-base(tenant, mainline) */
+    public String mainline;
 }

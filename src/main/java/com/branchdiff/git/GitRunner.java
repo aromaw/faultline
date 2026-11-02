@@ -13,8 +13,10 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Read-only access to a git repository. Never checks out, never writes refs, never touches the worktree:
- * only rev-parse / merge-base / ls-tree / cat-file are used.
+ * Access to a git repository. Never checks out, never writes refs, never touches the worktree or the index. Besides
+ * read commands (rev-parse / merge-base / ls-tree / cat-file / log / blame / diff), the conflict mode's offline
+ * simulation uses {@code merge-tree --write-tree} and {@code commit-tree}, which only add unreferenced objects to the
+ * object database (garbage-collected later).
  */
 public class GitRunner {
     private final Path repo;
@@ -53,6 +55,60 @@ public class GitRunner {
             Thread.currentThread().interrupt();
             throw new GitException("interrupted", e);
         }
+    }
+
+    /** Output and exit code of a git command that may legitimately fail (e.g. merge-tree exits 1 on conflicts). */
+    public record Result(int exit, String out, String err) {
+    }
+
+    public Result exec(String... args) {
+        List<String> cmd = new ArrayList<>();
+        cmd.add("git");
+        cmd.add("-C");
+        cmd.add(repo.toString());
+        cmd.addAll(List.of(args));
+        try {
+            Process p = new ProcessBuilder(cmd).start();
+            p.getOutputStream().close();
+            byte[][] err = new byte[1][];
+            Thread t = new Thread(() -> {
+                try {
+                    err[0] = p.getErrorStream().readAllBytes();
+                } catch (IOException e) {
+                    err[0] = new byte[0];
+                }
+            });
+            t.start();
+            byte[] out = p.getInputStream().readAllBytes();
+            t.join();
+            if (!p.waitFor(5, TimeUnit.MINUTES)) {
+                p.destroyForcibly();
+                throw new GitException("git timed out: " + String.join(" ", args));
+            }
+            return new Result(p.exitValue(), new String(out, StandardCharsets.UTF_8), new String(err[0], StandardCharsets.UTF_8));
+        } catch (IOException e) {
+            throw new GitException("cannot run git: " + e.getMessage(), e);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new GitException("interrupted", e);
+        }
+    }
+
+    /** null when {@code ref} does not resolve */
+    public String tryResolve(String ref) {
+        Result r = exec("rev-parse", "--verify", "--quiet", ref);
+        return r.exit() == 0 ? r.out().trim() : null;
+    }
+
+    /** content of {@code path} at {@code rev}, null when it does not exist there */
+    public String show(String rev, String path) {
+        Result r = exec("cat-file", "blob", rev + ":" + path);
+        return r.exit() == 0 ? r.out() : null;
+    }
+
+    public String blob(String sha) {
+        Result r = exec("cat-file", "blob", sha);
+        return r.exit() == 0 ? r.out() : null;
     }
 
     public String resolveCommit(String ref) {

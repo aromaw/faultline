@@ -21,4 +21,6 @@ public final class Report {
     public List<String> predictedTextualConflicts = new ArrayList<>();
     /** dependency / impact trees, chains and port checklists (null when context building failed) */
     public ContextModel context;
+    /** cherry-pick / merge conflict analysis (conflict mode only) */
+    public com.branchdiff.conflict.ConflictModel conflicts;
 }

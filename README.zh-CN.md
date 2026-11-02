@@ -1,57 +1,134 @@
 [English](README.md) | 简体中文
 
-# faultline（分支迁移语义差异检测 MVP）
+# faultline
 
-把 **theirs** 分支的代码迁移/合并到 **ours** 分支（Java Spring Boot 微服务，Maven，单个服务目录）时，`git diff` / `git merge` 只能发现**文本冲突**。
-本工具在**方法级**比较 merge-base、ours、theirs 三个版本，找出 theirs 改动了、而 ours **缺失或不一致**的代码——包括 git 完全不报冲突的语义缺口和依赖缺口。
+**租户分支落后主线几个月时，解释 cherry-pick 冲突。**
 
-> 只读：通过 `git rev-parse / merge-base / ls-tree / cat-file` 读取三个版本，**不 checkout、不改工作区、不改 index、不建 ref、不访问远端**。
-> 源码被复制到系统临时目录用于符号解析（以及可选的 `mvn dependency:build-classpath`），结束后自动删除。
-> 启用兄弟模块时，只修改**临时副本**中的服务 pom（去掉对兄弟模块的依赖，见下文），仓库本身不受影响。
+租户代码很早就从主线分了出去。现在要从主线迁移一个功能（一个或几个提交），cherry-pick 时出现冲突。冲突的代码通常是分叉之后主线新增、重构、改名或删除的代码。`git diff` 只显示冲突的行，看不出相关的调用方和上下文依赖是否都正确。
+
+`faultline conflicts` 对每个冲突块回答五个问题：
+
+| | 问题 | faultline 给出 |
+|---|---|---|
+| **WHERE 在哪** | 冲突在哪里？ | 文件、行范围以及所在成员（方法、字段、MyBatis 语句、import 区）在 **ours**（租户）、**base**（被 pick 提交的父提交）、**theirs**（被 pick 的提交）三边的位置 |
+| **WHY 为什么** | 为什么冲突？ | 从分叉点到 pick 的父提交之间，改过这段代码的主线提交（hash、日期、标题）；成员级历史（新增、修改、改名、移动、签名变化，按方法体识别）；base 行的 `git blame -w -M`；以及租户自分叉以来的修改 |
+| **TAKE THEIRS 取主线** | 取 pick 这边需要什么？ | 冲突块 theirs 侧用到的所有符号（方法、字段、类型、Bean、配置项、Mapper 语句、第三方库类型），向下最多 4 层：租户有没有，旧名字是什么，由哪个主线提交引入。也会检查被挪走的 import 和 git 自动合并的行 |
+| **TAKE OURS 保留租户** | 保留租户这边会坏什么？ | ours 侧成员在租户里的调用方，一直追到入口：HTTP 方法和路径（`@RequestMapping` 等）、`@PreAuthorize` 权限、`@Scheduled`、`@EventListener` 和 MQ 监听、Runner；还有 pick 里会因此悬空的部分 |
+| **CHECKLIST 清单** | 按什么顺序处理？ | 依赖优先：建议先 pick 的主线提交、要带过来的文件、要补进租户文件的符号、需要手工适配的地方（如 `jakarta.*` 与 `javax.*`），然后是逐个解决冲突块，以及需要回归测试的入口 |
+
+pick 中能干净合并的文件也会经过依赖分析：干净合并的代码同样可能用到租户没有的符号。
+
+> 只读。离线模式用 `git merge-tree`，执行的是 cherry-pick 本身的那次合并，不动工作区、index 或任何 ref。实时模式读取 index 的各个 stage 和 `.git/sequencer`。不 checkout，不提交，不推送。
 
 ## 构建
 
-需要 JDK 17+、Maven 3.8+、git。
+需要 JDK 17+、Maven 3.8+、git 2.38+（`git merge-tree --write-tree`）。
 
 ```bash
-cd /workspace/branch-diff-tool
-mvn -B package            # 编译 + 单元测试 + 打包
+mvn -B package   # 编译 + 单元测试 + 打包
 # 产物：target/branch-diff-tool.jar（可执行 fat jar）
 ```
 
 ## 使用
 
+### 实时模式：cherry-pick 进行到一半
+
 ```bash
-java -jar target/branch-diff-tool.jar \
-  --repo /path/to/repo \
-  --ours HEAD \                 # 默认 HEAD
-  --theirs origin/feature-x \   # 必填
-  --service-dir order-service \ # 服务子目录，默认仓库根目录
-  -o report.md                  # 不指定则输出到 stdout
-
-# JSON 输出
-java -jar target/branch-diff-tool.jar --repo . --theirs feature-x --json -o report.json
-
-# 自包含的 HTML 报告（IDEA 风格的 diff 视图，见下文）
-java -jar target/branch-diff-tool.jar --repo . --theirs feature-x --html -o report.html
+git cherry-pick dbe9834e          # 停在冲突上
+java -jar target/branch-diff-tool.jar conflicts --repo . --mainline master --html -o conflicts.html
 ```
 
-| 参数 | 说明 |
-|---|---|
-| `--repo <path>` | git 仓库路径（默认 `.`） |
-| `--ours <ref>` / `--theirs <ref>` | 两个分支/提交，merge-base 自动计算 |
-| `--service-dir <dir>` | 只分析该子目录（其他目录的变化不会进入报告） |
-| `--format md\|json\|html`, `--json`, `--html` | 输出格式，默认 Markdown；`html` 为单个自包含页面（见 [HTML 报告](#html-报告)） |
-| `-o, --output <file>` | 输出文件 |
-| `--no-maven` | 不执行 `mvn dependency:build-classpath`（更快，但第三方库类型无法解析，更多条目会变成 UNCERTAIN） |
-| `--mvn <cmd>` / `--maven-timeout <sec>` | Maven 命令与超时（默认 `mvn`、600 秒） |
-| `--include-tests` | 同时分析 `src/test/java` |
-| `--include-siblings [deps\|all\|none]` | 把同一仓库中兄弟模块的 `src/main/java` 加入符号解析与索引（三个版本都加载），这样兄弟模块中的类不再被当成外部库，theirs 依赖、而 ours 版本的兄弟模块缺失的方法/类型/常量也会被报告。**默认 `deps`**：只加载服务 pom 依赖（含经兄弟模块的传递依赖）的模块；`all`：仓库中所有其他 `<dir>/src/main/java`（含父 pom `<modules>` 中列出的模块和非 Maven 目录）；`none`：关闭（旧行为）。不带值等同 `deps`，也支持 `--include-siblings=all` |
-| `--no-siblings` | 等同 `--include-siblings none` |
-| `--fail-on-findings` | 存在 HIGH 且确定的问题时退出码为 2（可用于 CI） |
-| `--keep-temp`, `-v` | 保留临时目录 / 输出进度 |
+自动识别 `CHERRY_PICK_HEAD` / `MERGE_HEAD` / `REVERT_HEAD`。读取未合并的 index 条目（stage 1/2/3，包括 modify/delete、add/add 冲突），以及 sequencer 中还没应用的提交。不带 `--theirs`、也不带 `--pick` 时，默认子命令就是 `conflicts`。
 
-## HTML 报告
+### 离线模式：pick 之前先看
+
+```bash
+# 单个提交
+java -jar target/branch-diff-tool.jar conflicts --repo . --onto tenant --pick dbe9834e --mainline master --html -o role.html
+# 多个提交：范围，或逗号分隔的列表，按顺序应用
+java -jar target/branch-diff-tool.jar conflicts --repo . --onto tenant --pick '0728a04b^..d454d972' --mainline master -o notice.md
+```
+
+每个 pick 用 `git merge-tree --write-tree --merge-base=<pick>^ <当前状态> <pick>` 模拟。范围有多步时，后一步合到前一步的结果上。这个结果是用 `git commit-tree` 生成的临时提交，没有任何 ref 指向它，git 之后会自行回收。冲突块按步骤加 `s<N>:` 前缀。
+
+| 选项 | 说明 |
+|---|---|
+| `--repo <path>` | git 仓库（默认 `.`） |
+| `--mainline <ref>` | 主线分支。分叉点为 `merge-base(租户, 主线)`，默认 `merge-base(租户, pick^)` |
+| `--onto <ref>` | 离线模式的租户 ref（默认 `HEAD`） |
+| `--pick <spec>` | 单个提交、`c1,c2,...` 或范围 `A..B` |
+| `--format md\|json\|html`、`--json`、`--html` | Markdown（默认）、JSON，或单个自包含 HTML |
+| `-o, --output <file>` | 输出到文件，默认 stdout |
+| `--no-maven` | 不运行 `mvn dependency:build-classpath`。速度更快，但第三方库类型只能按启发式判断（见局限） |
+| `--fail-on-findings` | pick 需要的符号租户缺失时，退出码为 2（适合 CI） |
+| `--include-tests`、`--keep-temp`、`-v` | 同时分析 `src/test/java` / 保留临时源码 / 打印进度 |
+
+### 输出
+
+- **HTML**：单个离线文件，CSS 和 JS 全部内联。
+  - 侧栏先列冲突块，按文件分组，并标出 modify/delete。然后是迁移清单，以及 pick 干净部分的发现。
+  - 每个冲突块有 **Conflict / Why / Take theirs / Take ours / Checklist** 五个标签页。Conflict 页是类似 IDE 的 ours | base | theirs 视图，当前冲突块描边，其他冲突块加底色。
+  - 点击符号、历史事件或调用链节点，可以看到该成员在三边的版本。
+  - 打开上下文标签页时，代码区会自动切换为 ours | theirs，顶栏的开关可以切回三栏。
+  - URL hash 保存当前状态，如 `#hunk=<id>&ctab=c-why`；`#hunk=__check` 直接打开清单。
+- **JSON**：同样的数据放在 `conflicts` 下，同时保留分支分析的字段。
+- **Markdown**：先是清单，然后每个文件、每个冲突块一节（where / why / take theirs / take ours），之后是 git 自动合并的行，最后是干净合并的文件。
+
+![Why 页：冲突背后的租户修改和主线历史](docs/conflict-why.png)
+![Take theirs：pick 需要的符号、租户有没有、由哪个提交引入](docs/conflict-take-theirs.png)
+![迁移清单，依赖优先](docs/conflict-checklist.png)
+
+### 原理
+
+1. **会话**。
+   - 实时模式：读取 `ls-files -u -z` 的 stage、`CHERRY_PICK_HEAD` 和 `.git/sequencer/todo`。
+   - 离线模式：读取 `merge-tree` 的输出，包括 tree、冲突 stage 和提示信息。
+   - 分叉点为 `merge-base(ours, mainline)`。窗口在主线上是 `fork..base`，在租户上是 `fork..ours`。
+2. **冲突块**。对每个冲突文件的三个 stage blob 运行 `git merge-file --diff3`，得到三边精确的行范围。只有换行符不同时，先去掉 CR 再算冲突块，并在报告中建议使用 `-X ignore-cr-at-eol`。
+3. **成员**。用 JavaParser 解析 Java，并解析 MyBatis XML 语句和 yml/properties 配置项。每个冲突块映射到它覆盖的成员。
+4. **历史**。对 base 侧，沿 `git log fork..base` 跟踪文件。对每个提交前后的成员做 diff，先按名字配对，再按方法体相似度（token Dice ≥ 0.75）配对，以识别改名、移动和签名变化。对 base 行运行 `git blame -w -M`。
+5. **取主线**。对 theirs 侧成员求依赖闭包，再与租户的索引对照，判断每个符号是存在、缺失、改名还是不兼容。引入它的提交从成员历史中得到。
+6. **保留租户**。在租户的反向调用图中，从 ours 侧成员一直追到入口。
+7. **清单**。需要的符号按文件分组，依赖排在前面。
+
+## 在 RuoYi-Vue 上的验证
+
+`/workspace/oss-eval/conflict-mode/SCENARIO.md` 记录了在 RuoYi-Vue 克隆上的一次真实运行。租户分支于 2025-10-05 分叉，带有租户自己的修改。从主线 pick 了两个最近的功能：
+
+- 角色权限变更后刷新在线用户权限，它依赖 Spring Boot 4 的 `jakarta` 迁移；
+- 通知公告阅读用户列表，它依赖分叉之后新增的整套“已读”子系统。
+
+两种模式（实时和离线）都跑过，其中 3 个冲突块用 `file:line` 和提交逐一手工核对过。
+
+## 局限（冲突模式）
+
+- 离线模式用 `git merge-tree`，而不是临时 worktree。在默认选项下，它的合并结果和 stage 与 `git cherry-pick` 一致；但不会应用自定义 merge driver、`rerere`、`-X` 策略选项和 hook。
+- 符号分析只覆盖 Java、MyBatis XML、yml/yaml 和 properties。`.vue`、`.js`、SQL 等文件的冲突块会定位并归因到历史（WHERE、WHY），但不分析内容。
+- 使用 `--no-maven` 或 classpath 无法解析时，第三方库类型按启发式判断：租户源码里没有任何文件从该包 import，就算缺失。租户里对应的类型按名字匹配（如 `jakarta.servlet...` 对应 `javax.servlet...`）。这类条目请对照租户的 pom 核实。
+- 纯静态分析：反射、AOP、字符串形式的 Bean 名、SpEL 和 XML 装配都不跟踪，仅按名字匹配的调用会标为不确定。依赖链最多 4 层；调用方一直追到入口为止。
+- 改名识别要求方法体至少有 6 个 token，过短的成员（getter、单行方法）会显示为删除 + 新增。
+- 工具不会替你解决冲突，也不写文件，只负责解释冲突，由你来解决。
+
+---
+
+## 分支模式（次要）
+
+原来的整分支对比仍然可用。它在**方法级**比较 merge-base、ours、theirs，报告 theirs 改了、而 ours 缺失或不一致的代码，包括 git 不报冲突的缺口。
+
+```bash
+java -jar target/branch-diff-tool.jar branch --repo . --ours HEAD --theirs origin/feature-x --service-dir order-service --html -o report.html
+# （不写子命令、但带 --theirs 时，同样进入分支模式）
+```
+
+| 选项 | 说明 |
+|---|---|
+| `--ours <ref>` / `--theirs <ref>` | 两个分支或提交，merge-base 自动计算 |
+| `--service-dir <dir>` | 只分析该子目录 |
+| `--include-siblings [deps\|all\|none]`、`--no-siblings` | 把同仓库的兄弟 Maven 模块加入索引（默认 `deps`：服务 pom 依赖的模块） |
+| `--mvn <cmd>` / `--maven-timeout <sec>` | Maven 命令和超时 |
+
+
+### HTML 报告
 
 `--html`（等同 `--format html`）生成**一个自包含的 `.html` 文件**，界面仿 IntelliJ IDEA 的 diff/merge 视图。所有 CSS 和 JavaScript 都内联：不依赖 CDN、不访问网络，可离线打开，也可以直接附到工单或邮件里。
 
@@ -72,7 +149,7 @@ java -jar target/branch-diff-tool.jar --repo . --theirs feature-x --service-dir 
 
 只嵌入问题涉及的文件，内容直接从 git 的三个版本读取；超过 1 MB 的版本不嵌入并给出说明。行级 diff（Myers 算法，[java-diff-utils](https://github.com/java-diff-utils/java-diff-utils)，Apache-2.0）在 Java 端计算后以 JSON 嵌入；三栏视图按 merge-base 区间把 ours 与 theirs 的改动分组，做法与 `diff3` 相同。`docs/sample-report.html` 是下文验证样例的报告。
 
-### 上下文与依赖链
+#### 上下文与依赖链
 
 每个问题还带有代码上下文，由同一套三方索引计算（JSON 报告中的 `context` 字段，Markdown 第 7 节）：
 
@@ -85,7 +162,7 @@ java -jar target/branch-diff-tool.jar --repo . --theirs feature-x --service-dir 
 ![RuoYi-Vue 真实问题的依赖链](docs/html-report-deps.png)
 
 
-## 检测内容
+### 检测内容
 
 1. **方法级变更集**（base→theirs、base→ours）：按 `类全限定名#方法名(参数类型...)` 识别 ADDED / REMOVED / MODIFIED / SIGNATURE_CHANGED（同名不同参）/ RENAMED（方法体相同、名字不同）。比较时去掉注释和格式，因此只改注释、格式或位置不算修改。
 2. **依赖闭包**：对 theirs 新增/修改的每个方法，收集其调用的方法、构造器、引用的类型、字段、常量（含枚举常量、方法引用、注解），逐一检查 ours 中是否存在且签名兼容：
@@ -124,7 +201,7 @@ java -jar target/branch-diff-tool.jar --repo . --theirs feature-x --service-dir 
 
 报告章节：概览统计 → 缺失依赖 → Spring 配置/Bean 缺口 → 签名变更影响（含已删除/改名字段）→ 4b 值变更（常量、MyBatis 语句内容）→ 双方修改 → 不确定项 → 附录（完整方法变更集，仅服务目录）。JSON 与 Markdown 内容一致。
 
-## 验证样例
+### 验证样例
 
 `scripts/create-sample.sh [目标目录]` 生成样例仓库（默认 `/workspace/branch-diff-sample`），含 merge-base、`ours`、`theirs` 三个提交，服务目录 `order-service`，并埋入以下问题：
 
@@ -157,7 +234,7 @@ java -jar target/branch-diff-tool.jar --repo /workspace/branch-diff-sample \
 
 `SampleRepoEndToEndTest` 在 `mvn package` 时自动执行上述流程（离线、`--no-maven` 模式），断言每个 G 项都被报告、每个 N 项都没有被报告；并分别以 `--include-siblings none` / `all` 再跑一次：`none` 时 G10 两条消失、其余不变，`all` 时额外索引 `other-service` 但结果与默认相同（N10 仍不报告）。生成的报告见 `docs/sample-report.md` / `docs/sample-report.json`。
 
-## 已知局限
+### 已知局限（分支模式）
 
 - **反射**：`Class.forName`、`Method.invoke`、字符串形式的类名/方法名无法追踪。
 - **动态代理 / AOP / 运行时生成代码**：JDK/CGLIB 代理、Feign、Spring Data 派生查询方法（`findByXxx`）、MyBatis-Plus `BaseMapper` 的继承方法、Lombok 生成的 getter/setter 等不在源码中，只能按"外部"处理；对它们的缺失无法确认。

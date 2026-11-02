@@ -1,6 +1,8 @@
 package com.branchdiff;
 
 import com.branchdiff.analysis.Analyzer;
+import com.branchdiff.conflict.ConflictCommand;
+import com.branchdiff.conflict.ConflictMarkdown;
 import com.branchdiff.git.SiblingModules;
 import com.branchdiff.report.Finding;
 import com.branchdiff.report.MarkdownRenderer;
@@ -14,42 +16,55 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Map;
 
 public final class Main {
     private static final String USAGE = """
-            branch-diff-tool - find code that 'theirs' changed and 'ours' is missing or inconsistent with
-            (semantic / dependency gaps that plain git diff and git merge do not report).
+            faultline - explains cherry-pick / merge conflicts of Java (Spring / MyBatis / Maven) code: where each conflict
+            hunk is, why it conflicts (what mainline did to that code since the tenant forked), what taking theirs needs and
+            whether the tenant has it, and what keeping ours breaks (tenant callers up to HTTP endpoints / jobs).
 
             Usage:
-              java -jar branch-diff-tool.jar --theirs <ref> [options]
+              faultline conflicts [--repo <path>] [options]
+                  analyze the repository's current cherry-pick / merge / revert (CHERRY_PICK_HEAD / MERGE_HEAD /
+                  REVERT_HEAD and the unmerged index entries, stages 1/2/3). This is the default when no --theirs is given.
+              faultline conflicts --onto <tenant-ref> --pick <commit | c1,c2,... | A..B> [options]
+                  simulate the cherry-pick offline (git merge-tree, the same merge cherry-pick runs) without touching the
+                  worktree, the index or any ref, then analyze it
+              faultline branch --theirs <ref> [--ours <ref>] [options]
+                  secondary mode: compare whole branches (what theirs changed that ours lacks or is inconsistent with)
 
-            Options:
+            Conflict options:
+              --mainline <ref>       mainline branch; the tenant's fork point is merge-base(tenant, mainline)
+                                     (default: merge-base(tenant, picked commit's parent))
+              --onto <ref>           tenant ref for --pick (default: HEAD)
+              --pick <spec>          commit(s) to pick: one commit, a comma separated list, or a range A..B
+
+            Common options:
               --repo <path>          git repository (default: .)
-              --ours <ref>           our branch/commit (default: HEAD)
-              --theirs <ref>         branch/commit being migrated into ours (required)
-              --service-dir <dir>    service sub-directory inside the repo (default: repo root)
+              --service-dir <dir>    sub-directory to analyze (default: repo root; conflict mode works best on the root)
               --format md|json|html  report format (default: md)
-              --json                 shorthand for --format json
-              --html                 shorthand for --format html: one self-contained HTML file with an IDE-like
-                                     merge view (ours | merge-base | theirs) of every file a finding refers to
+              --json | --html        shorthand for --format json / html (html: one self-contained file, conflict hunks first,
+                                     tabs Conflict / Why / Take theirs / Take ours / Checklist, IDE-like ours|base|theirs view)
               --output, -o <file>    write report to file instead of stdout
               --no-maven             do not run 'mvn dependency:build-classpath' (faster, more UNCERTAIN items)
               --mvn <cmd>            maven executable (default: mvn)
               --maven-timeout <sec>  timeout per classpath resolution (default: 600)
               --include-tests        also analyze src/test/java
-              --include-siblings [deps|all|none]
-                                     index sibling modules of the same repo so that their classes are checked
-                                     instead of being treated as external libraries (default: deps = modules the
-                                     service pom depends on, transitively; all = every <dir>/src/main/java in the
-                                     repo; bare flag = deps). Findings stay limited to --service-dir.
-              --no-siblings          same as --include-siblings none
+              --include-siblings [deps|all|none], --no-siblings
+                                     (branch mode) index sibling modules of the same repo for lookups
               --keep-temp            keep the temporary materialized sources (debugging)
-              --fail-on-findings     exit with code 2 if any HIGH certain finding exists
+              --fail-on-findings     exit with code 2 if any HIGH certain finding exists (or, in conflict mode, any
+                                     symbol the pick needs is missing in the tenant)
               -v, --verbose          progress on stderr
               -h, --help
 
-            The repository is only read (rev-parse, merge-base, ls-tree, cat-file); the worktree, index and refs are
-            never touched.
+            Branch options:
+              --ours <ref>           our branch/commit (default: HEAD)
+              --theirs <ref>         branch/commit being migrated into ours (required in branch mode)
+
+            The worktree, index and refs are never modified. The offline simulation only adds unreferenced objects
+            (merge-tree / commit-tree) to the object database.
             """;
 
     private Main() {
@@ -70,23 +85,35 @@ public final class Main {
             return;
         }
         try {
-            Analyzer analyzer = new Analyzer(o);
-            Report r = analyzer.runFromGit();
+            Report r;
+            Analyzer analyzer;
+            Map<String, String[]> conflictFiles = Map.of();
+            if (o.command.equals("conflicts")) {
+                ConflictCommand cc = new ConflictCommand();
+                r = cc.run(o);
+                analyzer = cc.analyzer;
+                conflictFiles = cc.contents;
+            } else {
+                analyzer = new Analyzer(o);
+                r = analyzer.runFromGit();
+            }
             String out = switch (o.format) {
                 case "json" -> toJson(r);
                 case "html" -> HtmlRenderer.render(r, HtmlRenderer.source(analyzer.lastBase, analyzer.lastOurs,
-                        analyzer.lastTheirs, analyzer.lastGit));
-                default -> MarkdownRenderer.render(r);
+                        analyzer.lastTheirs, analyzer.lastGit), conflictFiles);
+                default -> r.conflicts != null ? ConflictMarkdown.render(r) : MarkdownRenderer.render(r);
             };
             if (o.output != null) {
                 if (o.output.toAbsolutePath().getParent() != null) Files.createDirectories(o.output.toAbsolutePath().getParent());
                 Files.writeString(o.output, out, StandardCharsets.UTF_8);
-                System.err.println("report written to " + o.output.toAbsolutePath() + " (" + r.findings.size() + " findings, "
-                        + r.summary.get("highSeverity") + " high)");
+                System.err.println("report written to " + o.output.toAbsolutePath() + (r.conflicts != null ? " ("
+                        + r.conflicts.summary.get("conflictHunks") + " conflict hunks in " + r.conflicts.files.size() + " files, " : " (")
+                        + r.findings.size() + " findings, " + r.summary.get("highSeverity") + " high)");
             } else {
                 System.out.print(out);
             }
-            if (o.failOnFindings && r.findings.stream().anyMatch(f -> f.severity == Finding.Severity.HIGH && !f.uncertain())) {
+            boolean conflictGaps = r.conflicts != null && r.conflicts.symbols.values().stream().anyMatch(n -> !"IN_PICK".equals(n.origin));
+            if (o.failOnFindings && (conflictGaps || r.findings.stream().anyMatch(f -> f.severity == Finding.Severity.HIGH && !f.uncertain()))) {
                 System.exit(2);
             }
         } catch (Exception e) {
@@ -106,7 +133,12 @@ public final class Main {
 
     static Options parse(String[] args) {
         Options o = new Options();
-        for (int i = 0; i < args.length; i++) {
+        int first = 0;
+        if (args.length > 0 && (args[0].equals("conflicts") || args[0].equals("branch"))) {
+            o.command = args[0];
+            first = 1;
+        }
+        for (int i = first; i < args.length; i++) {
             String a = args[i];
             if (a.startsWith("--include-siblings=")) {
                 o.siblings = SiblingModules.Mode.parse(a.substring("--include-siblings=".length()));
@@ -136,10 +168,17 @@ public final class Main {
                 case "--keep-temp" -> o.keepTemp = true;
                 case "--fail-on-findings" -> o.failOnFindings = true;
                 case "-v", "--verbose" -> o.verbose = true;
+                case "--onto" -> o.onto = val(args, ++i, a);
+                case "--pick" -> o.pick = val(args, ++i, a);
+                case "--mainline" -> o.mainline = val(args, ++i, a);
                 default -> throw new IllegalArgumentException("unknown option " + a);
             }
         }
-        if (o.theirs == null) throw new IllegalArgumentException("--theirs is required");
+        if (o.command == null) o.command = o.theirs != null ? "branch" : "conflicts";
+        if (o.command.equals("branch") && o.theirs == null) throw new IllegalArgumentException("--theirs is required in branch mode");
+        if (o.command.equals("conflicts") && o.theirs != null) {
+            throw new IllegalArgumentException("--theirs belongs to branch mode; in conflict mode use --onto/--pick or a repository mid cherry-pick");
+        }
         if (!o.format.equals("md") && !o.format.equals("json") && !o.format.equals("html")) {
             throw new IllegalArgumentException("--format must be md, json or html");
         }

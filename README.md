@@ -2,20 +2,27 @@ English | [简体中文](README.zh-CN.md)
 
 # faultline
 
-Find what a clean git merge silently leaves behind in Spring/Maven services.
+**Explain cherry-pick conflicts when a tenant branch is months behind mainline.**
 
-*(Semantic diff for branch migration — MVP. The build artifact is still named `branch-diff-tool`.)*
+A tenant codebase forked from mainline long ago. You cherry-pick one feature from mainline, one commit or a few. Git stops on conflicts. The conflicting code is usually code that mainline added, refactored, renamed or deleted after the fork. `git diff` shows only the conflicting lines. It does not tell you whether the callers and dependencies around them are right.
 
-When you migrate or merge code from a **theirs** branch into an **ours** branch (a Java Spring Boot microservice, Maven, a single service directory), `git diff` / `git merge` only surface **textual conflicts**.
-This tool compares the merge-base, ours and theirs versions **at method level** and finds code that theirs changed but that ours is **missing or inconsistent with** — including semantic gaps and dependency gaps for which git reports no conflict at all.
+`faultline conflicts` answers five questions for every conflict hunk:
 
-> Read-only: the three versions are read via `git rev-parse / merge-base / ls-tree / cat-file`. **No checkout, no working-tree changes, no index changes, no refs created, no remote access.**
-> Sources are copied to a system temp directory for symbol resolution (and the optional `mvn dependency:build-classpath`) and deleted automatically afterwards.
-> With sibling modules enabled, only the service pom in the **temp copy** is modified (dependencies on sibling modules are removed, see below); the repository itself is untouched.
+| | Question | What faultline shows |
+|---|---|---|
+| **WHERE** | Where is the conflict? | File, line ranges and the enclosing member (method, field, MyBatis statement, import section) on **ours** (tenant), **base** (the pick's parent) and **theirs** (the pick) |
+| **WHY** | Why does it conflict? | The mainline commits between the fork point and the pick's parent that touched this code (hash, date, subject), member-level history (added / modified / renamed / moved / signature changed, detected from the body), `git blame -w -M` of the base lines, and the tenant's own edits since the fork |
+| **TAKE THEIRS** | If I take the pick's side, what does it need? | Every symbol the theirs side of the hunk uses (methods, fields, types, beans, config keys, mapper statements, library types), transitively down to 4 levels: whether the tenant has it, under which old name, and which mainline commit introduced it. Moved imports and the lines git merged automatically are checked too |
+| **TAKE OURS** | If I keep the tenant's side, what breaks? | Tenant callers of the ours-side members, traced up to entry points (HTTP method and path from `@RequestMapping` and friends, `@PreAuthorize` permission, `@Scheduled`, `@EventListener` / MQ listeners, runners), plus parts of the pick that would be left dangling |
+| **CHECKLIST** | In what order do I fix it? | Dependencies first: mainline commits to consider picking first, files to bring, symbols to add to tenant files, places to adapt by hand (e.g. `jakarta.*` vs `javax.*`), then each hunk to resolve and the entry points to retest |
+
+Files of the pick that merge cleanly still go through the dependency analyzers. A clean merge can also need a symbol the tenant lacks.
+
+> Read-only. The offline mode runs `git merge-tree`, the same merge that cherry-pick runs, without touching the worktree, the index or any ref. Live mode reads the index stages and `.git/sequencer`. Nothing is checked out, committed or pushed.
 
 ## Build
 
-Requires JDK 17+, Maven 3.8+, git.
+Requires JDK 17+, Maven 3.8+ and git 2.38+ (for `git merge-tree --write-tree`).
 
 ```bash
 mvn -B package   # compile + unit tests + package
@@ -24,39 +31,104 @@ mvn -B package   # compile + unit tests + package
 
 ## Usage
 
+### Live mode: you are in the middle of a cherry-pick
+
 ```bash
-java -jar target/branch-diff-tool.jar \
-  --repo /path/to/repo \
-  --ours HEAD \
-  --theirs origin/feature-x \
-  --service-dir order-service \
-  -o report.md
-
-# JSON output
-java -jar target/branch-diff-tool.jar --repo . --theirs feature-x --json -o report.json
-
-# self-contained HTML report (IDEA-style diff viewer, see below)
-java -jar target/branch-diff-tool.jar --repo . --theirs feature-x --html -o report.html
+git cherry-pick dbe9834e          # stops with conflicts
+java -jar target/branch-diff-tool.jar conflicts --repo . --mainline master --html -o conflicts.html
 ```
 
-`--ours` defaults to `HEAD`; `--theirs` is required; `--service-dir` defaults to the repo root; without `-o` the report goes to stdout.
+faultline detects `CHERRY_PICK_HEAD` / `MERGE_HEAD` / `REVERT_HEAD`. It reads the unmerged index entries (stages 1/2/3, including modify/delete and add/add conflicts) and the commits still waiting in the sequencer. With no `--theirs` and no `--pick`, `conflicts` is the default subcommand.
+
+### Offline mode: before you pick
+
+```bash
+# one commit
+java -jar target/branch-diff-tool.jar conflicts --repo . --onto tenant --pick dbe9834e --mainline master --html -o role.html
+# several commits: a range, or a comma-separated list, applied in order
+java -jar target/branch-diff-tool.jar conflicts --repo . --onto tenant --pick '0728a04b^..d454d972' --mainline master -o notice.md
+```
+
+Each pick is simulated with `git merge-tree --write-tree --merge-base=<pick>^ <state> <pick>`. When a range has several steps, each later step is merged onto the result of the step before. That result is a temporary, unreferenced commit made with `git commit-tree`, so git can collect it later. Conflict hunks are labeled `s<N>:` by step.
 
 | Option | Description |
 |---|---|
-| `--repo <path>` | Path to the git repository (default `.`) |
-| `--ours <ref>` / `--theirs <ref>` | The two branches/commits; the merge-base is computed automatically |
-| `--service-dir <dir>` | Analyze only this subdirectory (changes in other directories do not enter the report) |
-| `--format md\|json\|html`, `--json`, `--html` | Output format, Markdown by default; `html` is a single self-contained page (see [HTML report](#html-report)) |
-| `-o, --output <file>` | Output file |
-| `--no-maven` | Skip `mvn dependency:build-classpath` (faster, but third-party library types cannot be resolved, so more entries become UNCERTAIN) |
-| `--mvn <cmd>` / `--maven-timeout <sec>` | Maven command and timeout (defaults `mvn`, 600 seconds) |
-| `--include-tests` | Also analyze `src/test/java` |
-| `--include-siblings [deps\|all\|none]` | Add the `src/main/java` of sibling modules in the same repo to symbol resolution and the index (loaded for all three versions), so classes in sibling modules are no longer treated as external libraries, and methods/types/constants that theirs depends on but that are missing from the ours version of a sibling module are reported as well. **Default `deps`**: load only modules the service pom depends on (including transitive dependencies via sibling modules); `all`: every other `<dir>/src/main/java` in the repo (including modules listed in the parent pom's `<modules>` and non-Maven directories); `none`: disabled (old behavior). Without a value it means `deps`; `--include-siblings=all` is also supported |
-| `--no-siblings` | Same as `--include-siblings none` |
-| `--fail-on-findings` | Exit code 2 when there are certain HIGH findings (useful in CI) |
-| `--keep-temp`, `-v` | Keep the temp directory / print progress |
+| `--repo <path>` | git repository (default `.`) |
+| `--mainline <ref>` | mainline branch. The fork point is `merge-base(tenant, mainline)`. Default: `merge-base(tenant, pick^)` |
+| `--onto <ref>` | tenant ref for offline mode (default `HEAD`) |
+| `--pick <spec>` | one commit, `c1,c2,...`, or a range `A..B` |
+| `--format md\|json\|html`, `--json`, `--html` | Markdown (default), JSON, or one self-contained HTML page |
+| `-o, --output <file>` | write to a file instead of stdout |
+| `--no-maven` | skip `mvn dependency:build-classpath`. This is faster. Library types are then judged by a heuristic (see limitations) |
+| `--fail-on-findings` | exit code 2 if the pick needs a symbol the tenant lacks (useful in CI) |
+| `--include-tests`, `--keep-temp`, `-v` | also analyze `src/test/java` / keep temp sources / print progress |
 
-## HTML report
+### Output
+
+- **HTML**: one offline file with inline CSS and JS.
+  - The sidebar lists the conflict hunks first, grouped by file, with modify/delete markers. Then come the migration checklist and the findings of the clean part of the pick.
+  - Each hunk has the tabs **Conflict / Why / Take theirs / Take ours / Checklist**. Conflict shows an IDE-like ours | base | theirs view: the selected hunk is outlined and the other hunks are shaded.
+  - Clicking a symbol, a history event or a call-path node shows that member on all three sides.
+  - When a context tab is open, the code view switches to ours | theirs automatically. The toggle in the top bar can switch it back.
+  - The URL hash holds the state, e.g. `#hunk=<id>&ctab=c-why`. `#hunk=__check` opens the checklist.
+- **JSON**: the same data under `conflicts`, together with the branch-analysis fields.
+- **Markdown**: the checklist first, then one section per file and hunk (where / why / take theirs / take ours), then the lines git merged automatically, then the clean files.
+
+![Why tab: the tenant edit and the mainline history behind a conflict](docs/conflict-why.png)
+![Take theirs: symbols the pick needs, whether the tenant has them, the commit that introduced them](docs/conflict-take-theirs.png)
+![Migration checklist, dependencies first](docs/conflict-checklist.png)
+
+### How it works
+
+1. **Session**.
+   - Live: `ls-files -u -z` stages, `CHERRY_PICK_HEAD`, `.git/sequencer/todo`.
+   - Offline: `merge-tree` output, including the tree, the conflicted stages and the informational messages.
+   - The fork is `merge-base(ours, mainline)`. The window is `fork..base` on mainline and `fork..ours` on the tenant.
+2. **Hunks**. Each conflicted path is re-merged with `git merge-file --diff3` on the three stage blobs, which gives the exact line ranges on all three sides. When only line endings differ, the hunks are computed on CR-stripped text and the report suggests `-X ignore-cr-at-eol`.
+3. **Members**. Java is parsed with JavaParser. The tool reads MyBatis XML statements and yml/properties keys. Each hunk is mapped to the members it overlaps.
+4. **History**. For the base side, `git log fork..base` follows the file. Each commit's two versions of the member are diffed, and members are paired by name, then by body similarity (Dice on tokens ≥ 0.75) to detect renames, moves and signature changes. `git blame -w -M` is run on the base lines.
+5. **Take theirs**. The dependency closure of the theirs-side members is built against the tenant's index, which says whether each symbol is present, missing, renamed or incompatible. The introducing commit is found from the member history.
+6. **Take ours**. The tenant's reverse call graph goes from the ours-side members up to entry points.
+7. **Checklist**. The needs are grouped per file and ordered with dependencies first.
+
+## Validation on RuoYi-Vue
+
+`/workspace/oss-eval/conflict-mode/SCENARIO.md` describes a real run on a RuoYi-Vue clone. A tenant branch forked 2025-10-05 has tenant-local edits. Two recent mainline features were picked onto it:
+
+- a role permission refresh, which depends on the Spring Boot 4 `jakarta` migration;
+- a notice read-users list, which depends on a notice-read subsystem added after the fork.
+
+The scenario was run in both live and offline modes, and three hunks were checked by hand against `file:line` and the commits.
+
+## Limitations (conflict mode)
+
+- Offline mode uses `git merge-tree` instead of a temporary worktree. It gives the same merge result and stages as `git cherry-pick` with default options. Custom merge drivers, `rerere`, `-X` strategy options and hooks are not applied.
+- Symbol analysis covers Java, MyBatis XML, yml/yaml and properties. Hunks in `.vue`, `.js`, SQL and other files are located and attributed to history (WHERE and WHY), but their contents are not analyzed.
+- With `--no-maven` or an unresolvable classpath, a library type counts as missing when no tenant source imports from its package. The tenant counterpart is found by name (e.g. `javax.servlet...` for `jakarta.servlet...`). Check these items against the tenant's pom.
+- Static analysis only: reflection, AOP, string bean names, SpEL and XML wiring are not followed, and calls resolved by name only are marked uncertain. Call paths stop at 4 levels for dependencies and at the entry points for callers.
+- Rename detection needs at least 6 tokens of body. Very short members (getters, one-liners) are reported as removed + added.
+- The tool does not resolve conflicts or write files. It explains them, and you resolve them.
+
+---
+
+## Branch mode (secondary)
+
+The original whole-branch comparison is still available. It compares the merge-base, ours and theirs **at method level** and reports code that theirs changed but that ours is missing or inconsistent with, including gaps that git reports no conflict for.
+
+```bash
+java -jar target/branch-diff-tool.jar branch --repo . --ours HEAD --theirs origin/feature-x --service-dir order-service --html -o report.html
+# (without a subcommand, passing --theirs also selects branch mode)
+```
+
+| Option | Description |
+|---|---|
+| `--ours <ref>` / `--theirs <ref>` | The two branches or commits. The merge-base is computed automatically |
+| `--service-dir <dir>` | Analyze only this subdirectory |
+| `--include-siblings [deps\|all\|none]`, `--no-siblings` | Index sibling Maven modules for lookups (default `deps`: the modules the service pom depends on) |
+| `--mvn <cmd>` / `--maven-timeout <sec>` | Maven command and timeout |
+
+
+### HTML report
 
 `--html` (same as `--format html`) writes **one self-contained `.html` file** in the style of IntelliJ IDEA's diff/merge viewer. All CSS and JavaScript are inline: no CDN, no network access, it works offline and can be attached to a ticket or sent by mail.
 
@@ -77,7 +149,7 @@ java -jar target/branch-diff-tool.jar --repo . --theirs feature-x --service-dir 
 
 Only files referenced by findings are embedded, read from git at the three revisions; a version larger than 1 MB is skipped with a note. Line diffs (Myers, [java-diff-utils](https://github.com/java-diff-utils/java-diff-utils), Apache-2.0) are computed in Java and embedded as JSON; the three-column view groups ours and theirs changes per merge-base range the way `diff3` does. `docs/sample-report.html` is the report of the verification sample below.
 
-### Context and dependency chains
+#### Context and dependency chains
 
 Each finding also carries its code context, computed from the same three indexes (also in the JSON report as `context` and in Markdown as section 7):
 
@@ -90,7 +162,7 @@ Each finding also carries its code context, computed from the same three indexes
 ![Dependency chain of a real RuoYi-Vue finding](docs/html-report-deps.png)
 
 
-## What it detects
+### What it detects
 
 1. **Method-level change sets** (base→theirs, base→ours): identified by `fully.qualified.Class#method(ParamType...)` as ADDED / REMOVED / MODIFIED / SIGNATURE_CHANGED (same name, different parameters) / RENAMED (same body, different name). Comments and formatting are stripped before comparison, so changes to comments, formatting or position alone do not count as modifications.
 2. **Dependency closure**: for every method theirs added or modified, collect the methods, constructors, referenced types, fields and constants it uses (including enum constants, method references and annotations), and check each one exists in ours with a compatible signature:
@@ -129,7 +201,7 @@ Each finding also carries its code context, computed from the same three indexes
 
 Report sections: summary statistics → missing dependencies → Spring config/bean gaps → signature change impact (including removed/renamed fields) → 4b value changes (constants, MyBatis statement bodies) → modified on both sides → uncertain items → appendix (full method change set, service directory only). JSON and Markdown have the same content.
 
-## Verification sample
+### Verification sample
 
 `scripts/create-sample.sh [target-dir]` generates a sample repository (default `/workspace/branch-diff-sample`) with three commits — merge-base, `ours`, `theirs` — and service directory `order-service`, with the following issues planted:
 
@@ -162,7 +234,7 @@ java -jar target/branch-diff-tool.jar --repo /workspace/branch-diff-sample \
 
 `SampleRepoEndToEndTest` runs this flow automatically during `mvn package` (offline, `--no-maven` mode), asserting that every G item is reported and no N item is; it then runs again with `--include-siblings none` and `all`: with `none` the two G10 entries disappear and everything else is unchanged; with `all`, `other-service` is additionally indexed but the results match the default (N10 is still not reported). The generated reports are in `docs/sample-report.md` / `docs/sample-report.json`.
 
-## Known limitations
+### Known limitations (branch mode)
 
 - **Reflection**: `Class.forName`, `Method.invoke`, and class/method names given as strings cannot be traced.
 - **Dynamic proxies / AOP / runtime-generated code**: JDK/CGLIB proxies, Feign, Spring Data derived query methods (`findByXxx`), methods inherited from MyBatis-Plus `BaseMapper`, Lombok-generated getters/setters, etc. are not in the source and can only be treated as "external"; their absence cannot be confirmed.

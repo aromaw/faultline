@@ -44,7 +44,7 @@ public final class DependencyAnalyzer {
     /** One dependency of a theirs method. candidates != empty means name-based guess (uncertain). */
     public record Dep(DepKind kind, String owner, String member, String name, int arity, boolean certain,
                       List<String> candidateOwners) {
-        String id() {
+        public String id() {
             return kind + "|" + owner + "|" + member;
         }
     }
@@ -90,7 +90,7 @@ public final class DependencyAnalyzer {
 
     // ------------------------------------------------------------------ collection
 
-    Map<Dep, Integer> collect(MethodInfo m) {
+    public Map<Dep, Integer> collect(MethodInfo m) {
         return collect(m.node, m.owner, m.node);
     }
 
@@ -99,7 +99,7 @@ public final class DependencyAnalyzer {
      * analyzer treats as "theirs" (callers may pass the same index three times to collect dependencies of ours).
      * {@code callable} supplies method type variables and locals; it may be null (field initializers, whole types).
      */
-    Map<Dep, Integer> collect(Node node, ClassInfo ctx, CallableDeclaration<?> callable) {
+    public Map<Dep, Integer> collect(Node node, ClassInfo ctx, CallableDeclaration<?> callable) {
         Map<Dep, Integer> out = new LinkedHashMap<>();
         Set<String> tvars = Scopes.typeVars(ctx, callable);
         Scopes scopes = new Scopes(theirs, ctx, callable != null ? callable : node, tvars);
@@ -339,13 +339,13 @@ public final class DependencyAnalyzer {
     // ------------------------------------------------------------------ checking
 
     /** Result of looking a dependency up in one version. */
-    record Lookup(String status, String detail, String location) {
-        boolean ok() {
+    public record Lookup(String status, String detail, String location) {
+        public boolean ok() {
             return status.equals("OK");
         }
     }
 
-    Lookup lookup(Dep d, CodeIndex idx) {
+    public Lookup lookup(Dep d, CodeIndex idx) {
         List<String> owners = d.candidateOwners.isEmpty() ? List.of(d.owner) : d.candidateOwners;
         boolean anyOwner = false;
         for (String o : owners) if (idx.classes.containsKey(o)) anyOwner = true;

@@ -166,6 +166,45 @@ public final class ContextBuilder {
         return model;
     }
 
+    // ------------------------------------------------------------------ public access for the conflict analysis
+
+    public ContextModel model() {
+        return model;
+    }
+
+    /** the node for {@code key} (created, with its status in ours / base / theirs, if new) */
+    public Node nodeOf(String key) {
+        return node(key);
+    }
+
+    /** forward dependency tree of a theirs symbol, depth {@link #MAX_DEPTH} (root always expanded) */
+    public TreeNode dependencyTree(String key) {
+        treeBudget = MAX_TREE_NODES;
+        return tree(key, null, false, 0, new HashSet<>(), true);
+    }
+
+    /** reverse impact tree of a symbol in ours (users, up to {@link #MAX_IMPACT_DEPTH} levels) */
+    public TreeNode impactTreeOf(String key) {
+        return impactTree(key, null, false, 0, new HashSet<>());
+    }
+
+    /** direct users of {@code key} in ours: [user key, "path:line"] */
+    public List<String[]> usersOf(String key) {
+        List<String[]> res = new ArrayList<>();
+        for (Edge e : reverse().getOrDefault(key, List.of())) res.add(new String[] {e.to, e.at});
+        return res;
+    }
+
+    /** node key of a dependency collected in {@code idx} */
+    public String keyOf(Dep d, CodeIndex idx) {
+        return depKey(d, idx);
+    }
+
+    /** node key of a method given as "owner#sig" (resolving name-only signatures) */
+    public String methodNodeKey(String ownerHashSig, CodeIndex idx) {
+        return methodKey(ownerHashSig, idx);
+    }
+
     private void limitations() {
         model.limitations.add("Dependency trees expand only symbols that ours lacks or that differ from theirs, at most "
                 + MAX_DEPTH + " levels below the root; reverse impact goes up to " + MAX_IMPACT_DEPTH + " levels of callers.");

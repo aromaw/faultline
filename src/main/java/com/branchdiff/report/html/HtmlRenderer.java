@@ -58,7 +58,13 @@ public final class HtmlRenderer {
     }
 
     public static String render(Report r, FileSource src) {
+        return render(r, src, Map.of());
+    }
+
+    /** @param conflictFiles view key -> [ours, base, theirs] contents of the conflicted files (conflict mode) */
+    public static String render(Report r, FileSource src, Map<String, String[]> conflictFiles) {
         Map<String, Object> data = data(r, src);
+        if (r.conflicts != null) conflicts(r, conflictFiles, data);
         String json;
         try {
             json = new ObjectMapper().writeValueAsString(data);
@@ -279,6 +285,51 @@ public final class HtmlRenderer {
             file.put("hunks3", h3);
             file.put("hunks2", h2);
             files.put(MEMBER_PREFIX + node.key, file);
+        }
+    }
+
+    // ------------------------------------------------------------------ conflict mode
+
+    /** Embeds the conflict model and, per conflicted file, the three stage contents with the conflict regions. */
+    @SuppressWarnings("unchecked")
+    static void conflicts(Report r, Map<String, String[]> contents, Map<String, Object> data) {
+        data.put("conflicts", r.conflicts);
+        Map<String, Map<String, Object>> files = (Map<String, Map<String, Object>>) data.get("files");
+        for (com.branchdiff.conflict.ConflictModel.ConflictFile f : r.conflicts.files) {
+            String[] c = contents.get(f.viewKey);
+            Map<String, Object> file = new LinkedHashMap<>();
+            file.put("lang", lang(f.path));
+            List<String> notes = new ArrayList<>();
+            Map<String, List<String>> lines = new LinkedHashMap<>();
+            String[] sides = {"ours", "base", "theirs"};
+            for (int i = 0; i < 3; i++) {
+                String v = c == null ? null : c[i];
+                if (v != null && v.getBytes(StandardCharsets.UTF_8).length > MAX_FILE_BYTES) {
+                    notes.add(sides[i] + " version larger than 1 MB, not embedded");
+                    v = null;
+                }
+                file.put(sides[i], v);
+                lines.put(sides[i], LineHunks.lines(v));
+            }
+            file.put("notes", notes);
+            file.put("conflict", true);
+            List<Map<String, Object>> h3 = new ArrayList<>();
+            for (LineHunks.Hunk3 h : LineHunks.threeWay(lines.get("base"), lines.get("ours"), lines.get("theirs"))) h3.add(h.json());
+            List<Map<String, Object>> h2 = new ArrayList<>();
+            for (LineHunks.Hunk2 h : LineHunks.twoWay(lines.get("ours"), lines.get("theirs"))) h2.add(h.json());
+            file.put("hunks3", h3);
+            file.put("hunks2", h2);
+            List<Map<String, Object>> regions = new ArrayList<>();
+            for (com.branchdiff.conflict.ConflictModel.Hunk h : f.hunks) {
+                Map<String, Object> m = new LinkedHashMap<>();
+                m.put("id", h.id);
+                m.put("o", new int[] {h.ours.start(), h.ours.end()});
+                m.put("b", new int[] {h.base.start(), h.base.end()});
+                m.put("t", new int[] {h.theirs.start(), h.theirs.end()});
+                regions.add(m);
+            }
+            file.put("regions", regions);
+            files.put(f.viewKey, file);
         }
     }
 

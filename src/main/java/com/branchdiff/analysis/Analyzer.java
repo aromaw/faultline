@@ -36,6 +36,15 @@ public final class Analyzer {
     /** git access of the last {@link #runFromGit()} (null for {@link #run} on in-memory snapshots) */
     public GitRunner lastGit;
 
+    /** Everything a follow-up analysis (the conflict mode) needs while the type solvers' temp sources still exist. */
+    public record Context(CodeIndex base, CodeIndex ours, CodeIndex theirs, ContextBuilder context, ChangeSet theirsChanges,
+                          ChangeSet theirsChangesAll, List<Finding> findings, Report report, List<String> warnings,
+                          boolean librariesComparable) {
+    }
+
+    /** called at the end of {@link #run}, before the temporary workspaces are deleted */
+    public java.util.function.Consumer<Context> after;
+
     public Analyzer(Options opt) {
         this.opt = opt;
     }
@@ -45,12 +54,17 @@ public final class Analyzer {
     }
 
     public Report runFromGit() {
+        return runFromGit(null);
+    }
+
+    /** @param baseRef explicit base commit (the picked commit's parent in conflict mode); null = merge-base */
+    public Report runFromGit(String baseRef) {
         GitRunner git = new GitRunner(opt.repo.toAbsolutePath().normalize());
         lastGit = git;
         git.run("rev-parse", "--git-dir");
         String oursC = git.resolveCommit(opt.ours);
         String theirsC = git.resolveCommit(opt.theirs);
-        String baseC = git.mergeBase(oursC, theirsC);
+        String baseC = baseRef != null ? git.resolveCommit(baseRef) : git.mergeBase(oursC, theirsC);
         log("ours=" + oursC + " theirs=" + theirsC + " merge-base=" + baseC);
         SnapshotLoader loader = new SnapshotLoader(git);
         String dir = SnapshotLoader.normalizeDir(opt.serviceDir);
@@ -141,9 +155,10 @@ public final class Analyzer {
             r.warnings = warnings;
             r.predictedTextualConflicts = textualConflicts(base, ours, theirs);
             long t0 = System.nanoTime();
+            boolean libs = wsOurs.classpathOk && wsTheirs.classpathOk;
+            ContextBuilder cb = null;
             try {
-                boolean libs = wsOurs.classpathOk && wsTheirs.classpathOk;
-                ContextBuilder cb = new ContextBuilder(iBase, iOurs, iTheirs, libs);
+                cb = new ContextBuilder(iBase, iOurs, iTheirs, libs);
                 if (libs) cb.withJars(new JarArtifacts(wsTheirs.jars), new JarArtifacts(wsOurs.jars));
                 r.context = cb.build(findings);
                 log("context: " + r.context.nodes.size() + " nodes, " + r.context.chains.size() + " chains in "
@@ -189,6 +204,10 @@ public final class Analyzer {
             n.put("mapperXmlNamespaces", Map.of("ours", iOurs.mapperXml.namespaces().size(), "theirs", iTheirs.mapperXml.namespaces().size()));
             r.changeSets.put("theirs", listChanges(csTheirs));
             r.changeSets.put("ours", listChanges(csOurs));
+            if (after != null) {
+                if (cb == null) cb = new ContextBuilder(iBase, iOurs, iTheirs, libs);
+                after.accept(new Context(iBase, iOurs, iTheirs, cb, csTheirs, csTheirsAll, findings, r, warnings, libs));
+            }
             return r;
         } finally {
             wsOurs.close();
