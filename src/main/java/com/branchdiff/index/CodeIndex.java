@@ -115,6 +115,7 @@ public final class CodeIndex {
             if (!includeTests && isTestPath(path)) continue;
             if (path.endsWith(".java")) {
                 ParseResult<CompilationUnit> r = parser.parse(e.getValue());
+                r.getResult().ifPresent(Ast::dropTokens);
                 if (r.getResult().isPresent() && r.isSuccessful()) {
                     CompilationUnit cu = r.getResult().get();
                     idx.units.put(path, cu);
@@ -132,6 +133,7 @@ public final class CodeIndex {
             String path = e.getKey();
             if (!path.endsWith(".java") || isTestPath(path)) continue;
             ParseResult<CompilationUnit> r = parser.parse(e.getValue());
+            r.getResult().ifPresent(Ast::dropTokens);
             if (!r.isSuccessful()) {
                 idx.parseErrors.add(path + " (sibling): " + r.getProblems().stream().findFirst().map(Object::toString).orElse("parse error"));
             }

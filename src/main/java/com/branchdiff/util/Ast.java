@@ -1,5 +1,7 @@
 package com.branchdiff.util;
 
+import com.github.javaparser.Range;
+
 import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.comments.Comment;
 import com.github.javaparser.ast.expr.AnnotationExpr;
@@ -107,5 +109,25 @@ public final class Ast {
     public static void removeComments(Node n) {
         for (Comment c : n.getAllContainedComments()) c.remove();
         n.getComment().ifPresent(Comment::remove);
+    }
+
+    /**
+     * Drops the token list of a parsed compilation unit and keeps every node's range. The analysis only needs ranges
+     * (line numbers) and the nodes; the tokens (every identifier, space and comment of the file with two positions and
+     * its text each) are most of a parsed file's memory.
+     */
+    public static void dropTokens(Node root) {
+        root.walk(n -> {
+            Range r = n.getRange().orElse(null);
+            n.setTokenRange(null);
+            if (r != null) n.setRange(r);
+        });
+        if (root instanceof com.github.javaparser.ast.CompilationUnit cu) {
+            for (Comment c : cu.getAllComments()) {
+                Range r = c.getRange().orElse(null);
+                c.setTokenRange(null);
+                if (r != null) c.setRange(r);
+            }
+        }
     }
 }

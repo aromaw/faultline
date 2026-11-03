@@ -589,7 +589,7 @@ public final class ContextBuilder {
 
     /**
      * Users of {@code key} in ours (reverse edges), computed on demand. Symbol resolution is the expensive part, so
-     * only the ours members whose source mentions the key's simple name (identifier tokens) are resolved, and each
+     * only the ours members whose AST mentions the key's simple name (as a name or identifier) are resolved, and each
      * member is resolved at most once. Every dependency {@link DependencyAnalyzer#collect} reports is derived from a
      * name written in the member (call name, type name, field name, method reference), so this prefilter returns the
      * same edges, in the same order, as resolving every member of the project.
@@ -641,13 +641,14 @@ public final class ContextBuilder {
 
     private void index(RevEntry e, com.github.javaparser.ast.Node node) {
         revEntries.add(e);
+        // every name a dependency can come from: simple names (calls, fields, variables, types), qualified names
+        // (annotations, imports) and method reference identifiers
         Set<String> names = new HashSet<>();
-        var tokens = node.getTokenRange();
-        if (tokens.isEmpty()) {
-            names.add("*"); // no tokens kept: the entry matches every name
-        } else {
-            for (com.github.javaparser.JavaToken t : tokens.get()) if (t.getCategory().isIdentifier()) names.add(t.getText());
-        }
+        node.walk(n -> {
+            if (n instanceof com.github.javaparser.ast.expr.SimpleName sn) names.add(sn.getIdentifier());
+            else if (n instanceof com.github.javaparser.ast.expr.Name nm) names.add(nm.getIdentifier());
+            else if (n instanceof com.github.javaparser.ast.expr.MethodReferenceExpr mr) names.add(mr.getIdentifier());
+        });
         for (String n : names) revByName.computeIfAbsent(n, k -> new ArrayList<>()).add(e);
     }
 
