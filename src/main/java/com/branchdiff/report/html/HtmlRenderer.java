@@ -141,7 +141,13 @@ public final class HtmlRenderer {
             f.details.forEach((k, v) -> details.put(k, v instanceof String || v instanceof Number ? v : String.valueOf(v)));
             m.put("details", details);
             List<Map<String, Object>> used = new ArrayList<>();
-            for (Finding.Usage u : f.neededBy) used.add(Map.of("by", u.by(), "location", u.location()));
+            for (Finding.Usage u : f.neededBy) {
+                // ordered like the JSON report; Map.of iterates in a different order on every JVM run
+                Map<String, Object> use = new LinkedHashMap<>();
+                use.put("location", u.location());
+                use.put("by", u.by());
+                used.add(use);
+            }
             m.put("neededBy", used);
             List<Map<String, Object>> targets = targets(f, src, files);
             m.put("targets", targets);

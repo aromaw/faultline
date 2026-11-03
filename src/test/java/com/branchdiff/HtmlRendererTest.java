@@ -106,6 +106,15 @@ class HtmlRendererTest {
         boolean conflict = false;
         for (JsonNode x : files.get(USER).get("hunks3")) conflict |= "conflict".equals(x.get("type").asText());
         assertTrue(conflict, files.get(USER).toString());
+        // the page is the same on every run: no randomly ordered maps (Map.of) in the embedded data
+        boolean usages = false;
+        for (JsonNode f : d.get("findings")) {
+            for (JsonNode u : f.get("neededBy")) {
+                usages = true;
+                assertEquals(List.of("location", "by"), com.google.common.collect.ImmutableList.copyOf(u.fieldNames()), u.toString());
+            }
+        }
+        assertTrue(usages, "scenario has neededBy entries");
     }
 
     @Test
