@@ -42,7 +42,7 @@ final class Ui {
         return c != null ? c : Color.GRAY;
     }
 
-    /** FlatLaf typography: "h1" ... "h4", "large", "medium", "small", "mini" (relative to the system font) */
+    /** FlatLaf typography "large", "small", "mini" (relative to the system font); for headings use {@link #heading} */
     static <T extends JComponent> T style(T c, String styleClass) {
         c.putClientProperty("FlatLaf.styleClass", styleClass);
         return c;
@@ -50,6 +50,22 @@ final class Ui {
 
     static JLabel label(String text, String styleClass) {
         return style(new JLabel(text), styleClass);
+    }
+
+    /**
+     * a bold heading {@code delta} points above the label font. (FlatLaf's h1..h4 style classes look up a semibold
+     * font family, which makes the JDK scan every installed font: ~150 ms of start-up on Linux.)
+     */
+    static JLabel heading(String text, float delta) {
+        JLabel l = new JLabel(text) {
+            @Override
+            public void updateUI() {
+                super.updateUI();
+                Font f = UIManager.getFont("Label.font");
+                if (f != null) setFont(f.deriveFont(Font.BOLD, f.getSize2D() + delta));
+            }
+        };
+        return l;
     }
 
     static JLabel muted(String text) {

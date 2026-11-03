@@ -79,7 +79,7 @@ class BranchPickerLogicTest {
         for (int s : AppIcon.SIZES) {
             java.awt.Image i = AppIcon.load(s);
             assertNotNull(i, "icon " + s);
-            assertEquals(s, i.getWidth(null));
+            assertEquals(s, new javax.swing.ImageIcon(i).getIconWidth()); // waits for the lazy decode
         }
         assertFalse(AppIcon.images().isEmpty());
     }

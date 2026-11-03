@@ -176,8 +176,7 @@ final class BranchPicker extends JButton {
 
         JPanel p = new JPanel(new BorderLayout(0, 6));
         p.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
-        JLabel title = Ui.label("Select " + what, "medium");
-        title.setFont(title.getFont().deriveFont(Font.BOLD));
+        JLabel title = Ui.heading("Select " + what, 0);
         JPanel north = new JPanel(new BorderLayout(0, 6));
         north.add(title, BorderLayout.NORTH);
         north.add(search, BorderLayout.CENTER);

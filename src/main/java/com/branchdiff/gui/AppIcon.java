@@ -1,11 +1,9 @@
 package com.branchdiff.gui;
 
-import javax.imageio.ImageIO;
 import javax.swing.JFrame;
 import java.awt.Image;
 import java.awt.Taskbar;
-import java.io.IOException;
-import java.io.InputStream;
+import java.awt.Toolkit;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -31,12 +29,10 @@ final class AppIcon {
         return images;
     }
 
+    /** decoded lazily by the toolkit (no ImageIO on the start-up path); null when the resource is missing */
     static Image load(int size) {
-        try (InputStream in = AppIcon.class.getResourceAsStream("icons/faultline-" + size + ".png")) {
-            return in == null ? null : ImageIO.read(in);
-        } catch (IOException e) {
-            return null;
-        }
+        java.net.URL u = AppIcon.class.getResource("icons/faultline-" + size + ".png");
+        return u == null ? null : Toolkit.getDefaultToolkit().createImage(u);
     }
 
     /** window icons, plus the Dock icon on macOS (ignored where unsupported) */

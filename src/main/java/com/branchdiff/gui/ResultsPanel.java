@@ -428,7 +428,7 @@ final class ResultsPanel {
         a.setBorder(BorderFactory.createEmptyBorder(6, 8, 6, 8));
         a.setFont(UIManager.getFont("Label.font"));
         JPanel top = new JPanel(new BorderLayout());
-        JLabel t = Ui.label(title, "h4");
+        JLabel t = Ui.heading(title, 0);
         t.setBorder(BorderFactory.createEmptyBorder(8, 8, 0, 8));
         top.add(t, BorderLayout.NORTH);
         top.add(new JScrollPane(a, JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED, JScrollPane.HORIZONTAL_SCROLLBAR_NEVER) {

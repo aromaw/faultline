@@ -97,6 +97,7 @@ final class MainFrame {
     private final AtomicBoolean cancelFlag = new AtomicBoolean();
     volatile String lastError;
     private boolean oomShown;
+    private javax.swing.Icon logo;
 
     MainFrame(Prefs prefs) {
         this.prefs = prefs;
@@ -116,8 +117,7 @@ final class MainFrame {
         left.addTab("Conflicts", Ui.icon(Ui.Glyph.BRANCH), conflictsHolder, "Conflicted files and hunks of the last analysis");
         left.addChangeListener(e -> showRight());
 
-        buildWelcome();
-        right.add(welcome, "welcome");
+        right.add(welcome, "welcome"); // filled by updateActions()
         JSplitPane split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, left, right);
         split.setResizeWeight(0.4);
         split.setDividerLocation(600);
@@ -328,7 +328,7 @@ final class MainFrame {
     }
 
     private static JComponent arrow() {
-        JLabel a = Ui.label("\u2190", "h3");
+        JLabel a = Ui.heading("\u2190", 3);
         a.setForeground(Ui.muted());
         a.setToolTipText("commits from the mainline are picked onto the target");
         a.setBorder(BorderFactory.createEmptyBorder(14, 0, 0, 0));
@@ -374,14 +374,27 @@ final class MainFrame {
         inner.setLayout(new BoxLayout(inner, BoxLayout.Y_AXIS));
         JLabel icon = new JLabel(new ScaledIcon(Ui.icon(glyph, null), 3));
         icon.setForeground(Ui.muted());
-        JLabel t = Ui.label(title, "h3");
-        JLabel d = Ui.muted("<html><div style='text-align:center;width:300px'>" + ResultsPanel.esc(text) + "</div></html>");
+        JLabel t = Ui.heading(title, 3);
+        // a wrapping text area, not an HTML label: HTML would load the Swing HTML kit on the start-up path
+        JTextArea d = new JTextArea(text, 0, 30) {
+            @Override
+            public void updateUI() {
+                super.updateUI();
+                setForeground(Ui.muted());
+                setFont(UIManager.getFont("Label.font"));
+            }
+        };
+        d.setEditable(false);
+        d.setFocusable(false);
+        d.setOpaque(false);
+        d.setLineWrap(true);
+        d.setWrapStyleWord(true);
+        d.setMaximumSize(new Dimension(380, 200));
         for (JComponent x : new JComponent[] {icon, t, d}) {
             x.setAlignmentX(0.5f);
             inner.add(x);
             inner.add(Box.createVerticalStrut(8));
         }
-        d.setHorizontalAlignment(SwingConstants.CENTER);
         if (action != null) {
             JButton b = new JButton(action);
             b.setAlignmentX(0.5f);
@@ -432,9 +445,12 @@ final class MainFrame {
         JPanel box = new JPanel();
         box.setLayout(new BoxLayout(box, BoxLayout.Y_AXIS));
         box.setBorder(BorderFactory.createEmptyBorder(36, 44, 36, 44));
-        java.awt.Image img = AppIcon.load(64);
-        JLabel title = Ui.label("faultline", "h1");
-        if (img != null) title.setIcon(new javax.swing.ImageIcon(img));
+        if (logo == null) {
+            java.awt.Image img = AppIcon.load(64);
+            if (img != null) logo = new javax.swing.ImageIcon(img); // waits for the (small) image
+        }
+        JLabel title = Ui.heading("faultline", 12);
+        title.setIcon(logo);
         title.setIconTextGap(14);
         box.add(title);
         box.add(Box.createVerticalStrut(6));
@@ -463,7 +479,7 @@ final class MainFrame {
         List<String> rec = prefs.recentProjects();
         if (!rec.isEmpty() && git == null) {
             box.add(Box.createVerticalStrut(10));
-            box.add(Ui.label("Recent projects", "h4"));
+            box.add(Ui.heading("Recent projects", 0));
             box.add(Box.createVerticalStrut(4));
             for (String p : rec) {
                 JButton b = new JButton(p, Ui.icon(Ui.Glyph.FOLDER));
