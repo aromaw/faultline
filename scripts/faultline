@@ -8,11 +8,14 @@
 # Environment:
 #   JAVA_HOME / FAULTLINE_JAVA   java to use (default: $JAVA_HOME/bin/java, else java on PATH)
 #   FAULTLINE_JAR                the jar (default: next to this script, or ../target/branch-diff-tool.jar)
-#   FAULTLINE_XMX                maximum heap (default 1g; a RuoYi-Vue-sized project (~270 Java files) needs ~300 MB)
+#   FAULTLINE_XMX                maximum heap, e.g. 4g (default: a quarter of the physical memory or of the container
+#                                limit, at least 1g and at most 8g; read with sysctl hw.memsize on macOS and from
+#                                /proc/meminfo and the cgroup limit on Linux). A 3,000-file project needs ~500 MB.
 #   FAULTLINE_CDS=1              use an AppCDS archive of the app's classes (created by the first run, in
 #                                ~/.cache/faultline). Off by default: on the reference box it did not measurably
 #                                speed up the start (see README).
 #   FAULTLINE_JAVA_OPTS          extra JVM options
+#   FAULTLINE_PRINT_OPTS=1       print the JVM options and exit (no java start)
 set -e
 DIR=$(cd "$(dirname "$0")" && pwd)
 JAR=${FAULTLINE_JAR:-}
@@ -33,9 +36,45 @@ fi
 # Measured on RuoYi-Vue (README, GUI section): G1 with low free-heap ratios gives the memory of the analysis back
 # after it (RSS ~195 MB vs ~450 MB with -XX:+UseSerialGC, which keeps its heap committed); two JIT compiler threads
 # instead of 4 save ~30 MB idle at ~10 % analysis time.
-OPTS="-XX:+UseG1GC -Xmx${FAULTLINE_XMX:-1g} -XX:MinHeapFreeRatio=10 -XX:MaxHeapFreeRatio=30 -XX:CICompilerCount=2"
-OPTS="$OPTS -Dapple.awt.application.name=faultline -Xdock:name=faultline"
-case "$(uname -s)" in Darwin) ;; *) OPTS=$(echo "$OPTS" | sed 's/ -Xdock:name=faultline//') ;; esac
+OS=${FAULTLINE_OS:-$(uname -s)}
+
+# physical memory in bytes (FAULTLINE_MEM_BYTES overrides, for tests); empty when unknown
+mem_bytes() {
+  if [ -n "${FAULTLINE_MEM_BYTES:-}" ]; then echo "$FAULTLINE_MEM_BYTES"; return; fi
+  case "$OS" in
+    Darwin) sysctl -n hw.memsize 2>/dev/null ;;
+    *)
+      m=$(awk '/^MemTotal:/ {printf "%.0f", $2 * 1024}' /proc/meminfo 2>/dev/null)
+      # a container's limit (cgroup v2, then v1) when it is lower
+      for f in /sys/fs/cgroup/memory.max /sys/fs/cgroup/memory/memory.limit_in_bytes; do
+        if [ -r "$f" ]; then
+          l=$(cat "$f" 2>/dev/null)
+          case "$l" in ''|*[!0-9]*) ;; *) if [ -n "$m" ] && [ "$l" -lt "$m" ]; then m=$l; fi ;; esac
+          break
+        fi
+      done
+      echo "$m" ;;
+  esac
+}
+
+# default heap: 1/4 of the memory, at least 1g (DREW's 3,173-file project peaked at ~0.5 GB), at most 8g
+default_xmx() {
+  b=$(mem_bytes)
+  case "$b" in ''|*[!0-9]*) echo 1g; return ;; esac
+  mb=$(awk -v b="$b" 'BEGIN { m = int(b / 1048576 / 4); if (m < 1024) m = 1024; if (m > 8192) m = 8192; print m }')
+  echo "${mb}m"
+}
+
+XMX=${FAULTLINE_XMX:-$(default_xmx)}
+OPTS="-XX:+UseG1GC -Xmx$XMX -XX:MinHeapFreeRatio=10 -XX:MaxHeapFreeRatio=30 -XX:CICompilerCount=2"
+OPTS="$OPTS -Dapple.awt.application.name=faultline"
+DOCK_ICON=
+if [ "$OS" = Darwin ]; then
+  OPTS="$OPTS -Xdock:name=faultline"
+  for c in "$DIR/faultline.icns" "$DIR/../assets/icon/faultline.icns"; do
+    if [ -f "$c" ]; then DOCK_ICON="-Xdock:icon=$c"; break; fi
+  done
+fi
 
 # AppCDS: archive the classes of the first run, map them on later runs (faster start-up, less RSS).
 if [ "${FAULTLINE_CDS:-0}" = "1" ]; then
@@ -57,5 +96,9 @@ if [ "${FAULTLINE_CDS:-0}" = "1" ]; then
   OPTS="$OPTS -Xlog:cds=off -Xlog:cds+dynamic=off"
 fi
 
+if [ "${FAULTLINE_PRINT_OPTS:-0}" = "1" ]; then
+  echo "$OPTS${DOCK_ICON:+ $DOCK_ICON}"
+  exit 0
+fi
 # shellcheck disable=SC2086
-exec "$JAVA" $OPTS $FAULTLINE_JAVA_OPTS -jar "$JAR" "$@"
+exec "$JAVA" $OPTS ${DOCK_ICON:+"$DOCK_ICON"} $FAULTLINE_JAVA_OPTS -jar "$JAR" "$@"
