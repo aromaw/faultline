@@ -62,6 +62,7 @@ Each pick is simulated with `git merge-tree --write-tree --merge-base=<pick>^ <s
 | `--no-maven` | skip `mvn dependency:build-classpath`. This is faster. Library types are then judged by a heuristic (see limitations) |
 | `--fail-on-findings` | exit code 2 if the pick needs a symbol the tenant lacks (useful in CI) |
 | `--include-tests`, `--keep-temp`, `-v` | also analyze `src/test/java` / keep temp sources / print progress |
+| `--no-cache` | do not read or write the summary cache (see below). Every file is parsed; the report is the same |
 
 ### Output
 
@@ -90,6 +91,34 @@ Each pick is simulated with `git merge-tree --write-tree --merge-base=<pick>^ <s
 5. **Take theirs**. The dependency closure of the theirs-side members is built against the tenant's index, which says whether each symbol is present, missing, renamed or incompatible. The introducing commit is found from the member history.
 6. **Take ours**. The tenant's reverse call graph goes from the ours-side members up to entry points.
 7. **Checklist**. The needs are grouped per file and ordered with dependencies first.
+
+### Summary cache
+
+The index of each version holds a summary of every Java file (types, members, imports, annotations;
+member texts only as fingerprints). Summaries depend only on the file's content, so they are stored on
+disk by git blob id and reused: a file that is the same in the fork point, base, ours and theirs is
+parsed once, and later runs parse only files they have not seen.
+
+- Location: `~/.faultline/cache/summaries/<key>/<2 hex>/<38 hex>`, one small file per blob. `<key>` is
+  the summary format, the faultline version and a hash of the extraction code and the JavaParser
+  version: a rebuilt jar with the same code keeps the cache, any change to the extraction starts a new
+  one.
+- Only the entries of the files being analyzed are read, one at a time; nothing else is loaded.
+- Writes go to a temporary file that is renamed into place, so concurrent runs and crashes are safe.
+  Each entry carries its blob id, length and CRC-32. A short, damaged or undecodable entry is ignored,
+  deleted and written again.
+- Size: at most 512 MB by default. When a run wrote entries and the cache was not checked for a day, a
+  background thread deletes the least recently used entries (other builds' first) down to 80% of the
+  limit.
+- `FAULTLINE_CACHE_DIR` (or `-Dfaultline.cacheDir=…`) moves it, `FAULTLINE_CACHE=off`
+  (`-Dfaultline.cache=off`, or `--no-cache`) disables it, `FAULTLINE_CACHE_MAX_MB`
+  (`-Dfaultline.cacheMaxMb=…`) sets the limit.
+- `faultline cache info` shows its size per key, `faultline cache prune` trims it now,
+  `faultline cache clear` deletes it.
+
+On ruoyi-vue-pro (four versions, 17,476 Java files, 8,679 distinct blobs) the cache takes 11 MB of
+entries, and a warm run parses in 0.5–0.7 s instead of 2.6–3.0 s. The report is byte-for-byte the same
+with the cache cold, warm or disabled.
 
 ## Desktop GUI
 
@@ -141,23 +170,37 @@ The app icon (window, taskbar, macOS Dock) is drawn by hand in `assets/icon/faul
 ### Memory and startup
 
 `scripts/faultline` runs
-`-XX:+UseG1GC -Xmx<heap> -XX:MinHeapFreeRatio=10 -XX:MaxHeapFreeRatio=30 -XX:CICompilerCount=2`
+`-XX:+UseG1GC -XX:MinHeapFreeRatio=10 -XX:MaxHeapFreeRatio=30 -XX:GCTimeRatio=4 -Xmx<heap> -XX:CICompilerCount=2`
 (on macOS also `-Xdock:name=faultline -Xdock:icon=…/faultline.icns`). Variables:
 
 - `FAULTLINE_XMX`: heap cap, e.g. `4g`. The default is a quarter of the physical memory, at least 1 GB
   and at most 8 GB. The launcher reads the memory with `sysctl -n hw.memsize` on macOS, and from
   `/proc/meminfo` and the cgroup limit (containers) on Linux. A ~7,000-file Spring/MyBatis project
-  (ruoyi-vue-pro) peaks at about 0.6 GB of heap; RuoYi-Vue runs in 256 MB.
-- `FAULTLINE_JAVA_OPTS`: extra flags. `-XX:TieredStopAtLevel=1` saves about 30 MB of RSS but makes
-  the analysis about 40% slower.
+  (ruoyi-vue-pro) peaks at about 0.19 GB of live heap; RuoYi-Vue runs in 256 MB.
+- `FAULTLINE_GC_OPTS`: replaces the collector flags (the first four above), e.g. `-XX:+UseSerialGC`.
+- `FAULTLINE_JAVA_OPTS`: extra flags. They come last, so they override any default. Examples:
+  - `-Dfaultline.parseThreads=N`: threads that parse (or read from the summary cache) a version's
+    files. Default: the number of processors, at most 8.
+  - `-XX:ReservedCodeCacheSize=48m` saves about 20 MB of idle RSS, but a cold-cache analysis takes
+    about 11% longer.
+  - `-XX:TieredStopAtLevel=1` saves about 30 MB of RSS but makes the analysis about 40% slower.
 - `FAULTLINE_CDS=1`: enables AppCDS. The archive is written to `~/.cache/faultline/` on the first run.
   On JDK 19+ this uses `-XX:+AutoCreateSharedArchive`; on JDK 13–18 it uses `-XX:ArchiveClassesAtExit`
   and then `-XX:SharedArchiveFile`. To do it by hand:
   `java -XX:ArchiveClassesAtExit=fl.jsa -jar …jar gui`, then
   `java -XX:SharedArchiveFile=fl.jsa -jar …jar gui`.
 
-G1 with low free ratios is used because it returns heap to the OS after an analysis. Serial GC kept
-about 450 MB resident in our runs.
+Why these flags (GUI automation on ruoyi-vue-pro, 3–5 runs each; the table below has the result):
+
+- G1 with low free ratios returns the heap to the OS after an analysis: about 210 MB RSS afterwards.
+  Serial GC peaked a little lower (~445 MB) but kept ~440 MB resident afterwards.
+- `-XX:GCTimeRatio=4` lets G1 spend up to ~20% of the time in GC (default 12, ~8%) before it grows the
+  heap. With a cold cache this lowered the peak RSS from ~1.15 GB to ~0.8 GB, with a warm cache from
+  ~0.64 GB to ~0.54 GB, for about 2% of analysis time.
+- 8 parse threads instead of 16 lowered the cold peak by another ~130 MB and was not slower.
+- No measurable effect, so not used: `SoftMaxHeapSize` (G1 on JDK 21 ignores it),
+  `G1PeriodicGCInterval` (the GUI already collects after an analysis), `UseStringDeduplication`,
+  `MaxMetaspaceSize=128m` (metaspace stays at ~20–40 MB), `-Xms64m`, `MALLOC_ARENA_MAX=2`.
 
 Plain `java -jar … gui` uses the JVM's default heap, which is also a quarter of the physical memory.
 If that is below about 900 MB, the status bar says so at start-up.
@@ -179,20 +222,36 @@ How the analysis keeps memory low:
   identical file contents are shared between versions.
 - Parser tokens are dropped after parsing, and reverse edges ("who calls this") are resolved only for
   the symbols that are needed. After each run the JavaParser caches are cleared.
+- A summary keeps member texts as 128-bit fingerprints (the few texts a report shows are printed again
+  from the syntax tree) and annotations as their source text. Decoded strings are interned, so a name
+  or type shared by many files and versions exists once, and methods are found by id through their
+  class instead of a map of every method's id.
+- Summaries come from the [summary cache](#summary-cache) when the file was seen before.
+- `-Dfaultline.heapLog=true` prints the live heap after a full GC at each phase of an analysis.
 
-Measured on Linux (JDK 21, 8 CPUs, 16 GB, warm disk cache), GUI automation, pick onto `tenant`:
+Measured on Linux (JDK 21, 16 CPUs, 19 GB, warm disk cache), GUI automation through
+`scripts/faultline`, ruoyi-vue-pro: pick `5f839f5bb0` onto `tenant` (forked from master at `91870831`,
+3,697 Java files; master has 7,622), mainline `master`, 17,476 Java files parsed. Three runs each.
+*Before* is `ebf2f14` (its own launcher, no summary cache); *cold* / *warm* is the summary cache.
 
-| | window shown | idle RSS | peak RSS | RSS after analysis | analysis |
-|---|---|---|---|---|---|
-| RuoYi-Vue `dbe9834e`, `scripts/faultline` (4 GB default) | ~0.6 s | ~140 MB | 495–630 MB | ~205 MB | 3.5–3.7 s |
-| RuoYi-Vue `dbe9834e`, `java -jar` | ~0.6 s | ~165 MB | 543–583 MB | ~315 MB | 3.4–3.8 s |
-| ruoyi-vue-pro `5f839f5bb0` (17,476 Java files parsed), `FAULTLINE_XMX=1g` | ~0.6 s | ~145 MB | 763–927 MB | ~235 MB | 16.3–16.5 s |
+| | heap | window shown | idle RSS | peak RSS | RSS after analysis | analysis |
+|---|---|---|---|---|---|---|
+| before | default (4.9 GB) | 0.66–0.78 s | 127 MB | 1663–1705 MB | 267–275 MB | 10.4–10.9 s |
+| now, cold cache | default (4.9 GB) | 0.64–0.67 s | 127–128 MB | 630–786 MB | 246–254 MB | 7.3–8.5 s |
+| now, warm cache | default (4.9 GB) | 0.68–0.71 s | 126–127 MB | 481–613 MB | 204–216 MB | 3.7 s |
+| before | `FAULTLINE_XMX=1g` | 0.62–0.71 s | 126 MB | 927–974 MB | 226–230 MB | 10.8–11.4 s |
+| now, cold cache | `FAULTLINE_XMX=1g` | 0.57–0.64 s | 126 MB | 507–538 MB | 211–223 MB | 8.0–8.4 s |
+| now, warm cache | `FAULTLINE_XMX=1g` | 0.68–0.70 s | 125–126 MB | 390–467 MB | 183–190 MB | 3.8 s |
 
-Before the summary-only index, the ruoyi-vue-pro run failed with `Java heap space` at 1 GB and needed
-a 6 GB heap (2.8–3.6 GB RSS, 34–37 s). At 1 GB it now peaks at about 0.56 GB of live heap. The reports
-are unchanged. The window now appears about 0.1 s later than the previous GUI (0.59–0.64 s vs
-0.49–0.57 s). The GUI adds about 2 MB to the jar; unused syntax modes are stripped. These numbers have
-not been measured on macOS.
+The window-shown times include the launcher script and the time the benchmark took to start the
+process. The peak live heap (CLI, `-Xmx1g -Dfaultline.heapLog=true`) went from 460–461 MB to 188 MB,
+cold or warm. The summary cache holds 8,683 entries: 11 MB of data, 35 MB on disk in 4 KB blocks. JSON,
+Markdown and HTML reports are byte-for-byte the same as before, with the cache cold, warm or disabled.
+
+Earlier, before the summary-only index, the ruoyi-vue-pro run failed with `Java heap space` at 1 GB and
+needed a 6 GB heap (2.8–3.6 GB RSS, 34–37 s). RuoYi-Vue `dbe9834e` (8 CPUs, 16 GB, before the summary
+cache): ~0.6 s to the window, ~140 MB idle, 495–630 MB peak RSS, 3.5–3.7 s. The GUI adds about 2 MB to
+the jar; unused syntax modes are stripped. These numbers have not been measured on macOS.
 
 ## Validation on RuoYi-Vue
 

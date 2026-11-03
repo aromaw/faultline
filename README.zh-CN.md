@@ -62,6 +62,7 @@ java -jar target/branch-diff-tool.jar conflicts --repo . --onto tenant --pick '0
 | `--no-maven` | 不运行 `mvn dependency:build-classpath`。速度更快，但第三方库类型只能按启发式判断（见局限） |
 | `--fail-on-findings` | pick 需要的符号租户缺失时，退出码为 2（适合 CI） |
 | `--include-tests`、`--keep-temp`、`-v` | 同时分析 `src/test/java` / 保留临时源码 / 打印进度 |
+| `--no-cache` | 不读写摘要缓存（见下文）。每个文件都重新解析，报告内容相同 |
 
 ### 输出
 
@@ -90,6 +91,26 @@ java -jar target/branch-diff-tool.jar conflicts --repo . --onto tenant --pick '0
 5. **取主线**。对 theirs 侧成员求依赖闭包，再与租户的索引对照，判断每个符号是存在、缺失、改名还是不兼容。引入它的提交从成员历史中得到。
 6. **保留租户**。在租户的反向调用图中，从 ours 侧成员一直追到入口。
 7. **清单**。需要的符号按文件分组，依赖排在前面。
+
+### 摘要缓存
+
+每个版本的索引保存每个 Java 文件的摘要（类型、成员、import、注解；成员文本只保存指纹）。摘要只取决于文件内容，
+因此按 git blob id 存到磁盘上重复使用：在 fork、base、ours、theirs 中内容相同的文件只解析一次，之后的运行只解析
+没见过的文件。
+
+- 位置：`~/.faultline/cache/summaries/<key>/<2 位十六进制>/<38 位十六进制>`，每个 blob 一个小文件。`<key>` 由摘要格式、
+  faultline 版本、提取代码与 JavaParser 版本的哈希组成：代码不变时重新构建 jar 仍沿用缓存，提取逻辑一旦变化就使用新缓存。
+- 只读取本次分析涉及的文件对应的条目，逐个读取，不加载其他内容。
+- 先写临时文件再重命名到位，并发运行或中途崩溃都不会留下半个条目。每个条目带 blob id、长度和 CRC-32；过短、损坏或
+  无法解码的条目会被忽略、删除并重新写入。
+- 大小：默认最多 512 MB。某次运行写入了条目、且距上次检查超过一天时，后台线程按最近最少使用删除条目（先删其他构建的），
+  直到降到上限的 80%。
+- `FAULTLINE_CACHE_DIR`（或 `-Dfaultline.cacheDir=…`）修改位置，`FAULTLINE_CACHE=off`（`-Dfaultline.cache=off`，或
+  `--no-cache`）关闭缓存，`FAULTLINE_CACHE_MAX_MB`（`-Dfaultline.cacheMaxMb=…`）设置上限。
+- `faultline cache info` 按 key 显示大小，`faultline cache prune` 立即修剪，`faultline cache clear` 全部删除。
+
+在 ruoyi-vue-pro 上（四个版本，解析 17476 个 Java 文件，8679 个不同的 blob），缓存条目共 11 MB；缓存命中时解析
+0.5–0.7 s，未命中时 2.6–3.0 s。缓存冷、热或关闭时，报告逐字节相同。
 
 ## 桌面 GUI
 
@@ -138,19 +159,32 @@ MEDIUM 表示入口点、孤儿代码、tenant 的改动或不确定的依赖。
 ### 内存与启动
 
 `scripts/faultline` 使用
-`-XX:+UseG1GC -Xmx<堆大小> -XX:MinHeapFreeRatio=10 -XX:MaxHeapFreeRatio=30 -XX:CICompilerCount=2`
+`-XX:+UseG1GC -XX:MinHeapFreeRatio=10 -XX:MaxHeapFreeRatio=30 -XX:GCTimeRatio=4 -Xmx<堆大小> -XX:CICompilerCount=2`
 （macOS 上另加 `-Xdock:name=faultline -Xdock:icon=…/faultline.icns`）。可用环境变量：
 
 - `FAULTLINE_XMX`：堆上限，例如 `4g`。默认取物理内存的四分之一，最少 1 GB，最多 8 GB。启动脚本在 macOS 上用
   `sysctl -n hw.memsize` 读内存，在 Linux 上读 `/proc/meminfo` 和 cgroup 限制（容器）。约 7000 个 Java 文件的
-  Spring/MyBatis 项目（ruoyi-vue-pro）峰值堆约 0.6 GB；RuoYi-Vue 用 256 MB 也能跑完。
-- `FAULTLINE_JAVA_OPTS`：额外参数。`-XX:TieredStopAtLevel=1` 可少占约 30 MB RSS，但分析慢约 40%。
+  Spring/MyBatis 项目（ruoyi-vue-pro）存活堆峰值约 0.19 GB；RuoYi-Vue 用 256 MB 也能跑完。
+- `FAULTLINE_GC_OPTS`：替换收集器参数（上面的前四个），例如 `-XX:+UseSerialGC`。
+- `FAULTLINE_JAVA_OPTS`：额外参数，放在最后，因此可以覆盖任何默认值。例如：
+  - `-Dfaultline.parseThreads=N`：解析（或从摘要缓存读取）一个版本的文件所用的线程数。默认等于处理器数，最多 8。
+  - `-XX:ReservedCodeCacheSize=48m` 可少占约 20 MB 空闲 RSS，但缓存未命中时分析慢约 11%。
+  - `-XX:TieredStopAtLevel=1` 可少占约 30 MB RSS，但分析慢约 40%。
 - `FAULTLINE_CDS=1`：开启 AppCDS，第一次运行时把归档写入 `~/.cache/faultline/`。JDK 19+ 用
   `-XX:+AutoCreateSharedArchive`；JDK 13–18 先用 `-XX:ArchiveClassesAtExit`，之后用 `-XX:SharedArchiveFile`。
   手动方式：先运行 `java -XX:ArchiveClassesAtExit=fl.jsa -jar …jar gui`，
   以后运行 `java -XX:SharedArchiveFile=fl.jsa -jar …jar gui`。
 
-选 G1 加较低的 free ratio，是因为分析结束后它会把堆还给操作系统；Serial GC 实测分析后仍常驻约 450 MB。
+为什么是这些参数（在 ruoyi-vue-pro 上用 GUI 自动化测量，每项 3–5 次；结果见下表）：
+
+- G1 加较低的 free ratio 会在分析结束后把堆还给操作系统，分析后 RSS 约 210 MB。Serial GC 峰值略低（约 445 MB），
+  但分析后仍常驻约 440 MB。
+- `-XX:GCTimeRatio=4` 允许 G1 在扩大堆之前花最多约 20% 的时间做 GC（默认 12，约 8%）。缓存未命中时峰值 RSS 从约
+  1.15 GB 降到约 0.8 GB，缓存命中时从约 0.64 GB 降到约 0.54 GB，分析时间约多 2%。
+- 解析线程由 16 个改为 8 个，缓存未命中时峰值再降约 130 MB，且不变慢。
+- 没有可测出的效果，因此不采用：`SoftMaxHeapSize`（JDK 21 的 G1 忽略它）、`G1PeriodicGCInterval`（GUI 在分析后
+  已主动 GC）、`UseStringDeduplication`、`MaxMetaspaceSize=128m`（metaspace 只用约 20–40 MB）、`-Xms64m`、
+  `MALLOC_ARENA_MAX=2`。
 
 直接 `java -jar … gui` 时使用 JVM 默认堆，同样是物理内存的四分之一；如果低于约 900 MB，启动时状态栏会提示。
 
@@ -166,18 +200,32 @@ MEDIUM 表示入口点、孤儿代码、tenant 的改动或不确定的依赖。
 - 全项目扫描（调用方、类型使用、注入）先在源码文本里查找标识符，只解析提到它的文件。
 - symbol solver 的单文件缓存有上限（`-Dfaultline.solverCacheSize=N`，默认 64），各版本之间相同的文件内容共享。
 - 解析完就丢弃 parser token；反向边（“谁调用了它”）只对需要的符号按需解析。每次分析结束都会清空 JavaParser 缓存。
+- 摘要中的成员文本只保存 128 位指纹（报告用到的少数文本从语法树重新打印），注解只保存源码文本。解码出的字符串
+  会被 intern，多个文件、多个版本共用的名称和类型只存一份；按 id 查方法时经由其所属的类，不再维护所有方法 id 的 map。
+- 见过的文件直接从[摘要缓存](#摘要缓存)读取摘要。
+- `-Dfaultline.heapLog=true` 会在分析的每个阶段做一次 full GC 并打印存活堆大小。
 
-实测环境：Linux（JDK 21，8 核，16 GB，磁盘缓存已预热），GUI 自动化运行，pick 到 `tenant`：
+实测环境：Linux（JDK 21，16 核，19 GB，磁盘缓存已预热），通过 `scripts/faultline` 用 GUI 自动化运行。
+ruoyi-vue-pro：把 `5f839f5bb0` pick 到 `tenant`（从 master 的 `91870831` 分叉，3697 个 Java 文件；master 有 7622 个），
+主线 `master`，共解析 17476 个 Java 文件。每项 3 次。*之前* 为 `ebf2f14`（用它自己的启动脚本，没有摘要缓存）；
+*冷* / *热* 指摘要缓存。
 
-| | 窗口显示 | 空闲 RSS | 峰值 RSS | 分析后 RSS | 分析耗时 |
-|---|---|---|---|---|---|
-| RuoYi-Vue `dbe9834e`，`scripts/faultline`（默认 4 GB） | 约 0.6 s | 约 140 MB | 495–630 MB | 约 205 MB | 3.5–3.7 s |
-| RuoYi-Vue `dbe9834e`，`java -jar` | 约 0.6 s | 约 165 MB | 543–583 MB | 约 315 MB | 3.4–3.8 s |
-| ruoyi-vue-pro `5f839f5bb0`（解析 17476 个 Java 文件），`FAULTLINE_XMX=1g` | 约 0.6 s | 约 145 MB | 763–927 MB | 约 235 MB | 16.3–16.5 s |
+| | 堆 | 窗口显示 | 空闲 RSS | 峰值 RSS | 分析后 RSS | 分析耗时 |
+|---|---|---|---|---|---|---|
+| 之前 | 默认（4.9 GB） | 0.66–0.78 s | 127 MB | 1663–1705 MB | 267–275 MB | 10.4–10.9 s |
+| 现在，冷缓存 | 默认（4.9 GB） | 0.64–0.67 s | 127–128 MB | 630–786 MB | 246–254 MB | 7.3–8.5 s |
+| 现在，热缓存 | 默认（4.9 GB） | 0.68–0.71 s | 126–127 MB | 481–613 MB | 204–216 MB | 3.7 s |
+| 之前 | `FAULTLINE_XMX=1g` | 0.62–0.71 s | 126 MB | 927–974 MB | 226–230 MB | 10.8–11.4 s |
+| 现在，冷缓存 | `FAULTLINE_XMX=1g` | 0.57–0.64 s | 126 MB | 507–538 MB | 211–223 MB | 8.0–8.4 s |
+| 现在，热缓存 | `FAULTLINE_XMX=1g` | 0.68–0.70 s | 125–126 MB | 390–467 MB | 183–190 MB | 3.8 s |
 
-改为只保留摘要的索引之前，ruoyi-vue-pro 在 1 GB 下报 `Java heap space`，需要 6 GB 堆（RSS 2.8–3.6 GB，34–37 s）；
-现在 1 GB 下存活堆峰值约 0.56 GB，报告内容不变。新窗口比之前的 GUI 晚约 0.1 s 出现（0.59–0.64 s，之前
-0.49–0.57 s）。GUI 让 jar 增大约 2 MB，未用到的语法高亮模式已剔除。以上数据尚未在 macOS 上测过。
+窗口显示时间包含启动脚本以及测量程序启动进程的时间。存活堆峰值（命令行，`-Xmx1g -Dfaultline.heapLog=true`）
+从 460–461 MB 降到 188 MB，冷热缓存相同。摘要缓存共 8683 个条目：数据 11 MB，按 4 KB 块计占用 35 MB。JSON、
+Markdown 和 HTML 报告与之前逐字节相同，缓存冷、热或关闭都一样。
+
+更早，在改为只保留摘要的索引之前，ruoyi-vue-pro 在 1 GB 下报 `Java heap space`，需要 6 GB 堆（RSS 2.8–3.6 GB，
+34–37 s）。RuoYi-Vue `dbe9834e`（8 核，16 GB，摘要缓存之前）：约 0.6 s 显示窗口，空闲约 140 MB，峰值 RSS 495–630 MB，
+3.5–3.7 s。GUI 让 jar 增大约 2 MB，未用到的语法高亮模式已剔除。以上数据尚未在 macOS 上测过。
 
 ## 在 RuoYi-Vue 上的验证
 
