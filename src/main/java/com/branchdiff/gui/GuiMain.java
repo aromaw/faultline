@@ -353,6 +353,7 @@ public final class GuiMain {
                     case "--measure" -> a.measure = true;
                     case "--exit" -> a.exit = true;
                     case "--toggle-theme" -> a.toggleTheme = true;
+                    case "--no-cache" -> com.branchdiff.index.SummaryCache.setDefault(com.branchdiff.index.SummaryCache.disabled());
                     default -> {
                         if (!s.startsWith("-") && a.repo == null) a.repo = Path.of(s);
                         else throw new IllegalArgumentException("unknown gui option " + s);

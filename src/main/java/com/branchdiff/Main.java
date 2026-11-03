@@ -4,6 +4,7 @@ import com.branchdiff.analysis.Analyzer;
 import com.branchdiff.conflict.ConflictCommand;
 import com.branchdiff.conflict.ConflictMarkdown;
 import com.branchdiff.git.SiblingModules;
+import com.branchdiff.index.SummaryCache;
 import com.branchdiff.report.Finding;
 import com.branchdiff.report.MarkdownRenderer;
 import com.branchdiff.report.Report;
@@ -16,6 +17,7 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Map;
 
 public final class Main {
@@ -35,6 +37,9 @@ public final class Main {
                   worktree, the index or any ref, then analyze it
               faultline branch --theirs <ref> [--ours <ref>] [options]
                   secondary mode: compare whole branches (what theirs changed that ours lacks or is inconsistent with)
+              faultline cache [info|clear|prune]
+                  the summary cache (parsed-file summaries by git blob id): show its size, delete it, or trim it to
+                  its limit now (it is trimmed automatically at most once a day)
 
             Conflict options:
               --mainline <ref>       mainline branch; the tenant's fork point is merge-base(tenant, mainline)
@@ -58,12 +63,17 @@ public final class Main {
               --keep-temp            keep the temporary materialized sources (debugging)
               --fail-on-findings     exit with code 2 if any HIGH certain finding exists (or, in conflict mode, any
                                      symbol the pick needs is missing in the tenant)
+              --no-cache             do not read or write the summary cache (every file is parsed; same report)
               -v, --verbose          progress on stderr
               -h, --help
 
             Branch options:
               --ours <ref>           our branch/commit (default: HEAD)
               --theirs <ref>         branch/commit being migrated into ours (required in branch mode)
+
+            Summary cache: ~/.faultline/cache by default; FAULTLINE_CACHE_DIR (or -Dfaultline.cacheDir) moves it,
+            FAULTLINE_CACHE=off (or -Dfaultline.cache=off) disables it, FAULTLINE_CACHE_MAX_MB (-Dfaultline.cacheMaxMb,
+            default 512) bounds it.
 
             The worktree, index and refs are never modified. The offline simulation only adds unreferenced objects
             (merge-tree / commit-tree) to the object database.
@@ -76,6 +86,10 @@ public final class Main {
         // "faultline gui", or no arguments at all on a desktop (double-click on the jar): the Swing GUI
         if ((args.length > 0 && args[0].equals("gui")) || (args.length == 0 && !java.awt.GraphicsEnvironment.isHeadless())) {
             com.branchdiff.gui.GuiMain.main(args);
+            return;
+        }
+        if (args.length > 0 && args[0].equals("cache")) {
+            System.exit(cacheCommand(args));
             return;
         }
         Options o;
@@ -130,6 +144,39 @@ public final class Main {
         }
     }
 
+    /** {@code faultline cache [info|clear|prune]} */
+    static int cacheCommand(String[] args) {
+        String what = args.length > 1 ? args[1] : "info";
+        Path root = SummaryCache.configuredRoot().toAbsolutePath().normalize();
+        try {
+            switch (what) {
+                case "info" -> {
+                    boolean on = SummaryCache.fromEnvironment().enabled();
+                    System.out.println("summary cache: " + root + (on ? "" : " (disabled)") + ", limit "
+                            + SummaryCache.configuredMaxBytes() / (1024 * 1024) + " MB");
+                    List<String> builds = SummaryCache.info(root);
+                    if (builds.isEmpty()) System.out.println("  empty");
+                    for (String b : builds) System.out.println("  " + b);
+                }
+                case "clear" -> System.out.println("deleted " + SummaryCache.clear(root) + " files from "
+                        + root.resolve("summaries"));
+                case "prune" -> {
+                    var r = SummaryCache.at(root, SummaryCache.configuredMaxBytes()).prune();
+                    System.out.println("summary cache: " + r.entries() + " entries, deleted " + r.removed() + " files, "
+                            + (r.bytes() + 512 * 1024) / (1024 * 1024) + " MB left");
+                }
+                default -> {
+                    System.err.println("error: usage: faultline cache [info|clear|prune]");
+                    return 64;
+                }
+            }
+            return 0;
+        } catch (java.io.IOException e) {
+            System.err.println("error: " + e.getMessage());
+            return 1;
+        }
+    }
+
     public static String toJson(Report r) throws Exception {
         ObjectMapper m = new ObjectMapper();
         m.setVisibility(PropertyAccessor.ALL, JsonAutoDetect.Visibility.NONE);
@@ -175,6 +222,7 @@ public final class Main {
                 case "--keep-temp" -> o.keepTemp = true;
                 case "--fail-on-findings" -> o.failOnFindings = true;
                 case "-v", "--verbose" -> o.verbose = true;
+                case "--no-cache" -> SummaryCache.setDefault(SummaryCache.disabled());
                 case "--onto" -> o.onto = val(args, ++i, a);
                 case "--pick" -> o.pick = val(args, ++i, a);
                 case "--mainline" -> o.mainline = val(args, ++i, a);

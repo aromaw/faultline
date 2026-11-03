@@ -103,6 +103,11 @@ public final class CodeIndex {
      * name-based analysis is possible on this version's AST.
      */
     public static CodeIndex build(Snapshot snapshot, TypeSolver solver, boolean includeTests) {
+        return build(snapshot, solver, includeTests, SummaryCache.getDefault());
+    }
+
+    /** {@link #build(Snapshot, TypeSolver, boolean)} with the summaries of {@code cache} (may be disabled) */
+    public static CodeIndex build(Snapshot snapshot, TypeSolver solver, boolean includeTests, SummaryCache cache) {
         CodeIndex idx = new CodeIndex(snapshot, solver);
         List<String> service = new ArrayList<>();
         for (Map.Entry<String, String> e : snapshot.files().entrySet()) {
@@ -121,8 +126,9 @@ public final class CodeIndex {
             if (path.endsWith(".java") && !isTestPath(path)) siblings.add(path);
         }
         // parse in parallel, keep only the summaries; merge sequentially in file order (deterministic)
-        List<FileSummary> svc = idx.summarize(service, snapshot.files());
-        List<FileSummary> sib = idx.summarize(siblings, snapshot.siblingFiles());
+        List<FileSummary> svc = idx.summarize(service, snapshot.files(), cache);
+        List<FileSummary> sib = idx.summarize(siblings, snapshot.siblingFiles(), cache);
+        cache.maybePruneAsync();
         for (FileSummary f : svc) {
             if (f.problem != null) idx.parseErrors.add(f.path + ": " + f.problem);
         }
@@ -234,7 +240,7 @@ public final class CodeIndex {
 
     private static final int CHUNK = 16;
 
-    private List<FileSummary> summarize(List<String> paths, Map<String, String> contents) {
+    private List<FileSummary> summarize(List<String> paths, Map<String, String> contents, SummaryCache cache) {
         int chunks = (paths.size() + CHUNK - 1) / CHUNK;
         // the first failure (typically OutOfMemoryError) stops the other chunks too: a parallel stream would keep
         // running them after rethrowing, holding memory the caller is trying to release
@@ -243,10 +249,10 @@ public final class CodeIndex {
             List<FileSummary> out = new ArrayList<>();
             if (failed.get() != null) return out;
             try {
-                JavaParser parser = new JavaParser(parserConfig());
+                JavaParser[] parser = {null};
                 for (int i = ci * CHUNK; i < Math.min(paths.size(), (ci + 1) * CHUNK) && failed.get() == null; i++) {
                     String path = paths.get(i);
-                    out.add(FileSummaries.decode(FileSummaries.extract(parser, contents.get(path)), path, this));
+                    out.add(summary(parser, path, contents.get(path), cache));
                 }
             } catch (RuntimeException | Error e) {
                 out = null;
@@ -260,6 +266,31 @@ public final class CodeIndex {
         List<FileSummary> res = new ArrayList<>(paths.size());
         for (List<FileSummary> p : parts) res.addAll(p);
         return res;
+    }
+
+    /**
+     * The summary of one file: from the cache when it has the file's blob, else parsed (and stored). Both paths decode
+     * the same bytes, so the index does not depend on where its summaries came from.
+     */
+    private FileSummary summary(JavaParser[] parser, String path, String src, SummaryCache cache) {
+        byte[] id = cache.enabled() ? SummaryCache.blobId(src) : null;
+        if (id != null) {
+            byte[] data = cache.get(id);
+            if (data != null) {
+                try {
+                    return FileSummaries.decode(data, path, this);
+                } catch (RuntimeException e) {
+                    cache.reject(id); // parsed and written again below
+                }
+            }
+        }
+        // a plain parser: a summary does not use symbol resolution, and must not depend on the version's solver
+        if (parser[0] == null) {
+            parser[0] = new JavaParser(new ParserConfiguration().setLanguageLevel(ParserConfiguration.LanguageLevel.JAVA_21));
+        }
+        byte[] data = FileSummaries.extract(parser[0], src);
+        if (id != null) cache.put(id, data);
+        return FileSummaries.decode(data, path, this);
     }
 
     private void register(FileSummary f, boolean inScope) {

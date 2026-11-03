@@ -82,7 +82,10 @@ final class FileSummaries {
     static byte[] extract(JavaParser parser, String src) {
         Writer w = new Writer();
         ParseResult<CompilationUnit> r = parser.parse(src);
-        String problem = r.isSuccessful() ? null : r.getProblems().stream().findFirst().map(Object::toString).orElse("parse error");
+        // location and message only: Problem#toString appends the parser's stack trace, which depends on the calling
+        // thread (and would make a cached summary differ from a fresh one)
+        String problem = r.isSuccessful() ? null
+                : r.getProblems().stream().findFirst().map(p -> p.getVerboseMessage()).orElse("parse error");
         w.str(problem);
         if (r.getResult().isEmpty()) {
             w.bool(false);

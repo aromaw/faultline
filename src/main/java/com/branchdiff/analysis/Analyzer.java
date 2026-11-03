@@ -121,7 +121,8 @@ public final class Analyzer {
             opt.phase("parsing theirs (pick)");
             CodeIndex iTheirs = CodeIndex.build(theirs, sTheirs, opt.includeTests);
             log("parsed " + (iBase.javaFileCount() + iOurs.javaFileCount() + iTheirs.javaFileCount()) + " java files in "
-                    + (System.nanoTime() - tParse) / 1_000_000 + " ms");
+                    + (System.nanoTime() - tParse) / 1_000_000 + " ms (summary cache: "
+                    + com.branchdiff.index.SummaryCache.getDefault().stats() + ")");
             for (CodeIndex i : List.of(iBase, iOurs, iTheirs)) {
                 for (String e : i.shadowedSiblingClasses) warnings.add("[" + i.snapshot.label() + "] sibling class ignored, the service declares the same FQN: " + e);
                 for (String e : i.parseErrors) warnings.add("[" + i.snapshot.label() + "] parse problem: " + e);

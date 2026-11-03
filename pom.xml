@@ -14,6 +14,10 @@
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <javaparser.version>3.28.2</javaparser.version>
     <junit.version>5.11.4</junit.version>
+    <!-- identifies the build in the summary cache key (faultline-version.properties): a rebuilt jar never reads
+         summaries an older build wrote -->
+    <maven.build.timestamp.format>yyyyMMddHHmmss</maven.build.timestamp.format>
+    <faultline.build.id>${maven.build.timestamp}</faultline.build.id>
   </properties>
 
   <dependencies>
@@ -60,6 +64,17 @@
 
   <build>
     <finalName>branch-diff-tool</finalName>
+    <resources>
+      <resource>
+        <directory>src/main/resources</directory>
+        <excludes><exclude>faultline-version.properties</exclude></excludes>
+      </resource>
+      <resource>
+        <directory>src/main/resources</directory>
+        <filtering>true</filtering>
+        <includes><include>faultline-version.properties</include></includes>
+      </resource>
+    </resources>
     <plugins>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
@@ -70,6 +85,12 @@
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>
         <version>3.5.2</version>
+        <configuration>
+          <!-- tests never touch the user's ~/.faultline/cache -->
+          <systemPropertyVariables>
+            <faultline.cacheDir>${project.build.directory}/test-summary-cache</faultline.cacheDir>
+          </systemPropertyVariables>
+        </configuration>
       </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
