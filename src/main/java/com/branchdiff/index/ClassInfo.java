@@ -22,8 +22,12 @@ public final class ClassInfo {
     public final String file;
     public final int line;
     public final String outerFqn;
-    public final TypeDeclaration<?> node;
-    public final CompilationUnit cu;
+    /** the index this class belongs to (its AST is parsed on demand, see {@link AstCache}) */
+    final CodeIndex index;
+    /** position of the declaration in {@code cu.findAll(TypeDeclaration.class)} */
+    final int typeIndex;
+    /** the file's imports (shared by all classes of the file) */
+    public final List<Import> imports;
     public final Map<String, AnnotationExpr> annotations = new LinkedHashMap<>();
     /** supertypes as written (extends + implements) */
     public final List<String> superRaw = new ArrayList<>();
@@ -39,9 +43,11 @@ public final class ClassInfo {
     public boolean inScope = true;
     /** normalized class header (annotations+modifiers+extends/implements) */
     public String normalizedHeader = "";
+    /** spring facts read from the AST at parse time, resolved and dropped by {@link CodeIndex} once all classes are known */
+    java.util.List<CodeIndex.SpringOp> springOps;
 
     public ClassInfo(String fqn, String simpleName, String pkg, Kind kind, boolean isAbstract, String file, int line,
-                     String outerFqn, TypeDeclaration<?> node, CompilationUnit cu) {
+                     String outerFqn, CodeIndex index, int typeIndex, List<Import> imports) {
         this.fqn = fqn;
         this.simpleName = simpleName;
         this.pkg = pkg;
@@ -50,8 +56,26 @@ public final class ClassInfo {
         this.file = file;
         this.line = line;
         this.outerFqn = outerFqn;
-        this.node = node;
-        this.cu = cu;
+        this.index = index;
+        this.typeIndex = typeIndex;
+        this.imports = imports;
+    }
+
+    /** an import declaration of the class's file */
+    public record Import(String name, boolean isStatic, boolean isAsterisk) {
+    }
+
+    /**
+     * The declaration's AST. It is parsed on demand and may be dropped and parsed again later (a new node), so do not
+     * keep it across unrelated work and compare nodes by position ({@link com.branchdiff.util.Ast#same}), not identity.
+     */
+    public TypeDeclaration<?> node() {
+        return index.entry(file).types().get(typeIndex);
+    }
+
+    /** the file's compilation unit (parsed on demand, see {@link #node()}) */
+    public CompilationUnit cu() {
+        return index.entry(file).cu();
     }
 
     public boolean isInterface() {

@@ -48,8 +48,9 @@ public final class Scopes {
         }
     }
 
-    public com.github.javaparser.ast.CompilationUnit unit() {
-        return ctx.cu;
+    /** the imports of the context class's file */
+    public List<ClassInfo.Import> imports() {
+        return ctx.imports;
     }
 
     public boolean isLocal(String name) {

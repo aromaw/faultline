@@ -116,6 +116,16 @@ public final class Ast {
      * (line numbers) and the nodes; the tokens (every identifier, space and comment of the file with two positions and
      * its text each) are most of a parsed file's memory.
      */
+    /**
+     * Whether two nodes are the same declaration: identical, or of the same class at the same position. ASTs are parsed
+     * on demand and may be parsed again ({@code com.branchdiff.index.AstCache}), which gives new node objects.
+     */
+    public static boolean same(Node a, Node b) {
+        if (a == b) return true;
+        if (a == null || b == null || a.getClass() != b.getClass()) return false;
+        return a.getRange().isPresent() && a.getRange().equals(b.getRange());
+    }
+
     public static void dropTokens(Node root) {
         root.walk(n -> {
             Range r = n.getRange().orElse(null);

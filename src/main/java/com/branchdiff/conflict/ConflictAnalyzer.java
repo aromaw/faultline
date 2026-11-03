@@ -558,7 +558,7 @@ public final class ConflictAnalyzer {
     }
 
     private void javaNeeds(Hunk h, Range r, Map<String, Need> needs, Set<String> declaredHere) {
-        CompilationUnit cu = ctx.theirs().units.get(h.path);
+        CompilationUnit cu = ctx.theirs().unit(h.path);
         if (cu == null) return;
         // imports inside the range
         for (ImportDeclaration imp : cu.getImports()) {
@@ -575,16 +575,16 @@ public final class ConflictAnalyzer {
         for (ClassInfo c : ctx.theirs().classes.values()) {
             if (!c.file.equals(h.path)) continue;
             for (MethodInfo m : c.methods.values()) {
-                if (m.node == null || !r.overlaps(Ast.line(m.node), Ast.endLine(m.node))) continue;
-                collectIn(m.node, c, m.node, r, needs, h, declaredHere);
+                if (m.node() == null || !r.overlaps(Ast.line(m.node()), Ast.endLine(m.node()))) continue;
+                collectIn(m.node(), c, m.node(), r, needs, h, declaredHere);
             }
-            for (FieldDeclaration fd : c.node.getFields()) {
+            for (FieldDeclaration fd : c.node().getFields()) {
                 if (!r.overlaps(Ast.line(fd), Ast.endLine(fd))) continue;
                 collectIn(fd, c, null, r, needs, h, declaredHere);
             }
             // class header (annotations, extends / implements) inside the range
-            int hs = Ast.line(c.node);
-            int he = c.node.getMembers().isEmpty() ? Ast.endLine(c.node) : Ast.line(c.node.getMembers().get(0)) - 1;
+            int hs = Ast.line(c.node());
+            int he = c.node().getMembers().isEmpty() ? Ast.endLine(c.node()) : Ast.line(c.node().getMembers().get(0)) - 1;
             if (r.overlaps(hs, Math.max(hs, he))) {
                 for (String sup : c.supertypes) {
                     if (ctx.theirs().isProjectType(sup)) addNeed(needs, new Dep(DepKind.TYPE, sup, "", sup, 0, true, List.of()), hs, h, declaredHere);
@@ -1005,7 +1005,7 @@ public final class ConflictAnalyzer {
     private void orphans(Hunk h, Set<String> theirsDeclared) {
         for (MethodChange ch : ctx.theirsChangesAll().changes) {
             MethodInfo m = ch.newMethod;
-            if (m == null || m.node == null) continue;
+            if (m == null || m.node() == null) continue;
             String self = "M:" + m.id();
             if (theirsDeclared.contains(self)) continue;
             Map<Dep, Integer> found;

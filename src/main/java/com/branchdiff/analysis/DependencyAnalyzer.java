@@ -70,7 +70,7 @@ public final class DependencyAnalyzer {
     public List<Finding> analyze(ChangeSet theirsChanges) {
         Map<String, Finding> byKey = new LinkedHashMap<>();
         for (MethodChange ch : theirsChanges.changes) {
-            if (ch.newMethod == null || ch.newMethod.node == null) continue;
+            if (ch.newMethod == null || ch.newMethod.node() == null) continue;
             MethodInfo m = ch.newMethod;
             stats.methodsAnalyzed++;
             Map<String, Integer> deps = new LinkedHashMap<>(); // dep id -> first usage line
@@ -91,7 +91,7 @@ public final class DependencyAnalyzer {
     // ------------------------------------------------------------------ collection
 
     public Map<Dep, Integer> collect(MethodInfo m) {
-        return collect(m.node, m.owner, m.node);
+        return collect(m.node(), m.owner, m.node());
     }
 
     /**
@@ -155,9 +155,9 @@ public final class DependencyAnalyzer {
         List<String> scopeTypes = scopes.scopeTypes(scope);
         if (scope == null) {
             scopeTypes = new ArrayList<>(scopeTypes);
-            for (var imp : scopes.unit().getImports()) {
+            for (var imp : scopes.imports()) {
                 if (!imp.isStatic()) continue;
-                String n = imp.getNameAsString();
+                String n = imp.name();
                 if (imp.isAsterisk()) scopeTypes.add(n);
                 else if (n.endsWith("." + name)) scopeTypes.add(Names.packageOf(n));
             }
@@ -194,8 +194,8 @@ public final class DependencyAnalyzer {
         List<MethodInfo> res = new ArrayList<>();
         for (MethodInfo m : ms) {
             boolean varargs = !m.params.isEmpty() && m.params.get(m.params.size() - 1).endsWith("[]")
-                    && m.node != null && !m.node.getParameters().isEmpty()
-                    && m.node.getParameter(m.params.size() - 1).isVarArgs();
+                    && m.node() != null && !m.node().getParameters().isEmpty()
+                    && m.node().getParameter(m.params.size() - 1).isVarArgs();
             if (m.params.size() == arity || (varargs && arity >= m.params.size() - 1)) res.add(m);
         }
         return res;
@@ -288,9 +288,9 @@ public final class DependencyAnalyzer {
             return;
         }
         // static import of a constant
-        for (var imp : ctx.cu.getImports()) {
-            if (imp.isStatic() && !imp.isAsterisk() && imp.getNameAsString().endsWith("." + name)) {
-                String owner = Names.packageOf(imp.getNameAsString());
+        for (var imp : ctx.imports) {
+            if (imp.isStatic() && !imp.isAsterisk() && imp.name().endsWith("." + name)) {
+                String owner = Names.packageOf(imp.name());
                 if (theirs.isProjectType(owner)) {
                     FieldInfo sf = theirs.findField(owner, name);
                     if (sf != null) out.putIfAbsent(new Dep(DepKind.CONSTANT, owner, name, name, 0, false, List.of(owner)), line);

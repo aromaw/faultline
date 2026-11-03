@@ -68,17 +68,20 @@ public final class ImpactAnalyzer {
     private void scanCalls(MethodChange ch, List<Finding> res) {
         MethodInfo old = ch.oldMethod;
         String ownerFqn = old.owner.fqn;
+        // a call names the method, a constructor call the class: files that do not mention it are not parsed
+        String needle = old.constructor ? old.owner.simpleName : old.name;
         for (ClassInfo c : ours.classes.values()) {
             if (!c.inScope) continue; // sibling modules are looked up, never reported
+            if (!ours.mentions(c.file, needle)) continue;
             for (MethodInfo caller : c.methods.values()) {
-                if (caller.node == null) continue;
+                if (caller.node() == null) continue;
                 if (caller.owner.fqn.equals(ownerFqn) && caller.key().equals(old.key())) continue;
-                Set<String> tvars = Scopes.typeVars(c, caller.node);
+                Set<String> tvars = Scopes.typeVars(c, caller.node());
                 Scopes scopes = null;
                 List<Node> sites = new ArrayList<>();
                 List<Boolean> certain = new ArrayList<>();
                 if (old.constructor) {
-                    for (ObjectCreationExpr oce : caller.node.findAll(ObjectCreationExpr.class)) {
+                    for (ObjectCreationExpr oce : caller.node().findAll(ObjectCreationExpr.class)) {
                         if (oce.getArguments().size() != old.params.size()) continue;
                         if (!ownerFqn.equals(ours.resolveType(oce.getType().getNameWithScope(), c, tvars))) continue;
                         try {
@@ -94,7 +97,7 @@ public final class ImpactAnalyzer {
                         }
                     }
                 } else {
-                    for (MethodCallExpr call : caller.node.findAll(MethodCallExpr.class)) {
+                    for (MethodCallExpr call : caller.node().findAll(MethodCallExpr.class)) {
                         if (!call.getNameAsString().equals(old.name) || call.getArguments().size() != old.params.size()) continue;
                         try {
                             ResolvedMethodDeclaration r = call.resolve();
@@ -103,7 +106,7 @@ public final class ImpactAnalyzer {
                             sites.add(call);
                             certain.add(true);
                         } catch (Throwable t) {
-                            if (scopes == null) scopes = new Scopes(ours, c, caller.node, tvars);
+                            if (scopes == null) scopes = new Scopes(ours, c, caller.node(), tvars);
                             List<String> types = scopes.scopeTypes(call.getScope().orElse(null));
                             boolean match = types.isEmpty();
                             for (String ty : types) if (ty.equals(ownerFqn) || ours.isAssignable(ty, ownerFqn)) match = true;
@@ -112,9 +115,9 @@ public final class ImpactAnalyzer {
                             certain.add(false);
                         }
                     }
-                    for (MethodReferenceExpr mr : caller.node.findAll(MethodReferenceExpr.class)) {
+                    for (MethodReferenceExpr mr : caller.node().findAll(MethodReferenceExpr.class)) {
                         if (!mr.getIdentifier().equals(old.name)) continue;
-                        if (scopes == null) scopes = new Scopes(ours, c, caller.node, tvars);
+                        if (scopes == null) scopes = new Scopes(ours, c, caller.node(), tvars);
                         String scopeText = mr.getScope().toString();
                         String t = ours.resolveType(scopeText, c, tvars);
                         if (ownerFqn.equals(t) || (t == null && !scopes.scopeTypes(mr.getScope()).isEmpty()
@@ -174,16 +177,19 @@ public final class ImpactAnalyzer {
     }
 
     private static boolean stillCalls(MethodInfo theirsCaller, MethodInfo old) {
-        if (theirsCaller.node == null) return false;
-        for (MethodCallExpr c : theirsCaller.node.findAll(MethodCallExpr.class)) {
+        if (theirsCaller.node() == null) return false;
+        for (MethodCallExpr c : theirsCaller.node().findAll(MethodCallExpr.class)) {
             if (c.getNameAsString().equals(old.name) && c.getArguments().size() == old.params.size()) return true;
         }
         return false;
     }
 
     private void scanTypeUsages(String removedType, List<Finding> res) {
-        for (var e : ours.units.entrySet()) {
-            for (ClassOrInterfaceType t : e.getValue().findAll(ClassOrInterfaceType.class)) {
+        String simple = Names.simpleName(removedType);
+        for (String path : ours.javaFiles()) {
+            // a reference names the type's simple name (imported or qualified)
+            if (!ours.mentions(path, simple)) continue;
+            for (ClassOrInterfaceType t : ours.unit(path).findAll(ClassOrInterfaceType.class)) {
                 Optional<TypeDeclaration> td = t.findAncestor(TypeDeclaration.class);
                 if (td.isEmpty()) continue;
                 ClassInfo ctx = ours.classes.get(((TypeDeclaration<?>) td.get()).getFullyQualifiedName().orElse(""));
@@ -196,8 +202,8 @@ public final class ImpactAnalyzer {
                         Confidence.CERTAIN, "STILL_USES_REMOVED_TYPE", "TYPE_REMOVED", removedType, "THEIRS_CHANGED",
                         "Theirs deleted/moved type " + Names.simpleName(removedType) + " but ours still references it"
                                 + (oursNew ? " from a class that only ours has" : ""));
-                f.oursAt(e.getKey() + ":" + Ast.line(t));
-                f.neededBy(user + " [in ours]", e.getKey() + ":" + Ast.line(t));
+                f.oursAt(path + ":" + Ast.line(t));
+                f.neededBy(user + " [in ours]", path + ":" + Ast.line(t));
                 res.add(f);
                 break; // one finding per file is enough
             }

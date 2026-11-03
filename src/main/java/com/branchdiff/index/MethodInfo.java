@@ -22,11 +22,12 @@ public final class MethodInfo {
     public final String normalizedDecl;
     /** normalized body only (used for rename detection) */
     public final String normalizedBody;
-    public final CallableDeclaration<?> node;
+    /** position among the declaring type's members; -1 for members without a declaration (record accessors) */
+    final int memberIndex;
 
     public MethodInfo(ClassInfo owner, String name, List<String> params, String returnType, boolean constructor,
                       boolean isStatic, boolean isAbstract, boolean isDefault, Set<String> annotations, int line,
-                      int endLine, String normalizedDecl, String normalizedBody, CallableDeclaration<?> node) {
+                      int endLine, String normalizedDecl, String normalizedBody, int memberIndex) {
         this.owner = owner;
         this.name = name;
         this.params = params;
@@ -40,7 +41,17 @@ public final class MethodInfo {
         this.endLine = endLine;
         this.normalizedDecl = normalizedDecl;
         this.normalizedBody = normalizedBody;
-        this.node = node;
+        this.memberIndex = memberIndex;
+    }
+
+    /** the declaration's AST (parsed on demand, see {@link ClassInfo#node()}); null for record accessors */
+    public CallableDeclaration<?> node() {
+        return memberIndex < 0 ? null : (CallableDeclaration<?>) owner.node().getMember(memberIndex);
+    }
+
+    /** whether the member has a declaration in the source (false for record accessors) */
+    public boolean hasNode() {
+        return memberIndex >= 0;
     }
 
     public static String key(String name, List<String> params) {

@@ -65,7 +65,7 @@ public final class Members {
         Snapshot s = new Snapshot("file", "", "", "", Map.of(path, content));
         CodeIndex idx = CodeIndex.build(s, null, true);
         List<M> res = new ArrayList<>();
-        CompilationUnit cu = idx.units.get(path);
+        CompilationUnit cu = idx.unit(path);
         if (cu == null) return res;
         if (!cu.getImports().isEmpty()) {
             int a = Integer.MAX_VALUE, b = 0;
@@ -78,15 +78,15 @@ public final class Members {
             res.add(new M(new Member("imports", "IMPORTS:" + path, "import section", path, a, b), "imports", "", body.toString()));
         }
         for (ClassInfo c : idx.classes.values()) {
-            res.add(new M(new Member("class", "T:" + c.fqn, c.simpleName, path, start(c.node), Ast.endLine(c.node)),
+            res.add(new M(new Member("class", "T:" + c.fqn, c.simpleName, path, start(c.node()), Ast.endLine(c.node())),
                     c.simpleName, c.outerFqn == null ? c.pkg : c.outerFqn, c.normalizedHeader));
             for (MethodInfo m : c.methods.values()) {
-                if (m.node == null) continue;
+                if (m.node() == null) continue;
                 String label = c.simpleName + "#" + (m.constructor ? c.simpleName : m.name) + "(" + String.join(",", m.params) + ")";
-                res.add(new M(new Member(m.constructor ? "constructor" : "method", "M:" + m.id(), label, path, start(m.node),
-                        Ast.endLine(m.node)), m.name, c.fqn, m.normalizedBody.isEmpty() ? m.normalizedDecl : m.normalizedBody));
+                res.add(new M(new Member(m.constructor ? "constructor" : "method", "M:" + m.id(), label, path, start(m.node()),
+                        Ast.endLine(m.node())), m.name, c.fqn, m.normalizedBody.isEmpty() ? m.normalizedDecl : m.normalizedBody));
             }
-            for (FieldDeclaration fd : c.node.getFields()) {
+            for (FieldDeclaration fd : c.node().getFields()) {
                 for (VariableDeclarator v : fd.getVariables()) {
                     boolean constant = fd.isStatic() && fd.isFinal() || c.isInterface();
                     res.add(new M(new Member(constant ? "constant" : "field", "F:" + c.fqn + "." + v.getNameAsString(),
@@ -94,7 +94,7 @@ public final class Members {
                             v.getType().asString() + " = " + v.getInitializer().map(Ast::normalized).orElse("")));
                 }
             }
-            if (c.node instanceof EnumDeclaration en) {
+            if (c.node() instanceof EnumDeclaration en) {
                 for (EnumConstantDeclaration ec : en.getEntries()) {
                     res.add(new M(new Member("constant", "F:" + c.fqn + "." + ec.getNameAsString(), c.simpleName + "." + ec.getNameAsString(),
                             path, start(ec), Ast.endLine(ec)), ec.getNameAsString(), c.fqn, Ast.normalized(ec)));

@@ -12,7 +12,6 @@ import com.branchdiff.report.Finding.Confidence;
 import com.branchdiff.report.Finding.Severity;
 import com.branchdiff.util.Ast;
 import com.branchdiff.util.Names;
-import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.body.BodyDeclaration;
 import com.github.javaparser.ast.body.CallableDeclaration;
@@ -101,7 +100,7 @@ public final class FieldImpactAnalyzer {
 
     /** normalized initializer of a field (or arguments + body of an enum constant), "" if none */
     static String initializer(ClassInfo c, String name) {
-        if (c.node instanceof EnumDeclaration en) {
+        if (c.node() instanceof EnumDeclaration en) {
             for (EnumConstantDeclaration ec : en.getEntries()) {
                 if (!ec.getNameAsString().equals(name)) continue;
                 if (ec.getArguments().isEmpty() && ec.getClassBody().isEmpty()) return "";
@@ -109,7 +108,7 @@ public final class FieldImpactAnalyzer {
                         + ec.getClassBody().stream().map(Ast::normalized).collect(Collectors.joining());
             }
         }
-        for (FieldDeclaration fd : c.node.getFields()) {
+        for (FieldDeclaration fd : c.node().getFields()) {
             for (VariableDeclarator v : fd.getVariables()) {
                 if (v.getNameAsString().equals(name)) return v.getInitializer().map(Ast::normalized).orElse("");
             }
@@ -125,14 +124,16 @@ public final class FieldImpactAnalyzer {
         Map<String, Finding> out = new LinkedHashMap<>();
         for (ClassInfo c : ours.classes.values()) {
             if (!c.inScope) continue;
+            // a reference names the field: files that mention none of the removed fields are not parsed
+            if (!ours.mentionsAny(c.file, byName.keySet())) continue;
             Map<Node, Scopes> scopesByMember = new LinkedHashMap<>();
-            List<Expression> refs = new ArrayList<>(c.node.findAll(NameExpr.class));
-            refs.addAll(c.node.findAll(FieldAccessExpr.class));
+            List<Expression> refs = new ArrayList<>(c.node().findAll(NameExpr.class));
+            refs.addAll(c.node().findAll(FieldAccessExpr.class));
             for (Expression ref : refs) {
                 String name = ref instanceof NameExpr ne ? ne.getNameAsString() : ((FieldAccessExpr) ref).getNameAsString();
                 List<Removed> rs = byName.get(name);
                 if (rs == null) continue;
-                Node member = memberOf(ref, c.node);
+                Node member = memberOf(ref, c.node());
                 if (member == null) continue;
                 for (Removed r : rs) {
                     Boolean certain = matches(ref, name, r, c, member, scopesByMember);
@@ -179,9 +180,9 @@ public final class FieldImpactAnalyzer {
         if (scopes.isLocal(name)) return null;
         FieldInfo f = scopes.visibleField(name);
         if (f != null) return f.owner.fqn.equals(owner) ? Boolean.FALSE : null;
-        for (ImportDeclaration imp : c.cu.getImports()) {
+        for (ClassInfo.Import imp : c.imports) {
             if (!imp.isStatic()) continue;
-            String n = imp.getNameAsString();
+            String n = imp.name();
             if (!imp.isAsterisk() && n.equals(owner + "." + name)) return Boolean.FALSE;
             if (imp.isAsterisk() && n.equals(owner)) return Boolean.FALSE;
         }
@@ -194,7 +195,7 @@ public final class FieldImpactAnalyzer {
         String why;
         if (member instanceof CallableDeclaration<?>) {
             MethodInfo caller = null;
-            for (MethodInfo m : c.methods.values()) if (m.node == member) caller = m;
+            for (MethodInfo m : c.methods.values()) if (Ast.same(m.node(), member)) caller = m;
             if (caller == null) return;
             memberName = "#" + caller.key();
             MethodChange oc = oursChanges.byNewId.get(caller.id());
@@ -205,7 +206,7 @@ public final class FieldImpactAnalyzer {
             } else if (oc != null) {
                 sev = Severity.HIGH;
                 why = "the referencing method was " + oc.kind + " by ours: theirs' update of it (if any) will conflict or be lost";
-            } else if (theirsCaller != null && theirsCaller.node != null && !mentions(theirsCaller.node, r.field.name)) {
+            } else if (theirsCaller != null && theirsCaller.node() != null && !mentions(theirsCaller.node(), r.field.name)) {
                 sev = Severity.LOW;
                 why = "referencing method unchanged in ours; theirs updated it, so a clean merge carries theirs' version";
             } else if (theirsCaller == null) {
@@ -220,8 +221,8 @@ public final class FieldImpactAnalyzer {
             memberName = memberLabel(member);
             ClassInfo bc = base.classes.get(c.fqn);
             ClassInfo tc = theirs.classes.get(c.fqn);
-            Node bm = bc == null ? null : findMember(bc.node, key);
-            Node tm = tc == null ? null : findMember(tc.node, key);
+            Node bm = bc == null ? null : findMember(bc.node(), key);
+            Node tm = tc == null ? null : findMember(tc.node(), key);
             if (bm == null || !Ast.normalized(bm).equals(Ast.normalized(member))) {
                 sev = Severity.HIGH;
                 why = "the referencing declaration was added/changed by ours: the merge will not update it";

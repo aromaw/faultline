@@ -440,7 +440,7 @@ public final class ContextBuilder {
 
     private void forwardMethod(String key, List<Edge> res) {
         MethodInfo m = method(key.substring(2), theirs);
-        if (m == null || m.node == null) return;
+        if (m == null || m.node() == null) return;
         Set<String> seen = new HashSet<>();
         for (Map.Entry<Dep, Integer> e : theirsDeps.collect(m).entrySet()) {
             String k = depKey(e.getKey(), theirs);
@@ -458,7 +458,7 @@ public final class ContextBuilder {
                 res.add(new Edge("CFG:" + v.key(), v.location(), false));
             }
         }
-        libraries(m.node, c, m.owner.file, res, seen);
+        libraries(m.node(), c, m.owner.file, res, seen);
     }
 
     private void forwardField(String key, List<Edge> res) {
@@ -498,7 +498,7 @@ public final class ContextBuilder {
         for (String s : c.supertypes) {
             if (theirs.isProjectType(s) && seen.add("T:" + s)) res.add(new Edge("T:" + s, c.location(), false));
         }
-        for (Map.Entry<Dep, Integer> e : theirsDeps.collect(c.node, c, null).entrySet()) {
+        for (Map.Entry<Dep, Integer> e : theirsDeps.collect(c.node(), c, null).entrySet()) {
             Dep d = e.getKey();
             String owner = d.candidateOwners().isEmpty() ? d.owner() : d.candidateOwners().get(0);
             if (owner.equals(fqn) || owner.startsWith(fqn + ".")) continue; // own members arrive with the type
@@ -514,7 +514,7 @@ public final class ContextBuilder {
         for (ValueRef v : theirs.valueRefs) {
             if (v.ownerFqn().equals(fqn) && seen.add("CFG:" + v.key())) res.add(new Edge("CFG:" + v.key(), v.location(), false));
         }
-        libraries(c.node, c, c.file, res, seen);
+        libraries(c.node(), c, c.file, res, seen);
     }
 
     private void forwardBean(String type, List<Edge> res) {
@@ -597,11 +597,10 @@ public final class ContextBuilder {
     List<Edge> usersOfKey(String key) {
         List<Edge> cached = reverse.get(key);
         if (cached != null) return cached;
-        if (revEntries == null) indexReverseEntries();
         List<Edge> l = new ArrayList<>();
         String name = simpleNameOfKey(key);
         if (name != null) {
-            for (RevEntry en : revByName.getOrDefault(name, List.of())) {
+            for (RevEntry en : entriesMentioning(name)) {
                 for (RevEdge r : revEdges(en)) if (r.key.equals(key)) addEdge(l, en.from, r.at, r.uncertain);
             }
         }
@@ -611,49 +610,59 @@ public final class ContextBuilder {
         return l;
     }
 
-    /** a member of ours whose dependencies may give reverse edges: a method, or a field with an initializer */
-    private record RevEntry(ClassInfo owner, MethodInfo method, FieldDeclaration field, String from) {
+    /**
+     * a member of ours whose dependencies may give reverse edges: a method, or a field with an initializer (named by
+     * its first variable; the AST is looked up again when needed, so no AST is kept here)
+     */
+    private record RevEntry(ClassInfo owner, MethodInfo method, String field, String from) {
     }
 
     private record RevEdge(String key, String at, boolean uncertain) {
     }
 
-    private List<RevEntry> revEntries;
     private final Map<String, List<RevEntry>> revByName = new HashMap<>();
-    private final Map<RevEntry, List<RevEdge>> revEdgeCache = new java.util.IdentityHashMap<>();
+    private final Map<String, List<RevEdge>> revEdgeCache = new HashMap<>();
     private Map<String, List<Edge>> staticReverse;
 
-    /** same iteration order as a full scan: per class, its methods then its initialized fields */
-    private void indexReverseEntries() {
-        revEntries = new ArrayList<>();
+    /**
+     * The ours members whose AST mentions {@code name} (as a simple name, a name or a method reference identifier),
+     * in the order of a full scan: per class, its methods then its initialized fields. Files whose source does not
+     * contain the word are skipped without parsing.
+     */
+    private List<RevEntry> entriesMentioning(String name) {
+        List<RevEntry> res = revByName.get(name);
+        if (res != null) return res;
+        res = new ArrayList<>();
         for (ClassInfo c : ours.classes.values()) {
-            if (!c.inScope) continue;
+            if (!c.inScope || !ours.mentions(c.file, name)) continue;
             for (MethodInfo m : c.methods.values()) {
-                if (m.node == null) continue;
-                index(new RevEntry(c, m, null, "M:" + m.id()), m.node);
+                if (!m.hasNode()) continue;
+                if (names(m.node()).contains(name)) res.add(new RevEntry(c, m, null, "M:" + m.id()));
             }
-            for (FieldDeclaration fd : c.node.getFields()) {
+            for (FieldDeclaration fd : c.node().getFields()) {
                 if (fd.getVariables().stream().noneMatch(v -> v.getInitializer().isPresent())) continue;
-                index(new RevEntry(c, null, fd, "F:" + c.fqn + "." + fd.getVariable(0).getNameAsString()), fd);
+                String first = fd.getVariable(0).getNameAsString();
+                if (names(fd).contains(name)) res.add(new RevEntry(c, null, first, "F:" + c.fqn + "." + first));
             }
         }
+        revByName.put(name, res);
+        return res;
     }
 
-    private void index(RevEntry e, com.github.javaparser.ast.Node node) {
-        revEntries.add(e);
-        // every name a dependency can come from: simple names (calls, fields, variables, types), qualified names
-        // (annotations, imports) and method reference identifiers
+    /** every name a dependency can come from: simple names (calls, fields, variables, types), qualified names
+     * (annotations, imports) and method reference identifiers */
+    private static Set<String> names(com.github.javaparser.ast.Node node) {
         Set<String> names = new HashSet<>();
         node.walk(n -> {
             if (n instanceof com.github.javaparser.ast.expr.SimpleName sn) names.add(sn.getIdentifier());
             else if (n instanceof com.github.javaparser.ast.expr.Name nm) names.add(nm.getIdentifier());
             else if (n instanceof com.github.javaparser.ast.expr.MethodReferenceExpr mr) names.add(mr.getIdentifier());
         });
-        for (String n : names) revByName.computeIfAbsent(n, k -> new ArrayList<>()).add(e);
+        return names;
     }
 
     private List<RevEdge> revEdges(RevEntry en) {
-        List<RevEdge> res = revEdgeCache.get(en);
+        List<RevEdge> res = revEdgeCache.get(en.from);
         if (res != null) return res;
         res = new ArrayList<>();
         try {
@@ -663,7 +672,12 @@ public final class ContextBuilder {
                     if (k != null && !k.equals(en.from)) res.add(new RevEdge(k, en.owner.file + ":" + e.getValue(), !e.getKey().certain()));
                 }
             } else {
-                for (Map.Entry<Dep, Integer> e : oursDeps.collect(en.field, en.owner, null).entrySet()) {
+                FieldDeclaration fd = null;
+                for (FieldDeclaration f : en.owner.node().getFields()) {
+                    if (f.getVariable(0).getNameAsString().equals(en.field)) fd = f;
+                }
+                if (fd == null) return List.of();
+                for (Map.Entry<Dep, Integer> e : oursDeps.collect(fd, en.owner, null).entrySet()) {
                     String k = depKey(e.getKey(), ours);
                     if (k != null && !k.equals(en.from) && !k.startsWith("T:")) {
                         res.add(new RevEdge(k, en.owner.file + ":" + e.getValue(), !e.getKey().certain()));
@@ -673,7 +687,7 @@ public final class ContextBuilder {
         } catch (RuntimeException | StackOverflowError ignored) {
             // one unparsable member must not hide the others (the edges found before the failure are kept)
         }
-        revEdgeCache.put(en, res);
+        revEdgeCache.put(en.from, res);
         return res;
     }
 
@@ -1080,17 +1094,17 @@ public final class ContextBuilder {
 
     private static Loc range(MethodInfo m, CodeIndex idx) {
         int start = m.line, end = Math.max(m.endLine, m.line), name = m.line;
-        if (m.node != null) {
+        if (m.node() != null) {
             // include the javadoc so the reader sees the whole member; point at the name, not the first annotation
-            start = m.node.getComment().flatMap(c -> c.getRange()).map(r -> r.begin.line).filter(l -> l < m.line).orElse(start);
-            name = m.node.getName().getBegin().map(p -> p.line).orElse(name);
+            start = m.node().getComment().flatMap(c -> c.getRange()).map(r -> r.begin.line).filter(l -> l < m.line).orElse(start);
+            name = m.node().getName().getBegin().map(p -> p.line).orElse(name);
         }
         return new Loc(m.owner.file, start, end, name);
     }
 
     private static FieldDeclaration fieldDecl(ClassInfo c, String name) {
-        if (c == null || c.node == null) return null;
-        for (BodyDeclaration<?> b : c.node.getMembers()) {
+        if (c == null || c.node() == null) return null;
+        for (BodyDeclaration<?> b : c.node().getMembers()) {
             if (b instanceof FieldDeclaration fd) {
                 for (VariableDeclarator v : fd.getVariables()) if (v.getNameAsString().equals(name)) return fd;
             }
@@ -1111,10 +1125,10 @@ public final class ContextBuilder {
     private static Side typeSide(String fqn, CodeIndex idx) {
         ClassInfo c = idx.classes.get(fqn);
         if (c == null) return Side.ABSENT;
-        int begin = Ast.line(c.node), end = Ast.endLine(c.node);
+        int begin = Ast.line(c.node()), end = Ast.endLine(c.node());
         if (end - begin > 60) {
             int first = end;
-            for (BodyDeclaration<?> m : c.node.getMembers()) first = Math.min(first, Ast.line(m) - 1);
+            for (BodyDeclaration<?> m : c.node().getMembers()) first = Math.min(first, Ast.line(m) - 1);
             end = Math.max(begin, Math.min(first, begin + 60));
         }
         return new Side(true, c.normalizedHeader, new Loc(c.file, begin, Math.max(begin, end), c.line), null);

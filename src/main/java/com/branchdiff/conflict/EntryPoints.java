@@ -47,11 +47,11 @@ public final class EntryPoints {
     public EntryPoint describe(String key) {
         if (!key.startsWith("M:")) return null;
         MethodInfo m = idx.methodsById.get(key.substring(2));
-        if (m == null || m.node == null) return null;
+        if (m == null || m.node() == null) return null;
         ClassInfo c = m.owner;
         EntryPoint e = null;
         boolean controller = c.hasAnnotation("RestController", "Controller") || c.hasAnnotation("RequestMapping");
-        for (AnnotationExpr a : m.node.getAnnotations()) {
+        for (AnnotationExpr a : m.node().getAnnotations()) {
             String n = simple(a.getNameAsString());
             if (controller && HTTP.containsKey(n)) {
                 String verb = HTTP.get(n);
@@ -91,7 +91,7 @@ public final class EntryPoints {
         EntryPoint res = e;
         res.node = key;
         res.location = m.location();
-        Ast.annotation(m.node, "PreAuthorize").flatMap(a -> Ast.attr(a, "value")).ifPresent(v -> res.permission = literal(v));
+        Ast.annotation(m.node(), "PreAuthorize").flatMap(a -> Ast.attr(a, "value")).ifPresent(v -> res.permission = literal(v));
         return res;
     }
 

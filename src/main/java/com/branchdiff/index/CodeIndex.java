@@ -72,10 +72,6 @@ public final class CodeIndex {
     public final Snapshot snapshot;
     public final Map<String, ClassInfo> classes = new LinkedHashMap<>();
     public final Map<String, MethodInfo> methodsById = new LinkedHashMap<>();
-    /** compilation units of the service dir (the reporting scope) */
-    public final Map<String, CompilationUnit> units = new LinkedHashMap<>();
-    /** compilation units of sibling modules (lookups only) */
-    public final Map<String, CompilationUnit> siblingUnits = new LinkedHashMap<>();
     /** sibling classes not indexed because the service dir declares the same FQN */
     public final List<String> shadowedSiblingClasses = new ArrayList<>();
     public final List<String> parseErrors = new ArrayList<>();
@@ -107,40 +103,33 @@ public final class CodeIndex {
      */
     public static CodeIndex build(Snapshot snapshot, TypeSolver solver, boolean includeTests) {
         CodeIndex idx = new CodeIndex(snapshot, solver);
-        ParserConfiguration cfg = new ParserConfiguration().setLanguageLevel(ParserConfiguration.LanguageLevel.JAVA_21);
-        if (solver != null) cfg.setSymbolResolver(new JavaSymbolSolver(solver));
-        JavaParser parser = new JavaParser(cfg);
+        List<String> service = new ArrayList<>();
         for (Map.Entry<String, String> e : snapshot.files().entrySet()) {
             String path = e.getKey();
             if (!includeTests && isTestPath(path)) continue;
             if (path.endsWith(".java")) {
-                ParseResult<CompilationUnit> r = parser.parse(e.getValue());
-                r.getResult().ifPresent(Ast::dropTokens);
-                if (r.getResult().isPresent() && r.isSuccessful()) {
-                    CompilationUnit cu = r.getResult().get();
-                    idx.units.put(path, cu);
-                } else {
-                    idx.parseErrors.add(path + ": " + r.getProblems().stream().findFirst().map(Object::toString).orElse("parse error"));
-                    r.getResult().ifPresent(cu -> idx.units.put(path, cu));
-                }
+                service.add(path);
             } else if (ConfigIndex.isConfigFile(path)) {
                 idx.config.addFile(path, e.getValue());
             } else if (MapperXmlIndex.maybeMapperXml(path, e.getValue())) {
                 idx.mapperXml.addFile(path, e.getValue());
             }
         }
-        for (Map.Entry<String, String> e : snapshot.siblingFiles().entrySet()) {
-            String path = e.getKey();
-            if (!path.endsWith(".java") || isTestPath(path)) continue;
-            ParseResult<CompilationUnit> r = parser.parse(e.getValue());
-            r.getResult().ifPresent(Ast::dropTokens);
-            if (!r.isSuccessful()) {
-                idx.parseErrors.add(path + " (sibling): " + r.getProblems().stream().findFirst().map(Object::toString).orElse("parse error"));
-            }
-            r.getResult().ifPresent(cu -> idx.siblingUnits.put(path, cu));
+        List<String> siblings = new ArrayList<>();
+        for (String path : snapshot.siblingFiles().keySet()) {
+            if (path.endsWith(".java") && !isTestPath(path)) siblings.add(path);
         }
-        for (Map.Entry<String, CompilationUnit> e : idx.units.entrySet()) idx.indexUnit(e.getKey(), e.getValue(), true);
-        for (Map.Entry<String, CompilationUnit> e : idx.siblingUnits.entrySet()) idx.indexUnit(e.getKey(), e.getValue(), false);
+        // parse in parallel, keep only the summaries; merge sequentially in file order (deterministic)
+        List<FileSummary> svc = idx.summarize(service, snapshot.files(), true);
+        List<FileSummary> sib = idx.summarize(siblings, snapshot.siblingFiles(), false);
+        for (FileSummary f : svc) {
+            if (f.problem != null) idx.parseErrors.add(f.path + ": " + f.problem);
+        }
+        for (FileSummary f : sib) {
+            if (f.problem != null) idx.parseErrors.add(f.path + " (sibling): " + f.problem);
+        }
+        for (FileSummary f : svc) idx.register(f, true);
+        for (FileSummary f : sib) idx.register(f, false);
         for (ClassInfo c : idx.classes.values()) {
             for (String raw : c.superRaw) {
                 String r = idx.resolveType(raw, c);
@@ -151,12 +140,164 @@ public final class CodeIndex {
         return idx;
     }
 
+    // ------------------------------------------------------------------ lazy ASTs
+
+    /** service-dir java files that parsed (possibly with problems), in snapshot order */
+    private final List<String> javaPaths = new ArrayList<>();
+    private final List<String> siblingJavaPaths = new ArrayList<>();
+    private final Set<String> javaPathSet = new java.util.HashSet<>();
+    private JavaParser lazyParser;
+
+    private ParserConfiguration parserConfig() {
+        ParserConfiguration cfg = new ParserConfiguration().setLanguageLevel(ParserConfiguration.LanguageLevel.JAVA_21);
+        if (solver != null) cfg.setSymbolResolver(new JavaSymbolSolver(solver));
+        return cfg;
+    }
+
+    /** the java files of the service dir (the reporting scope), in snapshot order */
+    public List<String> javaFiles() {
+        return java.util.Collections.unmodifiableList(javaPaths);
+    }
+
+    public int javaFileCount() {
+        return javaPaths.size();
+    }
+
+    public int siblingJavaFileCount() {
+        return siblingJavaPaths.size();
+    }
+
+    /** source of a java file of this version (service dir or sibling module), null when absent */
+    public String source(String path) {
+        String s = snapshot.files().get(path);
+        return s != null ? s : snapshot.siblingFiles().get(path);
+    }
+
+    /**
+     * The compilation unit of a service-dir java file, parsed on demand (see {@link AstCache}); null when the file is
+     * absent or did not parse.
+     */
+    public CompilationUnit unit(String path) {
+        return javaPathSet.contains(path) ? entry(path).cu() : null;
+    }
+
+    AstCache.Entry entry(String path) {
+        AstCache.Entry e = AstCache.get(this, path);
+        if (e != null) return e;
+        String src = source(path);
+        if (src == null) throw new IllegalStateException("no source for " + path + " in " + snapshot.label());
+        CompilationUnit cu;
+        synchronized (this) {
+            if (lazyParser == null) lazyParser = new JavaParser(parserConfig());
+            cu = lazyParser.parse(src).getResult().orElseThrow(() -> new IllegalStateException("cannot parse " + path));
+        }
+        Ast.dropTokens(cu);
+        List<TypeDeclaration<?>> types = new ArrayList<>();
+        for (TypeDeclaration<?> td : cu.findAll(TypeDeclaration.class)) types.add(td);
+        e = new AstCache.Entry(cu, types, src.length());
+        AstCache.put(this, path, e);
+        return e;
+    }
+
+    /**
+     * Whether a java file of this version mentions {@code word} as a whole identifier. Every name an AST node can
+     * carry is written in the source, so this is a safe prefilter before parsing a file to look for uses of a name
+     * (unicode escapes in identifiers aside).
+     */
+    public boolean mentions(String path, String word) {
+        return mentionsWord(source(path), word);
+    }
+
+    public static boolean mentionsWord(String src, String word) {
+        if (src == null || word == null || word.isEmpty()) return false;
+        int from = 0;
+        while (true) {
+            int i = src.indexOf(word, from);
+            if (i < 0) return false;
+            int end = i + word.length();
+            boolean startOk = i == 0 || !Character.isJavaIdentifierPart(src.charAt(i - 1));
+            boolean endOk = end >= src.length() || !Character.isJavaIdentifierPart(src.charAt(end));
+            if (startOk && endOk) return true;
+            from = i + 1;
+        }
+    }
+
+    /** whether the file mentions any of the words */
+    public boolean mentionsAny(String path, java.util.Collection<String> words) {
+        String src = source(path);
+        for (String w : words) if (mentionsWord(src, w)) return true;
+        return false;
+    }
+
     // ------------------------------------------------------------------ indexing
 
-    private void indexUnit(String path, CompilationUnit cu, boolean inScope) {
-        String pkg = cu.getPackageDeclaration().map(p -> p.getNameAsString()).orElse("");
-        String dir = path.contains("/") ? path.substring(0, path.lastIndexOf('/')) : "";
-        String pkgPath = pkg.replace('.', '/');
+    /** what parsing one file contributes; no AST is kept */
+    private static final class FileSummary {
+        final String path;
+        String problem;
+        boolean parsed;
+        String pkg = "";
+        final List<ClassInfo> types = new ArrayList<>();
+        final List<Boolean> topLevel = new ArrayList<>();
+
+        FileSummary(String path) {
+            this.path = path;
+        }
+    }
+
+    private static final int CHUNK = 16;
+
+    private List<FileSummary> summarize(List<String> paths, Map<String, String> contents, boolean inScope) {
+        int chunks = (paths.size() + CHUNK - 1) / CHUNK;
+        List<List<FileSummary>> parts = java.util.stream.IntStream.range(0, chunks).parallel().mapToObj(ci -> {
+            JavaParser parser = new JavaParser(parserConfig());
+            List<FileSummary> out = new ArrayList<>();
+            for (int i = ci * CHUNK; i < Math.min(paths.size(), (ci + 1) * CHUNK); i++) {
+                String path = paths.get(i);
+                out.add(summarize(parser, path, contents.get(path), inScope));
+            }
+            return out;
+        }).toList();
+        List<FileSummary> res = new ArrayList<>(paths.size());
+        for (List<FileSummary> p : parts) res.addAll(p);
+        return res;
+    }
+
+    private FileSummary summarize(JavaParser parser, String path, String src, boolean inScope) {
+        FileSummary f = new FileSummary(path);
+        ParseResult<CompilationUnit> r = parser.parse(src);
+        if (!r.isSuccessful()) f.problem = r.getProblems().stream().findFirst().map(Object::toString).orElse("parse error");
+        if (r.getResult().isEmpty()) return f;
+        CompilationUnit cu = r.getResult().get();
+        Ast.dropTokens(cu);
+        f.parsed = true;
+        f.pkg = cu.getPackageDeclaration().map(p -> p.getNameAsString()).orElse("");
+        List<ClassInfo.Import> imports = new ArrayList<>();
+        for (ImportDeclaration imp : cu.getImports()) imports.add(new ClassInfo.Import(imp.getNameAsString(), imp.isStatic(), imp.isAsterisk()));
+        List<ClassInfo.Import> imps = List.copyOf(imports);
+        int ti = -1;
+        for (TypeDeclaration<?> td : cu.findAll(TypeDeclaration.class)) {
+            ti++;
+            boolean member = td.isTopLevelType() || td.getParentNode().map(p -> p instanceof TypeDeclaration).orElse(false);
+            if (!member) continue;
+            Optional<String> fqnOpt = td.getFullyQualifiedName();
+            if (fqnOpt.isEmpty()) continue;
+            f.types.add(indexType(path, f.pkg, td, ti, fqnOpt.get(), inScope, imps));
+            f.topLevel.add(td.isTopLevelType());
+        }
+        return f;
+    }
+
+    private void register(FileSummary f, boolean inScope) {
+        if (!f.parsed) return;
+        if (inScope) {
+            javaPaths.add(f.path);
+        } else {
+            siblingJavaPaths.add(f.path);
+        }
+        javaPathSet.add(f.path);
+        String dir = f.path.contains("/") ? f.path.substring(0, f.path.lastIndexOf('/')) : "";
+        String pkgPath = f.pkg.replace('.', '/');
         if (!inScope) {
             // sibling roots are not part of the service's source roots
         } else if (!pkgPath.isEmpty() && dir.endsWith(pkgPath)) {
@@ -164,21 +305,20 @@ public final class CodeIndex {
         } else if (pkgPath.isEmpty()) {
             sourceRoots.add(dir);
         }
-        for (TypeDeclaration<?> td : cu.findAll(TypeDeclaration.class)) {
-            boolean member = td.isTopLevelType() || td.getParentNode().map(p -> p instanceof TypeDeclaration).orElse(false);
-            if (!member) continue;
-            Optional<String> fqnOpt = td.getFullyQualifiedName();
-            if (fqnOpt.isEmpty()) continue;
-            if (!inScope && classes.containsKey(fqnOpt.get())) {
+        for (int i = 0; i < f.types.size(); i++) {
+            ClassInfo ci = f.types.get(i);
+            if (!inScope && classes.containsKey(ci.fqn)) {
                 // the service's own class wins over a sibling class with the same FQN
-                if (td.isTopLevelType()) shadowedSiblingClasses.add(fqnOpt.get() + " (" + path + ")");
+                if (f.topLevel.get(i)) shadowedSiblingClasses.add(ci.fqn + " (" + f.path + ")");
                 continue;
             }
-            indexType(path, cu, pkg, td, fqnOpt.get(), inScope);
+            classes.put(ci.fqn, ci);
+            for (MethodInfo mi : ci.methods.values()) if (mi.hasNode()) methodsById.put(mi.id(), mi);
         }
     }
 
-    private void indexType(String path, CompilationUnit cu, String pkg, TypeDeclaration<?> td, String fqn, boolean inScope) {
+    private ClassInfo indexType(String path, String pkg, TypeDeclaration<?> td, int typeIndex, String fqn, boolean inScope,
+                                List<ClassInfo.Import> imports) {
         ClassInfo.Kind kind;
         boolean isAbstract = false;
         List<String> supers = new ArrayList<>();
@@ -203,22 +343,25 @@ public final class CodeIndex {
         }
         String outer = td.getParentNode().filter(p -> p instanceof TypeDeclaration)
                 .flatMap(p -> ((TypeDeclaration<?>) p).getFullyQualifiedName()).orElse(null);
-        ClassInfo ci = new ClassInfo(fqn, td.getNameAsString(), pkg, kind, isAbstract, path, Ast.line(td), outer, td, cu);
+        ClassInfo ci = new ClassInfo(fqn, td.getNameAsString(), pkg, kind, isAbstract, path, Ast.line(td), outer, this,
+                typeIndex, imports);
         ci.inScope = inScope;
         ci.superRaw.addAll(supers);
         ci.typeParams.addAll(typeParams);
-        for (AnnotationExpr a : td.getAnnotations()) ci.annotations.put(Names.simpleName(a.getNameAsString()), a);
+        // detached copies: the summary must not keep the file's AST alive
+        for (AnnotationExpr a : td.getAnnotations()) ci.annotations.put(Names.simpleName(a.getNameAsString()), a.clone());
         // header for "class-level changed" detection
         StringBuilder header = new StringBuilder();
         td.getAnnotations().forEach(a -> header.append(Ast.normalized(a)).append('\n'));
         header.append(td.getModifiers()).append(' ').append(kind).append(' ').append(td.getNameAsString()).append(' ').append(supers);
         ci.normalizedHeader = header.toString();
-        classes.put(fqn, ci);
 
+        int memberIndex = -1;
         for (BodyDeclaration<?> m : td.getMembers()) {
+            memberIndex++;
             if (m instanceof FieldDeclaration f) {
                 Map<String, AnnotationExpr> anns = new LinkedHashMap<>();
-                f.getAnnotations().forEach(a -> anns.put(Names.simpleName(a.getNameAsString()), a));
+                f.getAnnotations().forEach(a -> anns.put(Names.simpleName(a.getNameAsString()), a.clone()));
                 boolean st = f.isStatic() || kind == ClassInfo.Kind.INTERFACE;
                 boolean fin = f.isFinal() || kind == ClassInfo.Kind.INTERFACE;
                 for (VariableDeclarator v : f.getVariables()) {
@@ -229,10 +372,10 @@ public final class CodeIndex {
                     ci.fields.put(v.getNameAsString(), fi);
                 }
             } else if (m instanceof MethodDeclaration md) {
-                addMethod(ci, md, md.getNameAsString(), md.getType().asString(), false, md.isStatic(),
+                addMethod(ci, md, memberIndex, md.getNameAsString(), md.getType().asString(), false, md.isStatic(),
                         md.getBody().isEmpty(), md.isDefault());
             } else if (m instanceof ConstructorDeclaration cd) {
-                addMethod(ci, cd, "<init>", fqn, true, false, false, false);
+                addMethod(ci, cd, memberIndex, "<init>", fqn, true, false, false, false);
             }
         }
         if (td instanceof EnumDeclaration en) {
@@ -258,13 +401,19 @@ public final class CodeIndex {
                 String key = MethodInfo.key(p.getNameAsString(), List.of());
                 if (!ci.methods.containsKey(key)) {
                     ci.methods.put(key, new MethodInfo(ci, p.getNameAsString(), List.of(), Names.simpleErased(raw), false,
-                            false, false, false, Set.of(), Ast.line(p), Ast.line(p), "record-accessor " + raw, "", null));
+                            false, false, false, Set.of(), Ast.line(p), Ast.line(p), "record-accessor " + raw, "", -1));
                 }
             }
         }
+        if (inScope) {
+            boolean stereotype = false;
+            for (String s : ci.annotations.keySet()) if (STEREOTYPES.contains(s)) stereotype = true;
+            ci.springOps = captureInjection(ci, td, stereotype);
+        }
+        return ci;
     }
 
-    private void addMethod(ClassInfo ci, CallableDeclaration<?> cd, String name, String returnRaw, boolean ctor,
+    private void addMethod(ClassInfo ci, CallableDeclaration<?> cd, int memberIndex, String name, String returnRaw, boolean ctor,
                            boolean isStatic, boolean isAbstract, boolean isDefault) {
         List<String> params = new ArrayList<>();
         for (Parameter p : cd.getParameters()) {
@@ -277,9 +426,8 @@ public final class CodeIndex {
         if (cd instanceof MethodDeclaration md) body = md.getBody().map(Ast::normalized).orElse("");
         if (cd instanceof ConstructorDeclaration c) body = Ast.normalized(c.getBody());
         MethodInfo mi = new MethodInfo(ci, name, params, ctor ? ci.simpleName : Names.simpleErased(returnRaw), ctor,
-                isStatic, isAbstract && !ctor, isDefault, anns, Ast.line(cd), Ast.endLine(cd), Ast.normalized(cd), body, cd);
+                isStatic, isAbstract && !ctor, isDefault, anns, Ast.line(cd), Ast.endLine(cd), Ast.normalized(cd), body, memberIndex);
         ci.methods.put(mi.key(), mi);
-        methodsById.put(mi.id(), mi);
     }
 
     // ------------------------------------------------------------------ type resolution (import based, no solver)
@@ -324,17 +472,16 @@ public final class CodeIndex {
             for (ClassInfo ci : classes.values()) if (ci.simpleName.equals(t)) return ci.fqn;
             return null;
         }
-        CompilationUnit cu = ctx.cu;
-        for (ImportDeclaration imp : cu.getImports()) {
+        for (ClassInfo.Import imp : ctx.imports) {
             if (imp.isStatic() || imp.isAsterisk()) continue;
-            String n = imp.getNameAsString();
+            String n = imp.name();
             if (n.equals(t) || n.endsWith("." + t)) return n;
         }
         String samePkg = ctx.pkg.isEmpty() ? t : ctx.pkg + "." + t;
         if (classes.containsKey(samePkg)) return samePkg;
-        for (ImportDeclaration imp : cu.getImports()) {
+        for (ClassInfo.Import imp : ctx.imports) {
             if (imp.isStatic() || !imp.isAsterisk()) continue;
-            String cand = imp.getNameAsString() + "." + t;
+            String cand = imp.name() + "." + t;
             if (classes.containsKey(cand)) return cand;
         }
         if (JAVA_LANG.contains(t)) return "java.lang." + t;
@@ -492,12 +639,49 @@ public final class CodeIndex {
                     beans.add(new BeanDef(c.fqn, Set.of(Names.decapitalize(c.simpleName)), "configuration-properties", c.file, c.line));
                 }
             }
-            if (c.inScope) collectInjection(c, stereotype);
+            if (c.inScope) collectInjection(c);
         }
     }
 
-    private void collectInjection(ClassInfo c, boolean isBean) {
-        TypeDeclaration<?> td = c.node;
+    /**
+     * Injection points, {@code @Value} / {@code Environment#getProperty} references and {@code @Bean} methods of a
+     * class, read from its AST while it is parsed; type names are resolved later ({@link #collectSpring}), when every
+     * class of the version is known.
+     */
+    sealed interface SpringOp permits ValueOp, InjectOp, BeanOp, RefOp {
+    }
+
+    record ValueOp(String member, List<String> raws, int line) implements SpringOp {
+    }
+
+    record InjectOp(String member, String typeRaw, String qualifier, boolean optional, String via, int line) implements SpringOp {
+    }
+
+    record BeanOp(String typeRaw, Set<String> names, String kind, int line) implements SpringOp {
+    }
+
+    record RefOp(ValueRef ref) implements SpringOp {
+    }
+
+    private void collectInjection(ClassInfo c) {
+        if (c.springOps == null) return;
+        for (SpringOp op : c.springOps) {
+            if (op instanceof ValueOp v) {
+                addValueRefs(c, v.member(), v.raws(), v.line());
+            } else if (op instanceof InjectOp i) {
+                addInjection(c, i.member(), i.typeRaw(), i.qualifier(), i.optional(), i.via(), i.line());
+            } else if (op instanceof BeanOp b) {
+                String t = resolveType(b.typeRaw(), c);
+                beans.add(new BeanDef(t != null ? t : Names.eraseGenerics(b.typeRaw()), b.names(), b.kind(), c.file, b.line()));
+            } else if (op instanceof RefOp r) {
+                valueRefs.add(r.ref());
+            }
+        }
+        c.springOps = null;
+    }
+
+    private static List<SpringOp> captureInjection(ClassInfo c, TypeDeclaration<?> td, boolean isBean) {
+        List<SpringOp> ops = new ArrayList<>();
         boolean lombokRequired = c.hasAnnotation("RequiredArgsConstructor");
         boolean lombokAll = c.hasAnnotation("AllArgsConstructor");
         for (FieldDeclaration f : td.getFields()) {
@@ -505,7 +689,7 @@ public final class CodeIndex {
                 String member = "field " + v.getNameAsString();
                 Optional<AnnotationExpr> val = Ast.annotation(f, "Value");
                 if (val.isPresent()) {
-                    addValueRefs(c, member, val.get(), Ast.line(v));
+                    ops.add(new ValueOp(member, Ast.stringValues(val.get(), "value"), Ast.line(v)));
                     continue;
                 }
                 boolean annotated = Ast.hasAnnotation(f, "Autowired", "Inject", "Resource");
@@ -515,8 +699,8 @@ public final class CodeIndex {
                     String qualifier = qualifierOf(f.getAnnotations());
                     boolean optional = Ast.annotation(f, "Autowired").flatMap(a -> Ast.attr(a, "required"))
                             .map(e -> e instanceof BooleanLiteralExpr b && !b.getValue()).orElse(false);
-                    addInjection(c, member, v.getType().asString(), qualifier, optional,
-                            annotated ? "field" : "lombok-constructor", Ast.line(v));
+                    ops.add(new InjectOp(member, v.getType().asString(), qualifier, optional,
+                            annotated ? "field" : "lombok-constructor", Ast.line(v)));
                 }
             }
         }
@@ -525,24 +709,24 @@ public final class CodeIndex {
             List<ConstructorDeclaration> chosen = new ArrayList<>();
             for (ConstructorDeclaration cd : ctors) if (Ast.hasAnnotation(cd, "Autowired", "Inject")) chosen.add(cd);
             if (chosen.isEmpty() && ctors.size() == 1) chosen.add(ctors.get(0));
-            for (ConstructorDeclaration cd : chosen) addParams(c, cd.getParameters(), "constructor", "constructor param ");
+            for (ConstructorDeclaration cd : chosen) addParams(ops, cd.getParameters(), "constructor", "constructor param ");
         }
         for (MethodDeclaration md : td.getMethods()) {
             if (Ast.hasAnnotation(md, "Autowired", "Inject")) {
-                addParams(c, md.getParameters(), "setter", md.getNameAsString() + "() param ");
+                addParams(ops, md.getParameters(), "setter", md.getNameAsString() + "() param ");
             }
             Optional<AnnotationExpr> bean = Ast.annotation(md, "Bean");
             if (bean.isPresent()) {
                 Set<String> names = new LinkedHashSet<>(Ast.stringValues(bean.get(), "value", "name"));
                 if (names.isEmpty()) names.add(md.getNameAsString());
-                String t = resolveType(md.getType().asString(), c);
-                beans.add(new BeanDef(t != null ? t : Names.eraseGenerics(md.getType().asString()), names,
-                        "@Bean " + c.simpleName + "." + md.getNameAsString() + "()", c.file, Ast.line(md)));
-                addParams(c, md.getParameters(), "bean-method-param", "@Bean " + md.getNameAsString() + "() param ");
+                ops.add(new BeanOp(md.getType().asString(), names, "@Bean " + c.simpleName + "." + md.getNameAsString() + "()",
+                        Ast.line(md)));
+                addParams(ops, md.getParameters(), "bean-method-param", "@Bean " + md.getNameAsString() + "() param ");
             }
             for (Parameter p : md.getParameters()) {
                 if (!Ast.hasAnnotation(md, "Bean", "Autowired", "Inject")) {
-                    Ast.annotation(p, "Value").ifPresent(a -> addValueRefs(c, md.getNameAsString() + "() param " + p.getNameAsString(), a, Ast.line(p)));
+                    Ast.annotation(p, "Value").ifPresent(a -> ops.add(new ValueOp(md.getNameAsString() + "() param " + p.getNameAsString(),
+                            Ast.stringValues(a, "value"), Ast.line(p))));
                 }
             }
         }
@@ -556,21 +740,22 @@ public final class CodeIndex {
             boolean hasDefault = n.equals("getProperty") && call.getArguments().size() >= 2
                     && !(call.getArguments().size() == 2 && call.getArgument(1).isClassExpr());
             String member = call.findAncestor(CallableDeclaration.class).map(cd -> cd.getNameAsString() + "()").orElse("?");
-            valueRefs.add(new ValueRef(c.fqn, member, key.asString(), hasDefault ? "<default>" : null,
-                    call.toString(), "Environment." + n, c.file, Ast.line(call)));
+            ops.add(new RefOp(new ValueRef(c.fqn, member, key.asString(), hasDefault ? "<default>" : null,
+                    call.toString(), "Environment." + n, c.file, Ast.line(call))));
         }
+        return ops.isEmpty() ? List.of() : ops;
     }
 
-    private void addParams(ClassInfo c, NodeList<Parameter> params, String via, String prefix) {
+    private static void addParams(List<SpringOp> ops, NodeList<Parameter> params, String via, String prefix) {
         for (Parameter p : params) {
             Optional<AnnotationExpr> val = Ast.annotation(p, "Value");
             if (val.isPresent()) {
-                addValueRefs(c, prefix + p.getNameAsString(), val.get(), Ast.line(p));
+                ops.add(new ValueOp(prefix + p.getNameAsString(), Ast.stringValues(val.get(), "value"), Ast.line(p)));
                 continue;
             }
             boolean optional = Ast.hasAnnotation(p, "Nullable");
-            addInjection(c, prefix + p.getNameAsString(), p.getType().asString(), qualifierOf(p.getAnnotations()),
-                    optional, via, Ast.line(p));
+            ops.add(new InjectOp(prefix + p.getNameAsString(), p.getType().asString(), qualifierOf(p.getAnnotations()),
+                    optional, via, Ast.line(p)));
         }
     }
 
@@ -597,8 +782,8 @@ public final class CodeIndex {
         return null;
     }
 
-    private void addValueRefs(ClassInfo c, String member, AnnotationExpr a, int line) {
-        for (String raw : Ast.stringValues(a, "value")) {
+    private void addValueRefs(ClassInfo c, String member, List<String> raws, int line) {
+        for (String raw : raws) {
             for (String body : Names.placeholderBodies(raw)) {
                 String[] kd = Names.splitPlaceholder(body);
                 valueRefs.add(new ValueRef(c.fqn, member, kd[0], kd[1], raw, "@Value", c.file, line));

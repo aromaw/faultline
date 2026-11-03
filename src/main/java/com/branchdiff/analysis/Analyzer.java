@@ -120,7 +120,7 @@ public final class Analyzer {
             CodeIndex iOurs = CodeIndex.build(ours, sOurs, opt.includeTests);
             opt.phase("parsing theirs (pick)");
             CodeIndex iTheirs = CodeIndex.build(theirs, sTheirs, opt.includeTests);
-            log("parsed " + (iBase.units.size() + iOurs.units.size() + iTheirs.units.size()) + " java files in "
+            log("parsed " + (iBase.javaFileCount() + iOurs.javaFileCount() + iTheirs.javaFileCount()) + " java files in "
                     + (System.nanoTime() - tParse) / 1_000_000 + " ms");
             for (CodeIndex i : List.of(iBase, iOurs, iTheirs)) {
                 for (String e : i.shadowedSiblingClasses) warnings.add("[" + i.snapshot.label() + "] sibling class ignored, the service declares the same FQN: " + e);
@@ -204,15 +204,15 @@ public final class Analyzer {
             n.put("callsResolvedBySymbolSolver", dep.stats.callsResolved);
             n.put("callsNameMatchedFallback", dep.stats.callsFallback);
             n.put("callsToExternalLibraries", dep.stats.callsExternal);
-            n.put("javaFiles", Map.of("base", iBase.units.size(), "ours", iOurs.units.size(), "theirs", iTheirs.units.size()));
+            n.put("javaFiles", ordered("base", iBase.javaFileCount(), "ours", iOurs.javaFileCount(), "theirs", iTheirs.javaFileCount()));
             if (!ours.siblingDirs().isEmpty()) {
                 n.put("siblingModules", ours.siblingDirs());
-                n.put("siblingJavaFiles", Map.of("base", iBase.siblingUnits.size(), "ours", iOurs.siblingUnits.size(),
-                        "theirs", iTheirs.siblingUnits.size()));
+                n.put("siblingJavaFiles", ordered("base", iBase.siblingJavaFileCount(), "ours", iOurs.siblingJavaFileCount(),
+                        "theirs", iTheirs.siblingJavaFileCount()));
             }
             n.put("siblingMode", opt.siblings.name().toLowerCase());
-            n.put("configFiles", Map.of("ours", iOurs.config.files(), "theirs", iTheirs.config.files()));
-            n.put("mapperXmlNamespaces", Map.of("ours", iOurs.mapperXml.namespaces().size(), "theirs", iTheirs.mapperXml.namespaces().size()));
+            n.put("configFiles", ordered("ours", iOurs.config.files(), "theirs", iTheirs.config.files()));
+            n.put("mapperXmlNamespaces", ordered("ours", iOurs.mapperXml.namespaces().size(), "theirs", iTheirs.mapperXml.namespaces().size()));
             r.changeSets.put("theirs", listChanges(csTheirs));
             r.changeSets.put("ours", listChanges(csOurs));
             if (after != null) {
@@ -224,11 +224,21 @@ public final class Analyzer {
         } finally {
             // the symbol solver keeps one facade (with its caches and type solver) per type solver in a static map
             com.github.javaparser.symbolsolver.javaparsermodel.JavaParserFacade.clearInstances();
+            log("AST cache: " + com.branchdiff.index.AstCache.stats());
+            // the cached ASTs of this run reference its type solvers (temp sources, jar indexes): drop them
+            com.branchdiff.index.AstCache.clear();
             wsOurs.close();
             wsTheirs.close();
             if (!opt.keepTemp) tmp.toFile().delete();
             else log("kept temp dir " + tmp);
         }
+    }
+
+    /** a map in the given key order (Map.of iterates in a different order on every JVM run) */
+    private static Map<String, Object> ordered(Object... kv) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        for (int i = 0; i + 1 < kv.length; i += 2) m.put((String) kv[i], kv[i + 1]);
+        return m;
     }
 
     private static String firstLine(String s) {

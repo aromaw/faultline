@@ -200,7 +200,7 @@ public final class SpringAnalyzer {
             MethodInfo m = ch.newMethod;
             ClassInfo owner = m.owner;
             boolean abstractMethod = (owner.isInterface() && !m.isDefault && !m.isStatic && m.isAbstract)
-                    || (!owner.isInterface() && m.isAbstract && m.node != null && m.node.isAbstract());
+                    || (!owner.isInterface() && m.isAbstract && m.node() != null && m.node().isAbstract());
             if (!abstractMethod) continue;
             for (ClassInfo impl : ours.classes.values()) {
                 if (!impl.inScope || impl.isInterface() || impl.isAbstract || impl.fqn.equals(owner.fqn)) continue;
