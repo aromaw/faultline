@@ -52,7 +52,7 @@ final class ResultsPanel {
     private final DiffView diff = new DiffView();
     private final SourceView source = new SourceView();
     final JTabbedPane tabs = new JTabbedPane();
-    private final JLabel summary = new JLabel(" ");
+    private final JPanel summary = new JPanel(new java.awt.FlowLayout(java.awt.FlowLayout.LEFT, 6, 0));
     private AnalysisJob.Result result;
     private Hunk current;
     private ConflictFile currentFile;
@@ -63,15 +63,17 @@ final class ResultsPanel {
         tree.setShowsRootHandles(true);
         tree.setCellRenderer(new Renderer());
         tree.setRowHeight(0);
+        javax.swing.ToolTipManager.sharedInstance().registerComponent(tree);
         tree.addTreeSelectionListener(e -> onSelect());
         tabs.putClientProperty("JTabbedPane.tabType", "underlined");
+        tabs.setTabLayoutPolicy(JTabbedPane.SCROLL_TAB_LAYOUT);
         JSplitPane bottom = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, tabs, source);
         bottom.setResizeWeight(0.6);
         bottom.setBorder(null);
         JSplitPane split = new JSplitPane(JSplitPane.VERTICAL_SPLIT, diff, bottom);
         split.setResizeWeight(0.5);
         split.setBorder(null);
-        summary.setBorder(BorderFactory.createEmptyBorder(4, 8, 4, 8));
+        summary.setBorder(BorderFactory.createEmptyBorder(6, 4, 6, 8));
         detail.add(summary, BorderLayout.NORTH);
         detail.add(split, BorderLayout.CENTER);
         onlyThisHunk.addActionListener(e -> {
@@ -94,15 +96,34 @@ final class ResultsPanel {
                 for (Hunk h : f.hunks) fn.add(new DefaultMutableTreeNode(h));
                 root.add(fn);
             }
-            summary.setText(c.summary.get("conflictHunks") + " conflict hunk(s) in " + c.files.size() + " file(s), "
-                    + c.cleanFiles.size() + " file(s) merged cleanly, " + c.checklist.size() + " checklist step(s), "
-                    + c.bringAlong.size() + " mainline commit(s) to consider  -  analysis " + r.millis() + " ms");
+            summary.removeAll();
+            chip(String.valueOf(c.summary.get("conflictHunks")), "conflict hunks", Ui.RED);
+            chip(String.valueOf(c.files.size()), "conflicted files", Ui.ORANGE);
+            chip(String.valueOf(c.cleanFiles.size()), "merged cleanly", Ui.GREEN);
+            chip(String.valueOf(c.checklist.size()), "checklist steps", Ui.BLUE);
+            chip(String.valueOf(c.bringAlong.size()), "commits to consider", Ui.muted());
+            summary.add(Ui.muted("  analysis " + r.millis() + " ms"));
         } else {
-            summary.setText(r == null ? " " : "no conflict model (see the exported report)");
+            summary.removeAll();
+            if (r != null) summary.add(Ui.muted("no conflict model (see the exported report)"));
         }
+        summary.revalidate();
+        summary.repaint();
         tree.setModel(new DefaultTreeModel(root));
         for (int i = 0; i < tree.getRowCount(); i++) tree.expandRow(i);
     }
+
+    private void chip(String n, String what, Color color) {
+        JLabel l = new JLabel(what, new Ui.Badge(n, color, 22), javax.swing.SwingConstants.LEFT);
+        l.setIconTextGap(2);
+        l.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 8));
+        summary.add(l);
+    }
+
+    /** the tab titles of the hunk detail (automation iterates them) */
+    static final String TAB_WHY = "Why it conflicts", TAB_THEIRS = "Take theirs \u2192 needs", TAB_OURS = "Keep ours \u2192 callers",
+            TAB_CHECKLIST = "Checklist", TAB_CHAIN = "Dependency chain";
+    static final String[] TABS = {TAB_WHY, TAB_THEIRS, TAB_OURS, TAB_CHECKLIST, TAB_CHAIN};
 
     AnalysisJob.Result result() {
         return result;
@@ -159,15 +180,17 @@ final class ResultsPanel {
         currentFile = f;
         String[] texts = result.contents().get(f.viewKey);
         if (texts == null) texts = new String[3];
-        String headline = "<html><b>" + esc(h.id) + "</b>  " + esc(f.kind) + (h.step > 1 || hasSteps() ? "  step " + h.step : "")
-                + "  <span style='color:gray'>" + esc(f.path) + "</span></html>";
+        HunkSeverity sev = HunkSeverity.of(f, h);
+        String headline = "<html><span style='color:" + Ui.hex(Ui.severity(sev.name())) + "'><b>" + sev + "</b></span>&nbsp;&nbsp;<b>" + esc(h.id) + "</b>  "
+                + esc(f.kind) + (h.step > 1 || hasSteps() ? "  step " + h.step : "")
+                + "  <span style='color:" + Ui.hex(Ui.muted()) + "'>" + esc(f.path) + "</span></html>";
         diff.show(f.path, headline, texts, new ConflictModel.Range[] {h.ours, h.base, h.theirs});
         tabs.removeAll();
-        tabs.addTab("Why", why(f, h));
-        tabs.addTab("Take theirs", takeTheirs(h));
-        tabs.addTab("Take ours", takeOurs(h));
-        tabs.addTab("Checklist", checklist(h));
-        tabs.addTab("Dependency chain", chain(h));
+        tabs.addTab(TAB_WHY, null, why(f, h), "What each side changed here, and the commits behind it");
+        tabs.addTab(TAB_THEIRS, null, takeTheirs(h), "Symbols the mainline code needs, and whether the tenant has them");
+        tabs.addTab(TAB_OURS, null, takeOurs(h), "Entry points and callers in the tenant that keeping ours affects");
+        tabs.addTab(TAB_CHECKLIST, null, checklist(h), "Ordered steps to resolve all conflicts");
+        tabs.addTab(TAB_CHAIN, null, chain(h), "What theirs depends on, and what depends on ours");
         tabs.setSelectedIndex(Math.min(tab, tabs.getTabCount() - 1));
     }
 
@@ -192,7 +215,8 @@ final class ResultsPanel {
             actions.add(b.boundary() ? () -> source.open(new Loc("base", f.path, b.start())) : () -> source.showCommit(b.commit().sha(), f.path));
         }
         for (Event e : f.fileHistory) addEvent(rows, actions, "file history", e, f.path);
-        return withHeader(sb.toString(), table(new String[] {"Side", "Commit", "Date", "Change", "Member", "Subject"}, rows, actions));
+        return withHeader("Why it conflicts", sb.toString(), "Commits that changed these lines (click a row to see the commit)",
+                table(new String[] {"Side", "Commit", "Date", "Change", "Member", "Subject"}, rows, actions));
     }
 
     private void addEvent(List<Object[]> rows, List<Runnable> actions, String side, Event e, String path) {
@@ -220,7 +244,8 @@ final class ResultsPanel {
             Loc tenant = Loc.parse("ours", n.tenantLocation != null ? n.tenantLocation : n.oursLocation);
             actions.add(() -> source.open(l != null ? l : tenant));
         }
-        return withHeader(sb.toString(), table(new String[] {"Symbol", "Line", "In tenant", "Origin", "Tenant has", "Introduced by", "Detail"}, rows, actions));
+        return withHeader("If you take theirs", sb.toString(), "Dependencies of the mainline code (missing ones first; click to open)",
+                table(new String[] {"Symbol", "Line", "In tenant", "Origin", "Tenant has", "Introduced by", "Detail"}, rows, actions));
     }
 
     private JComponent takeOurs(Hunk h) {
@@ -246,10 +271,10 @@ final class ResultsPanel {
             }
             root.add(on);
         }
-        DefaultMutableTreeNode imp = new DefaultMutableTreeNode(new Item("Callers in the tenant (reverse impact)", null));
+        DefaultMutableTreeNode imp = new DefaultMutableTreeNode(new Item("Callers in the tenant that use this code (reverse impact)", null));
         for (TreeNode t : h.takeOurs.impact) imp.add(treeNode(t, "ours"));
         root.add(imp);
-        return withHeader(sb.toString(), itemTree(root));
+        return withHeader("If you keep ours", sb.toString(), "Affected entry points and callers in the tenant (click to open)", itemTree(root));
     }
 
     private JComponent checklist(Hunk h) {
@@ -281,11 +306,11 @@ final class ResultsPanel {
 
     private JComponent chain(Hunk h) {
         DefaultMutableTreeNode root = new DefaultMutableTreeNode();
-        DefaultMutableTreeNode needs = new DefaultMutableTreeNode(new Item("Taking theirs needs (dependency trees, depth "
+        DefaultMutableTreeNode needs = new DefaultMutableTreeNode(new Item("Dependencies: what taking theirs needs (depth "
                 + (result.report().context != null ? result.report().context.maxDepth : 4) + ")", null));
         for (TreeNode t : h.takeTheirs.trees) needs.add(treeNode(t, "theirs"));
         root.add(needs);
-        DefaultMutableTreeNode users = new DefaultMutableTreeNode(new Item("Used by in the tenant (reverse impact)", null));
+        DefaultMutableTreeNode users = new DefaultMutableTreeNode(new Item("Callers: what uses ours in the tenant (reverse impact)", null));
         for (TreeNode t : h.takeOurs.impact) users.add(treeNode(t, "ours"));
         root.add(users);
         List<CommitNeed> along = result.report().conflicts.bringAlong;
@@ -393,7 +418,7 @@ final class ResultsPanel {
         return new JScrollPane(t);
     }
 
-    private static JComponent withHeader(String text, JComponent body) {
+    private static JComponent withHeader(String title, String text, String listTitle, JComponent body) {
         JTextArea a = new JTextArea(text);
         a.setEditable(false);
         a.setLineWrap(true);
@@ -401,12 +426,22 @@ final class ResultsPanel {
         a.setOpaque(false);
         a.setRows(Math.min(6, Math.max(2, text.split("\n").length + text.length() / 140)));
         a.setBorder(BorderFactory.createEmptyBorder(6, 8, 6, 8));
-        JPanel p = new JPanel(new BorderLayout());
-        p.add(new JScrollPane(a, JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED, JScrollPane.HORIZONTAL_SCROLLBAR_NEVER) {
+        a.setFont(UIManager.getFont("Label.font"));
+        JPanel top = new JPanel(new BorderLayout());
+        JLabel t = Ui.label(title, "h4");
+        t.setBorder(BorderFactory.createEmptyBorder(8, 8, 0, 8));
+        top.add(t, BorderLayout.NORTH);
+        top.add(new JScrollPane(a, JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED, JScrollPane.HORIZONTAL_SCROLLBAR_NEVER) {
             {
                 setBorder(null);
             }
-        }, BorderLayout.NORTH);
+        }, BorderLayout.CENTER);
+        JLabel lt = Ui.style(Ui.muted(listTitle), "small");
+        lt.setFont(lt.getFont().deriveFont(java.awt.Font.BOLD));
+        lt.setBorder(BorderFactory.createEmptyBorder(2, 8, 4, 8));
+        top.add(lt, BorderLayout.SOUTH);
+        JPanel p = new JPanel(new BorderLayout());
+        p.add(top, BorderLayout.NORTH);
         p.add(body, BorderLayout.CENTER);
         return p;
     }
@@ -432,17 +467,6 @@ final class ResultsPanel {
     }
 
     // ------------------------------------------------------------------ rendering
-
-    static Color severityColor(String s) {
-        if (s == null) return null;
-        return switch (s) {
-            case "HIGH", "MISSING", "CHANGED" -> new Color(0xE5493A);
-            case "MEDIUM", "DIFFERS", "UNKNOWN" -> new Color(0xE8A33D);
-            case "LOW", "PRESENT" -> new Color(0x59A869);
-            case "HTTP", "SCHEDULED", "LISTENER", "STARTUP", "MAIN" -> new Color(0x3592C4);
-            default -> null;
-        };
-    }
 
     /** a small filled circle, like IDEA's inspection severity markers */
     record Dot(Color color) implements Icon {
@@ -478,17 +502,17 @@ final class ResultsPanel {
                 setText("<html>" + esc(name) + " <span" + gray + ">" + esc(f.kind) + (hasStepsSafe() ? " · step " + f.step : "")
                         + " · " + f.hunks.size() + "</span></html>");
                 setToolTipText(f.path);
-                setIcon(new Dot(severityColor(s.name())));
+                setIcon(new Dot(Ui.severity(s.name())));
             } else if (o instanceof Hunk h) {
                 HunkSeverity s = HunkSeverity.of(parentFile(value), h);
                 String mem = members(h.members.get("ours") != null && !h.members.get("ours").isEmpty() ? h.members.get("ours") : h.members.get("theirs"));
-                setText("<html>#" + h.index + " <b>" + s + "</b> <span" + gray + ">ours " + lines(h.ours) + " · " + esc(shorten(mem, 60)) + "</span></html>");
+                setText("<html><b>#" + h.index + "</b> " + esc(shorten(mem, 60)) + " <span" + gray + ">ours " + lines(h.ours) + "</span></html>");
                 setToolTipText(h.why);
-                setIcon(new Dot(severityColor(s.name())));
+                setIcon(new Ui.Badge(s.name(), Ui.severity(s.name()), 58));
             } else if (o instanceof Item it) {
                 setText(it.text());
-                Color c = severityColor(it.badge());
-                setIcon(c != null ? new Dot(c) : null);
+                Color c = Ui.severity(it.badge());
+                setIcon(c != null ? new Ui.Badge(it.badge(), c) : null);
                 setToolTipText(it.loc() != null ? it.loc().toString() : null);
             }
             return this;

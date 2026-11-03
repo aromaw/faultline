@@ -81,7 +81,7 @@ final class CommitsPanel extends JPanel {
             CommitRow cr = rows.get(r);
             return switch (c) {
                 case 0 -> checked.contains(cr.sha());
-                case 1 -> cr.shortSha();
+                case 1 -> cr.shortSha().length() > 8 ? cr.shortSha().substring(0, 8) : cr.shortSha();
                 case 2 -> cr.subject();
                 case 3 -> cr.author();
                 default -> cr.day();
@@ -101,7 +101,9 @@ final class CommitsPanel extends JPanel {
     CommitsPanel(Runnable onChange) {
         super(new BorderLayout());
         this.onChange = onChange;
-        filter.putClientProperty("JTextField.placeholderText", "Filter by message, author or sha  (author:name, sha:abc)");
+        filter.putClientProperty("JTextField.placeholderText", "Filter commits by message, author or hash  (author:name, sha:abc)");
+        filter.putClientProperty("JTextField.leadingIcon", Ui.icon(Ui.Glyph.SEARCH));
+        filter.setToolTipText("Case-insensitive; every word must match. author:name and sha:abc narrow to one field");
         filter.putClientProperty("JTextField.showClearButton", true);
         filter.getDocument().addDocumentListener(new DocumentListener() {
             @Override
@@ -125,9 +127,10 @@ final class CommitsPanel extends JPanel {
         table.setFillsViewportHeight(true);
         table.setShowHorizontalLines(false);
         table.setAutoResizeMode(JTable.AUTO_RESIZE_SUBSEQUENT_COLUMNS);
-        int[] widths = {44, 90, 420, 120, 90};
+        int[] widths = {44, 84, 320, 100, 96};
         for (int i = 0; i < widths.length; i++) table.getColumnModel().getColumn(i).setPreferredWidth(widths[i]);
         table.getColumnModel().getColumn(0).setMaxWidth(50);
+        FontMetricsHolder.minWidths(table);
         table.getInputMap(JComponent.WHEN_FOCUSED).put(KeyStroke.getKeyStroke("SPACE"), "togglePick");
         table.getActionMap().put("togglePick", new AbstractAction() {
             @Override
@@ -143,18 +146,19 @@ final class CommitsPanel extends JPanel {
         });
 
         JPanel top = new JPanel(new BorderLayout());
-        top.setBorder(BorderFactory.createEmptyBorder(4, 4, 4, 4));
+        top.setBorder(BorderFactory.createEmptyBorder(6, 6, 6, 6));
         top.add(filter, BorderLayout.CENTER);
-        JButton check = new JButton("Check selected");
-        check.setToolTipText("Toggle the Pick checkbox of the selected rows (Space)");
+        JButton check = new JButton("Pick Selected", Ui.icon(Ui.Glyph.CHECK, Ui.GREEN));
+        check.setToolTipText("Check (or uncheck) the Pick box of the selected rows (Space)");
         check.addActionListener(e -> toggleSelected());
-        JButton clear = new JButton("Clear");
+        JButton clear = new JButton("Clear Picks", Ui.icon(Ui.Glyph.CLEAR));
+        clear.setToolTipText("Uncheck all picked commits");
         clear.addActionListener(e -> {
             checked.clear();
             model.fireTableDataChanged();
             changed();
         });
-        JPanel buttons = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 0));
+        JPanel buttons = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 0));
         buttons.add(check);
         buttons.add(clear);
         top.add(buttons, BorderLayout.EAST);
@@ -162,10 +166,15 @@ final class CommitsPanel extends JPanel {
         details.setEditable(false);
         details.setFont(CodeViewsLite.mono());
         details.setBorder(BorderFactory.createEmptyBorder(6, 8, 6, 8));
-        JSplitPane split = new JSplitPane(JSplitPane.VERTICAL_SPLIT, new JScrollPane(table), new JScrollPane(details));
+        table.setRowHeight(Math.max(table.getRowHeight(), 24));
+        tableCards.add(new JScrollPane(table), "table");
+        tableCards.add(emptyLabel, "empty");
+        emptyLabel.setHorizontalAlignment(javax.swing.SwingConstants.CENTER);
+        JSplitPane split = new JSplitPane(JSplitPane.VERTICAL_SPLIT, tableCards, new JScrollPane(details));
         split.setResizeWeight(0.72);
         split.setBorder(null);
-        status.setBorder(BorderFactory.createEmptyBorder(3, 8, 3, 8));
+        status.setBorder(BorderFactory.createEmptyBorder(4, 8, 4, 8));
+        Ui.style(status, "small");
         add(top, BorderLayout.NORTH);
         add(split, BorderLayout.CENTER);
         add(status, BorderLayout.SOUTH);
@@ -185,6 +194,8 @@ final class CommitsPanel extends JPanel {
         changed();
     }
 
+    private final JPanel tableCards = new JPanel(new java.awt.CardLayout());
+    private final JLabel emptyLabel = Ui.muted(" ");
     private boolean truncated;
     private String range = "";
 
@@ -243,10 +254,15 @@ final class CommitsPanel extends JPanel {
     }
 
     private void changed() {
+        boolean empty = table.getRowCount() == 0;
+        emptyLabel.setText(rows.isEmpty() ? "<html><center><b>Nothing to pick</b><br>every mainline commit is already on the target branch ("
+                + ResultsPanel.esc(range) + ")</center></html>" : "<html><center><b>No commit matches the filter</b><br>clear the filter field to see all "
+                + rows.size() + " commits</center></html>");
+        ((java.awt.CardLayout) tableCards.getLayout()).show(tableCards, empty && git != null ? "empty" : "table");
         List<CommitRow> ch = chosen();
         String how = checked.isEmpty() ? (ch.isEmpty() ? "" : " (selected)") : " (checked)";
         status.setText(table.getRowCount() + " of " + rows.size() + " commits " + range + (truncated ? " (newest only)" : "")
-                + "  -  " + ch.size() + " to pick" + how + (ch.size() > 1 ? ", applied oldest first: "
+                + "  \u00B7  " + ch.size() + " to pick" + how + (ch.size() > 1 ? ", applied oldest first: "
                 + String.join(" -> ", ch.stream().map(c -> c.shortSha().substring(0, 8)).toList()) : ""));
         if (onChange != null) onChange.run();
     }
@@ -278,5 +294,14 @@ final class CommitsPanel extends JPanel {
                 }
             }
         }.execute();
+    }
+
+    /** hash and date columns never shrink below their text */
+    private static final class FontMetricsHolder {
+        static void minWidths(JTable t) {
+            java.awt.FontMetrics fm = t.getFontMetrics(t.getFont());
+            t.getColumnModel().getColumn(1).setMinWidth(fm.stringWidth("0123abcd") + 18);
+            t.getColumnModel().getColumn(4).setMinWidth(fm.stringWidth("2026-04-16") + 18);
+        }
     }
 }

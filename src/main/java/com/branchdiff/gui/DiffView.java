@@ -32,10 +32,11 @@ import java.util.List;
  * scrolling together relative to it.
  */
 final class DiffView extends JPanel {
-    private final Pane ours = new Pane("Ours (tenant)"), base = new Pane("Base (pick parent)"), theirs = new Pane("Theirs (pick)");
+    private final Pane ours = new Pane("Ours", "tenant", Ui.BLUE), base = new Pane("Base", "pick parent", null),
+            theirs = new Pane("Theirs", "the pick", new java.awt.Color(0x8B5CF6));
     private final JPanel columns = new JPanel(new GridLayout(1, 3, 1, 0));
-    private final JToggleButton threeWay = new JToggleButton("Ours | Base | Theirs", true);
-    private final JToggleButton twoWay = new JToggleButton("Ours | Theirs");
+    private final JToggleButton threeWay = new JToggleButton("3-way: Ours | Base | Theirs", true);
+    private final JToggleButton twoWay = new JToggleButton("2-way: Ours | Theirs");
     private final JCheckBox sync = new JCheckBox("Sync scroll", true);
     private final JLabel title = new JLabel(" ");
     private String[] texts = new String[3];
@@ -48,16 +49,34 @@ final class DiffView extends JPanel {
         final RTextScrollPane scroll = CodeViews.scroll(area);
         final JLabel header = new JLabel();
         final JPanel panel = new JPanel(new BorderLayout());
-        final String name;
+        final String name, role;
+        final java.awt.Color color;
         Range range;
         boolean absent;
 
-        Pane(String name) {
+        Pane(String name, String role, java.awt.Color color) {
             this.name = name;
-            header.setBorder(BorderFactory.createEmptyBorder(3, 8, 3, 8));
+            this.role = role;
+            this.color = color;
+            styleHeader();
+            setHeader(null);
             panel.add(header, BorderLayout.NORTH);
             panel.add(scroll, BorderLayout.CENTER);
             scroll.getVerticalScrollBar().addAdjustmentListener(e -> follow(this));
+        }
+
+        void styleHeader() {
+            java.awt.Color line = color != null ? color : UIManager.getColor("Component.borderColor");
+            header.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createMatteBorder(0, 0, 2, 0, line),
+                    BorderFactory.createEmptyBorder(4, 8, 3, 8)));
+            header.setForeground(UIManager.getColor("Label.foreground"));
+        }
+
+        /** "Ours  tenant · L12-20" with the side name bold and the rest muted */
+        void setHeader(String extra) {
+            String gray = Ui.hex(Ui.muted());
+            header.setText("<html><b>" + name + "</b>&nbsp;&nbsp;<span style='color:" + gray + "'>" + role
+                    + (extra == null || extra.isEmpty() ? "" : " \u00B7 " + ResultsPanel.esc(extra)) + "</span></html>");
         }
 
         int anchorPx() {
@@ -83,6 +102,9 @@ final class DiffView extends JPanel {
             b.addActionListener(e -> layoutColumns());
             bar.add(b);
         }
+        threeWay.setToolTipText("Show the tenant (ours), the pick's parent (base) and the pick (theirs) side by side");
+        twoWay.setToolTipText("Show only the tenant (ours) and the pick (theirs)");
+        sync.setToolTipText("Scroll the panes together, aligned at the conflict");
         bar.add(sync);
         title.setBorder(BorderFactory.createEmptyBorder(0, 12, 0, 0));
         bar.add(title);
@@ -116,7 +138,7 @@ final class DiffView extends JPanel {
             p.range = ranges[i];
             p.area.setSyntaxEditingStyle(p.absent ? "text/plain" : CodeViews.syntaxFor(path));
             p.area.setText(p.absent ? "(file absent on this side)" : texts[i]);
-            p.header.setText(p.name + (p.absent ? " - file absent" : p.range == null ? "" : "  " + ResultsPanel.lines(p.range)));
+            p.setHeader(p.absent ? "file absent" : p.range == null ? "" : ResultsPanel.lines(p.range));
         }
         highlight();
     }
@@ -126,14 +148,17 @@ final class DiffView extends JPanel {
         title.setText(" ");
         for (Pane p : new Pane[] {ours, base, theirs}) {
             p.area.setText("");
-            p.header.setText(p.name);
+            p.setHeader(null);
             p.area.removeAllLineHighlights();
         }
     }
 
     /** re-applies the colors (after a theme change) */
     void refresh() {
-        for (Pane p : new Pane[] {ours, base, theirs}) p.header.setForeground(UIManager.getColor("Label.foreground"));
+        for (Pane p : new Pane[] {ours, base, theirs}) {
+            p.styleHeader();
+            p.setHeader(path == null ? null : p.absent ? "file absent" : p.range == null ? "" : ResultsPanel.lines(p.range));
+        }
         if (path != null) highlight();
     }
 

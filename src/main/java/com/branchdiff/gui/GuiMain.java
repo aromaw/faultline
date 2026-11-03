@@ -64,10 +64,27 @@ public final class GuiMain {
             throw new IllegalStateException(e);
         }
         MainFrame m = holder[0];
+        installOomHandler(m);
         if (a.repo == null && !automated) return;
         Thread driver = new Thread(() -> drive(m, a), "faultline-gui-driver");
         driver.setDaemon(true);
         driver.start();
+    }
+
+    /** an OutOfMemoryError outside the analysis worker (e.g. while painting a huge file) gets the same advice */
+    private static void installOomHandler(MainFrame m) {
+        Thread.UncaughtExceptionHandler prev = Thread.getDefaultUncaughtExceptionHandler();
+        Thread.setDefaultUncaughtExceptionHandler((t, e) -> {
+            if (e instanceof OutOfMemoryError) {
+                MainFrame.releaseMemory();
+                SwingUtilities.invokeLater(m::outOfMemory);
+            } else if (prev != null) {
+                prev.uncaughtException(t, e);
+            } else {
+                System.err.println("Exception in thread \"" + t.getName() + "\" " + e);
+                e.printStackTrace();
+            }
+        });
     }
 
     private static void drive(MainFrame m, Args a) {
@@ -82,6 +99,8 @@ public final class GuiMain {
             }
             if (a.repo == null) return;
             String theme = Prefs.load().dark() ? "dark" : "light";
+            settle();
+            shot(m, a, "00-empty-" + theme);
             onEdt(() -> m.openProject(a.repo));
             idle(m);
             if (a.onto != null || a.mainline != null) {
@@ -90,6 +109,12 @@ public final class GuiMain {
             }
             settle();
             shot(m, a, "01-project-opened-" + theme);
+            if (a.branchSearch != null) {
+                onEdt(() -> m.mainline.open(a.branchSearch));
+                settle();
+                shot(m, a, "01b-branch-search-" + theme);
+                onEdt(m.mainline::close);
+            }
             if (a.measure) {
                 Thread.sleep(2000); // idle: project and commit list loaded, nothing forced
                 measure("idle-rss-kb", rssKb("VmRSS"));
@@ -117,11 +142,11 @@ public final class GuiMain {
                     onEdt(() -> m.results().selectHunk(a.hunk));
                     settle();
                     shot(m, a, "03-results-hunk-" + theme);
-                    for (String tab : new String[] {"Why", "Take theirs", "Take ours", "Checklist", "Dependency chain"}) {
+                    for (String tab : ResultsPanel.TABS) {
                         if (a.screenshots == null) break;
                         onEdt(() -> m.results().selectTab(tab, c -> selectFirstLocated(c)));
                         settle();
-                        shot(m, a, "04-tab-" + tab.toLowerCase().replace(' ', '-') + "-" + theme);
+                        shot(m, a, "04-tab-" + tab.toLowerCase().replaceAll("[^a-z0-9]+", "-") + "-" + theme);
                     }
                     if (a.toggleTheme) {
                         onEdt(m::toggleTheme);
@@ -227,6 +252,15 @@ public final class GuiMain {
             BufferedImage b = new BufferedImage(rp.getWidth(), rp.getHeight(), BufferedImage.TYPE_INT_RGB);
             Graphics2D g = b.createGraphics();
             rp.paintAll(g);
+            // heavyweight popups (the branch search) are separate windows: paint them where they are on screen
+            java.awt.Point origin = rp.getLocationOnScreen();
+            for (java.awt.Window w : m.frame.getOwnedWindows()) {
+                if (!w.isShowing() || w.getType() != java.awt.Window.Type.POPUP) continue;
+                java.awt.Point p = w.getLocationOnScreen();
+                Graphics2D wg = (Graphics2D) g.create(p.x - origin.x, p.y - origin.y, w.getWidth(), w.getHeight());
+                w.paintAll(wg);
+                wg.dispose();
+            }
             g.dispose();
             img[0] = b;
         });
@@ -262,7 +296,7 @@ public final class GuiMain {
 
     static final class Args {
         Path repo;
-        String onto, mainline, pick, hunk;
+        String onto, mainline, pick, hunk, branchSearch;
         boolean analyze, measure, exit, toggleTheme;
         Boolean dark;
         Path screenshots, export;
@@ -279,6 +313,7 @@ public final class GuiMain {
                     case "--mainline" -> a.mainline = args[++i];
                     case "--pick" -> a.pick = args[++i];
                     case "--hunk" -> a.hunk = args[++i];
+                    case "--branch-search" -> a.branchSearch = args[++i];
                     case "--analyze" -> a.analyze = true;
                     case "--dark" -> a.dark = true;
                     case "--light" -> a.dark = false;
