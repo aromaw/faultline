@@ -14,7 +14,10 @@
 #   FAULTLINE_CDS=1              use an AppCDS archive of the app's classes (created by the first run, in
 #                                ~/.cache/faultline). Off by default: on the reference box it did not measurably
 #                                speed up the start (see README).
-#   FAULTLINE_JAVA_OPTS          extra JVM options
+#   FAULTLINE_GC_OPTS            replaces the collector flags (default: G1 with low free ratios and
+#                                -XX:GCTimeRatio=4, see below), e.g. "-XX:+UseSerialGC"
+#   FAULTLINE_JAVA_OPTS          extra JVM options (they come last, so they override the defaults), e.g.
+#                                -Dfaultline.parseThreads=N, -XX:ReservedCodeCacheSize=48m
 #   FAULTLINE_PRINT_OPTS=1       print the JVM options and exit (no java start)
 set -e
 DIR=$(cd "$(dirname "$0")" && pwd)
@@ -33,9 +36,11 @@ if [ -z "$JAVA" ]; then
   if [ -n "$JAVA_HOME" ] && [ -x "$JAVA_HOME/bin/java" ]; then JAVA="$JAVA_HOME/bin/java"; else JAVA=java; fi
 fi
 
-# Measured on RuoYi-Vue (README, GUI section): G1 with low free-heap ratios gives the memory of the analysis back
-# after it (RSS ~195 MB vs ~450 MB with -XX:+UseSerialGC, which keeps its heap committed); two JIT compiler threads
-# instead of 4 save ~30 MB idle at ~10 % analysis time.
+# Measured on RuoYi-Vue and ruoyi-vue-pro (README, "Memory and startup"): G1 with low free-heap ratios gives the
+# memory of the analysis back after it (ruoyi-vue-pro: ~210 MB RSS vs ~440 MB with -XX:+UseSerialGC, which keeps its
+# heap committed); -XX:GCTimeRatio=4 (G1 may spend up to 20 % of the time in GC instead of 8 % before it grows the
+# heap) lowers the peak RSS of a cold ruoyi-vue-pro run from ~1.15 GB to ~0.8 GB for ~2 % analysis time; two JIT
+# compiler threads instead of 4 save ~30 MB idle at ~10 % analysis time.
 OS=${FAULTLINE_OS:-$(uname -s)}
 
 # physical memory in bytes (FAULTLINE_MEM_BYTES overrides, for tests); empty when unknown
@@ -66,7 +71,8 @@ default_xmx() {
 }
 
 XMX=${FAULTLINE_XMX:-$(default_xmx)}
-OPTS="-XX:+UseG1GC -Xmx$XMX -XX:MinHeapFreeRatio=10 -XX:MaxHeapFreeRatio=30 -XX:CICompilerCount=2"
+GC_OPTS=${FAULTLINE_GC_OPTS:--XX:+UseG1GC -XX:MinHeapFreeRatio=10 -XX:MaxHeapFreeRatio=30 -XX:GCTimeRatio=4}
+OPTS="$GC_OPTS -Xmx$XMX -XX:CICompilerCount=2"
 OPTS="$OPTS -Dapple.awt.application.name=faultline"
 DOCK_ICON=
 if [ "$OS" = Darwin ]; then

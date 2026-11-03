@@ -45,6 +45,16 @@ class LauncherHeapTest {
     }
 
     @Test
+    void gcFlagsDefaultToTunedG1AndCanBeReplaced() throws Exception {
+        String def = opts(Map.of("FAULTLINE_MEM_BYTES", String.valueOf(8L << 30)));
+        assertTrue(def.startsWith("-XX:+UseG1GC -XX:MinHeapFreeRatio=10 -XX:MaxHeapFreeRatio=30 -XX:GCTimeRatio=4 -Xmx2048m"), def);
+        assertTrue(def.contains("-XX:CICompilerCount=2"), def);
+        String serial = opts(Map.of("FAULTLINE_MEM_BYTES", String.valueOf(8L << 30), "FAULTLINE_GC_OPTS", "-XX:+UseSerialGC"));
+        assertTrue(serial.startsWith("-XX:+UseSerialGC -Xmx2048m"), serial);
+        assertFalse(serial.contains("G1"), serial);
+    }
+
+    @Test
     void dockOptionsOnlyOnMac() throws Exception {
         String mac = opts(Map.of("FAULTLINE_OS", "Darwin", "FAULTLINE_MEM_BYTES", String.valueOf(8L << 30)));
         assertTrue(mac.contains("-Xdock:name=faultline"), mac);

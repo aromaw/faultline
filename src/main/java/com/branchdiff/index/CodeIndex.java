@@ -245,7 +245,56 @@ public final class CodeIndex {
 
     private static final int CHUNK = 16;
 
+    /** default of {@link #parseThreads()}: more threads did not parse faster and raised the peak heap (README) */
+    static final int DEFAULT_MAX_PARSE_THREADS = 8;
+    private static volatile java.util.concurrent.ForkJoinPool parsePool;
+
+    /**
+     * Threads that parse (or read from the summary cache) the files of a version: {@code -Dfaultline.parseThreads=N},
+     * default the number of processors, at most {@value #DEFAULT_MAX_PARSE_THREADS}. Each thread holds one syntax tree
+     * in flight and its own allocation buffers, so fewer threads lower the peak heap of a cold run.
+     */
+    public static int parseThreads() {
+        String v = System.getProperty("faultline.parseThreads");
+        if (v != null && !v.isBlank()) {
+            try {
+                return Math.max(1, Integer.parseInt(v.trim()));
+            } catch (NumberFormatException ignored) {
+                // the default
+            }
+        }
+        return Math.max(1, Math.min(Runtime.getRuntime().availableProcessors(), DEFAULT_MAX_PARSE_THREADS));
+    }
+
+    private static java.util.concurrent.ForkJoinPool parsePool() {
+        int n = parseThreads();
+        java.util.concurrent.ForkJoinPool p = parsePool;
+        if (p == null || p.getParallelism() != n) {
+            synchronized (CodeIndex.class) {
+                p = parsePool;
+                if (p == null || p.getParallelism() != n) {
+                    if (p != null) p.shutdown();
+                    // daemon workers, ended after a minute idle (ForkJoinPool's keep-alive)
+                    p = new java.util.concurrent.ForkJoinPool(n, pool -> {
+                        java.util.concurrent.ForkJoinWorkerThread t =
+                                java.util.concurrent.ForkJoinPool.defaultForkJoinWorkerThreadFactory.newThread(pool);
+                        t.setName("faultline-parse-" + t.getPoolIndex());
+                        return t;
+                    }, null, false);
+                    parsePool = p;
+                }
+            }
+        }
+        return p;
+    }
+
     private List<FileSummary> summarize(List<String> paths, Map<String, String> contents, SummaryCache cache) {
+        if (paths.isEmpty()) return new ArrayList<>();
+        // a parallel stream started inside a pool's task runs on that pool
+        return parsePool().submit(() -> summarizeParallel(paths, contents, cache)).join();
+    }
+
+    private List<FileSummary> summarizeParallel(List<String> paths, Map<String, String> contents, SummaryCache cache) {
         int chunks = (paths.size() + CHUNK - 1) / CHUNK;
         // the first failure (typically OutOfMemoryError) stops the other chunks too: a parallel stream would keep
         // running them after rethrowing, holding memory the caller is trying to release

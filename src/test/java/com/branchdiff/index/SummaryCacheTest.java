@@ -343,6 +343,27 @@ class SummaryCacheTest {
         assertFalse(Files.exists(tmp.resolve("summaries")));
     }
 
+    @Test
+    void parseThreadCountDoesNotChangeTheIndex() throws IOException {
+        String prop = System.getProperty("faultline.parseThreads");
+        try {
+            System.clearProperty("faultline.parseThreads");
+            int def = CodeIndex.parseThreads();
+            assertTrue(def >= 1 && def <= CodeIndex.DEFAULT_MAX_PARSE_THREADS, "default " + def);
+            Snapshot s = corpus();
+            String expected = dump(CodeIndex.build(s, null, false, SummaryCache.disabled()));
+            for (String n : List.of("1", "3")) {
+                System.setProperty("faultline.parseThreads", n);
+                assertEquals(Integer.parseInt(n), CodeIndex.parseThreads());
+                same(expected, dump(CodeIndex.build(s, null, false, SummaryCache.disabled())));
+            }
+            System.setProperty("faultline.parseThreads", "zero");
+            assertEquals(def, CodeIndex.parseThreads(), "unparsable: the default");
+        } finally {
+            if (prop == null) System.clearProperty("faultline.parseThreads"); else System.setProperty("faultline.parseThreads", prop);
+        }
+    }
+
     /** methods are found by id through their class; a class declared twice keeps the first one's other methods */
     @Test
     void methodByIdWithDuplicateClassesAndRecordAccessors() {
