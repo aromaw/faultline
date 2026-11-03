@@ -39,7 +39,8 @@ final class AppIcon {
     static void install(JFrame frame) {
         List<Image> imgs = images();
         if (imgs.isEmpty()) return;
-        frame.setIconImages(imgs);
+        // the window peer decodes every image it gets; the 512 px one is for the Dock only
+        frame.setIconImages(imgs.size() > 1 ? imgs.subList(0, imgs.size() - 1) : imgs);
         try {
             if (Taskbar.isTaskbarSupported() && Taskbar.getTaskbar().isSupported(Taskbar.Feature.ICON_IMAGE)) {
                 Taskbar.getTaskbar().setIconImage(imgs.get(imgs.size() - 1));
