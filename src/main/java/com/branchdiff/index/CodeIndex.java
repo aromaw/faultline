@@ -249,15 +249,27 @@ public final class CodeIndex {
 
     private List<FileSummary> summarize(List<String> paths, Map<String, String> contents, boolean inScope) {
         int chunks = (paths.size() + CHUNK - 1) / CHUNK;
+        // the first failure (typically OutOfMemoryError) stops the other chunks too: a parallel stream would keep
+        // running them after rethrowing, holding memory the caller is trying to release
+        java.util.concurrent.atomic.AtomicReference<Throwable> failed = new java.util.concurrent.atomic.AtomicReference<>();
         List<List<FileSummary>> parts = java.util.stream.IntStream.range(0, chunks).parallel().mapToObj(ci -> {
-            JavaParser parser = new JavaParser(parserConfig());
             List<FileSummary> out = new ArrayList<>();
-            for (int i = ci * CHUNK; i < Math.min(paths.size(), (ci + 1) * CHUNK); i++) {
-                String path = paths.get(i);
-                out.add(summarize(parser, path, contents.get(path), inScope));
+            if (failed.get() != null) return out;
+            try {
+                JavaParser parser = new JavaParser(parserConfig());
+                for (int i = ci * CHUNK; i < Math.min(paths.size(), (ci + 1) * CHUNK) && failed.get() == null; i++) {
+                    String path = paths.get(i);
+                    out.add(summarize(parser, path, contents.get(path), inScope));
+                }
+            } catch (RuntimeException | Error e) {
+                out = null;
+                failed.compareAndSet(null, e);
             }
             return out;
         }).toList();
+        Throwable t = failed.get();
+        if (t instanceof Error e) throw e;
+        if (t != null) throw (RuntimeException) t;
         List<FileSummary> res = new ArrayList<>(paths.size());
         for (List<FileSummary> p : parts) res.addAll(p);
         return res;
