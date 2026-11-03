@@ -145,7 +145,7 @@ public final class Main {
     }
 
     /** {@code faultline cache [info|clear|prune]} */
-    static int cacheCommand(String[] args) {
+    public static int cacheCommand(String[] args) {
         String what = args.length > 1 ? args[1] : "info";
         Path root = SummaryCache.configuredRoot().toAbsolutePath().normalize();
         try {

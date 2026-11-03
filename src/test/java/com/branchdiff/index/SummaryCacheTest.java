@@ -289,6 +289,60 @@ class SummaryCacheTest {
         assertNull(SummaryCache.unwrap(framed, id));
     }
 
+    @Test
+    void buildKeyIsFormatVersionAndExtractionCodeNotBuildTime() {
+        String k = SummaryCache.buildKey();
+        assertTrue(k.startsWith("f" + FileSummaries.FORMAT + "-"), k);
+        String code = SummaryCache.codeHash();
+        assertNotNull(code, "extraction classes readable from target/classes");
+        assertTrue(code.matches("[0-9a-f]{12}"), code);
+        assertTrue(k.endsWith("-" + code), k);
+        assertEquals(code, SummaryCache.codeHash(), "stable");
+    }
+
+    @Test
+    void cacheCanBeDisabledAndMovedBySystemProperties() {
+        String on = System.getProperty("faultline.cache"), dir = System.getProperty("faultline.cacheDir");
+        try {
+            System.setProperty("faultline.cacheDir", tmp.resolve("elsewhere").toString());
+            assertEquals(tmp.resolve("elsewhere").toAbsolutePath(), SummaryCache.fromEnvironment().root());
+            for (String off : List.of("off", "0", "false", "no", "OFF")) {
+                System.setProperty("faultline.cache", off);
+                assertFalse(SummaryCache.fromEnvironment().enabled(), off);
+            }
+            System.setProperty("faultline.cache", "on");
+            assertTrue(SummaryCache.fromEnvironment().enabled());
+        } finally {
+            if (on == null) System.clearProperty("faultline.cache"); else System.setProperty("faultline.cache", on);
+            if (dir == null) System.clearProperty("faultline.cacheDir"); else System.setProperty("faultline.cacheDir", dir);
+        }
+    }
+
+    @Test
+    void cacheCommandShowsClearsAndPrunes() throws IOException {
+        String dir = System.getProperty("faultline.cacheDir");
+        java.io.PrintStream out = System.out;
+        java.io.ByteArrayOutputStream buf = new java.io.ByteArrayOutputStream();
+        try {
+            System.setProperty("faultline.cacheDir", tmp.toString());
+            CodeIndex.build(corpus(), null, false, SummaryCache.at(tmp, 1L << 30));
+            System.setOut(new java.io.PrintStream(buf, true, java.nio.charset.StandardCharsets.UTF_8));
+            assertEquals(0, Main.cacheCommand(new String[]{"cache"}));
+            assertEquals(0, Main.cacheCommand(new String[]{"cache", "prune"}));
+            assertEquals(0, Main.cacheCommand(new String[]{"cache", "clear"}));
+            assertEquals(0, Main.cacheCommand(new String[]{"cache", "info"}));
+            assertEquals(64, Main.cacheCommand(new String[]{"cache", "bogus"}));
+        } finally {
+            System.setOut(out);
+            if (dir == null) System.clearProperty("faultline.cacheDir"); else System.setProperty("faultline.cacheDir", dir);
+        }
+        String text = buf.toString(java.nio.charset.StandardCharsets.UTF_8);
+        assertTrue(text.contains(SummaryCache.buildKey() + " (this build): "), text);
+        assertTrue(text.contains("deleted "), text);
+        assertTrue(text.trim().endsWith("empty"), "info after clear: " + text);
+        assertFalse(Files.exists(tmp.resolve("summaries")));
+    }
+
     /** whole reports (sample repo, branch mode) with the default cache cold, warm and disabled */
     @Test
     void reportsAreTheSameColdWarmAndDisabled() throws Exception {

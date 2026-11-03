@@ -154,7 +154,13 @@ public final class SummaryCache {
 
     private static volatile String buildKey;
 
-    /** summary format + faultline version + build id: entries of another build are never read */
+    /**
+     * Summary format + faultline version + a hash of the extraction code: entries written by code that could extract
+     * differently are never read. The hash covers the classes of {@code com.branchdiff.index} and
+     * {@code com.branchdiff.util} (the extraction, the normalized printing, names, fingerprints) and the JavaParser
+     * version, so rebuilding the same code keeps the cache, and changing the extraction without bumping
+     * {@link FileSummaries#FORMAT} still cannot read stale entries.
+     */
     static String buildKey() {
         String k = buildKey;
         if (k == null) {
@@ -165,13 +171,68 @@ public final class SummaryCache {
                 // unknown build
             }
             String v = p.getProperty("version", "dev");
-            String b = p.getProperty("build", "");
             if (v.startsWith("${")) v = "dev";
-            if (b.startsWith("${")) b = "";
-            k = ("f" + FileSummaries.FORMAT + "-" + v + (b.isEmpty() ? "" : "-" + b)).replaceAll("[^A-Za-z0-9._-]", "_");
+            String code = codeHash();
+            if (code == null) {
+                // the classes could not be read: fall back to the build time, which changes on every build
+                String b = p.getProperty("build", "");
+                code = b.startsWith("${") || b.isEmpty() ? "nocode" : "b" + b;
+            }
+            k = ("f" + FileSummaries.FORMAT + "-" + v + "-" + code).replaceAll("[^A-Za-z0-9._-]", "_");
             buildKey = k;
         }
         return k;
+    }
+
+    private static final List<String> EXTRACTION_PACKAGES = List.of("com/branchdiff/index/", "com/branchdiff/util/");
+
+    /** 12 hex digits of SHA-1 over the extraction classes (sorted by name) and the JavaParser version; null if unreadable */
+    static String codeHash() {
+        try {
+            java.net.URL loc = SummaryCache.class.getProtectionDomain().getCodeSource().getLocation();
+            Path src = Path.of(loc.toURI());
+            java.util.TreeMap<String, byte[]> classes = new java.util.TreeMap<>();
+            if (Files.isDirectory(src)) {
+                for (String pkg : EXTRACTION_PACKAGES) {
+                    Path d = src.resolve(pkg);
+                    if (!Files.isDirectory(d)) continue;
+                    try (DirectoryStream<Path> s = Files.newDirectoryStream(d, "*.class")) {
+                        for (Path f : s) classes.put(pkg + f.getFileName(), Files.readAllBytes(f));
+                    }
+                }
+            } else {
+                try (java.util.jar.JarFile jar = new java.util.jar.JarFile(src.toFile())) {
+                    var en = jar.entries();
+                    while (en.hasMoreElements()) {
+                        var e = en.nextElement();
+                        String n = e.getName();
+                        if (!n.endsWith(".class")) continue;
+                        for (String pkg : EXTRACTION_PACKAGES) {
+                            if (n.startsWith(pkg) && n.indexOf('/', pkg.length()) < 0) {
+                                try (InputStream in = jar.getInputStream(e)) {
+                                    classes.put(n, in.readAllBytes());
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            if (!classes.containsKey("com/branchdiff/index/FileSummaries.class")) return null;
+            MessageDigest md = MessageDigest.getInstance("SHA-1");
+            for (var e : classes.entrySet()) {
+                md.update(e.getKey().getBytes(StandardCharsets.UTF_8));
+                md.update(e.getValue());
+            }
+            Properties jp = new Properties();
+            try (InputStream in = com.github.javaparser.JavaParser.class.getResourceAsStream(
+                    "/META-INF/maven/com.github.javaparser/javaparser-core/pom.properties")) {
+                if (in != null) jp.load(in);
+            }
+            md.update(("javaparser " + jp.getProperty("version", "?")).getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(md.digest()).substring(0, 12);
+        } catch (Exception | LinkageError e) {
+            return null;
+        }
     }
 
     private static final ThreadLocal<MessageDigest> SHA1 = ThreadLocal.withInitial(() -> {
