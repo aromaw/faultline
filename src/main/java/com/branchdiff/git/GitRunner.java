@@ -143,9 +143,43 @@ public class GitRunner {
     }
 
     /** Reads many blobs with a single {@code git cat-file --batch} process. */
+    /**
+     * Blob contents by sha, shared by every read while someone still uses them: the versions of one analysis (fork
+     * point, base, ours, theirs) are mostly the same files, which are then read and held once.
+     */
+    private static final Map<String, java.lang.ref.WeakReference<String>> BLOBS = new java.util.HashMap<>();
+
+    private static synchronized String sharedBlob(String sha) {
+        java.lang.ref.WeakReference<String> r = BLOBS.get(sha);
+        return r == null ? null : r.get();
+    }
+
+    private static synchronized String shareBlob(String sha, String content) {
+        String old = sharedBlob(sha);
+        if (old != null) return old;
+        if (BLOBS.size() > 4096 && BLOBS.size() % 4096 == 0) BLOBS.values().removeIf(w -> w.get() == null);
+        BLOBS.put(sha, new java.lang.ref.WeakReference<>(content));
+        return content;
+    }
+
     public Map<String, String> readBlobs(Map<String, String> pathToSha) {
         Map<String, String> res = new LinkedHashMap<>();
         if (pathToSha.isEmpty()) return res;
+        Map<String, String> missing = new LinkedHashMap<>();
+        for (Map.Entry<String, String> e : pathToSha.entrySet()) {
+            String s = sharedBlob(e.getValue());
+            res.put(e.getKey(), s); // keeps the order; filled below when null
+            if (s == null) missing.put(e.getKey(), e.getValue());
+        }
+        if (!missing.isEmpty()) {
+            Map<String, String> read = readBlobsFromGit(missing);
+            read.forEach((path, content) -> res.put(path, shareBlob(missing.get(path), content)));
+        }
+        return res;
+    }
+
+    private Map<String, String> readBlobsFromGit(Map<String, String> pathToSha) {
+        Map<String, String> res = new LinkedHashMap<>();
         try {
             Process p = new ProcessBuilder("git", "-C", repo.toString(), "cat-file", "--batch").start();
             List<String> paths = new ArrayList<>(pathToSha.keySet());

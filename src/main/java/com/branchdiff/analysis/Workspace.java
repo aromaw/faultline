@@ -32,6 +32,9 @@ import java.util.stream.Stream;
 public final class Workspace implements AutoCloseable {
     private static final Pattern PACKAGE = Pattern.compile("^\\s*package\\s+([\\w.]+)\\s*;", Pattern.MULTILINE);
 
+    /** entries per cache (parsed files, parsed directories, found types) of each source root's type solver */
+    static final long SOLVER_CACHE_SIZE = Long.getLong("faultline.solverCacheSize", 64);
+
     public final Snapshot snapshot;
     public final Path root;
     public final List<Path> jars = new ArrayList<>();
@@ -183,7 +186,12 @@ public final class Workspace implements AutoCloseable {
     public TypeSolver typeSolver(boolean includeTests, List<String> warnings) {
         CombinedTypeSolver solver = new CombinedTypeSolver();
         solver.add(new ReflectionTypeSolver(true));
-        for (Path r : sourceRoots(includeTests)) solver.add(new JavaParserTypeSolver(r));
+        // bounded caches: by default every parsed file (with its tokens) and every parsed package directory stays in
+        // memory until the solver is dropped, which on a large project is as large as the project's ASTs themselves
+        for (Path r : sourceRoots(includeTests)) {
+            solver.add(new JavaParserTypeSolver(r, new com.github.javaparser.ParserConfiguration()
+                    .setLanguageLevel(com.github.javaparser.ParserConfiguration.LanguageLevel.BLEEDING_EDGE), SOLVER_CACHE_SIZE));
+        }
         for (Path jar : jars) {
             try {
                 solver.add(new JarTypeSolver(jar));
