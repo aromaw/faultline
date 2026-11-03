@@ -149,7 +149,7 @@ public final class EntryPoints {
     }
 
     private static String classPath(ClassInfo c) {
-        AnnotationExpr a = c.annotations.get("RequestMapping");
+        AnnotationExpr a = c.annotation("RequestMapping");
         return a == null ? "" : first(paths(a));
     }
 

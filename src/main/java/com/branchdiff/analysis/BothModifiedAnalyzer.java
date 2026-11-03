@@ -35,7 +35,7 @@ public final class BothModifiedAnalyzer {
                 MethodChange oc = oursCs.byOldId.get(tc.oldId());
                 if (oc == null) continue;
                 if (tc.newMethod != null && oc.newMethod != null && tc.newMethod.key().equals(oc.newMethod.key())
-                        && tc.newMethod.normalizedDecl.equals(oc.newMethod.normalizedDecl)) {
+                        && tc.newMethod.sameDecl(oc.newMethod)) {
                     identicalChanges++;
                     continue;
                 }
@@ -49,10 +49,10 @@ public final class BothModifiedAnalyzer {
                 if (oc.newMethod != null) f.oursAt(oc.newMethod.owner.file + ":" + oc.newMethod.line + "-" + oc.newMethod.endLine);
                 if (tc.newMethod != null) f.theirsAt(tc.newMethod.owner.file + ":" + tc.newMethod.line + "-" + tc.newMethod.endLine);
                 f.detail("base", tc.oldMethod.owner.file + ":" + tc.oldMethod.line);
-                String oursText = oc.newMethod == null ? "" : oc.newMethod.normalizedDecl;
-                String theirsText = tc.newMethod == null ? "" : tc.newMethod.normalizedDecl;
-                f.detail("diffBaseToOurs", LineDiff.compact(LineDiff.diff(tc.oldMethod.normalizedDecl, oursText)));
-                f.detail("diffBaseToTheirs", LineDiff.compact(LineDiff.diff(tc.oldMethod.normalizedDecl, theirsText)));
+                String oursText = oc.newMethod == null ? "" : oc.newMethod.normalizedDecl();
+                String theirsText = tc.newMethod == null ? "" : tc.newMethod.normalizedDecl();
+                f.detail("diffBaseToOurs", LineDiff.compact(LineDiff.diff(tc.oldMethod.normalizedDecl(), oursText)));
+                f.detail("diffBaseToTheirs", LineDiff.compact(LineDiff.diff(tc.oldMethod.normalizedDecl(), theirsText)));
                 textual(f, tc.oldMethod.owner.file,
                         oc.newMethod != null ? oc.newMethod.owner.file : tc.oldMethod.owner.file,
                         tc.newMethod != null ? tc.newMethod.owner.file : tc.oldMethod.owner.file);
@@ -60,7 +60,7 @@ public final class BothModifiedAnalyzer {
             } else if (tc.kind == MethodChange.Kind.ADDED) {
                 MethodChange oc = oursCs.byNewId.get(tc.newId());
                 if (oc == null || oc.kind != MethodChange.Kind.ADDED) continue;
-                if (oc.newMethod.normalizedDecl.equals(tc.newMethod.normalizedDecl)) {
+                if (oc.newMethod.sameDecl(tc.newMethod)) {
                     identicalChanges++;
                     continue;
                 }
@@ -68,7 +68,7 @@ public final class BothModifiedAnalyzer {
                         "added/added", tc.newMethod.id(), "BOTH", "Both sides added this method with different bodies");
                 f.oursAt(oc.newMethod.owner.file + ":" + oc.newMethod.line + "-" + oc.newMethod.endLine);
                 f.theirsAt(tc.newMethod.owner.file + ":" + tc.newMethod.line + "-" + tc.newMethod.endLine);
-                f.detail("diffOursToTheirs", LineDiff.compact(LineDiff.diff(oc.newMethod.normalizedDecl, tc.newMethod.normalizedDecl)));
+                f.detail("diffOursToTheirs", LineDiff.compact(LineDiff.diff(oc.newMethod.normalizedDecl(), tc.newMethod.normalizedDecl())));
                 textual(f, null, oc.newMethod.owner.file, tc.newMethod.owner.file);
                 res.add(f);
             }

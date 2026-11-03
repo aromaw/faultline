@@ -1,5 +1,7 @@
 package com.branchdiff.index;
 
+import com.github.javaparser.JavaParser;
+import com.github.javaparser.ParserConfiguration;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.AnnotationExpr;
@@ -28,7 +30,11 @@ public final class ClassInfo {
     final int typeIndex;
     /** the file's imports (shared by all classes of the file) */
     public final List<Import> imports;
-    public final Map<String, AnnotationExpr> annotations = new LinkedHashMap<>();
+    /**
+     * simple name -> the annotation's normalized source; parsed again by {@link #annotation} (an annotation AST takes
+     * about 30 times the heap of its text, and only a few annotations of a class are ever read)
+     */
+    final Map<String, String> annotations = new LinkedHashMap<>();
     /** supertypes as written (extends + implements) */
     public final List<String> superRaw = new ArrayList<>();
     /** supertypes resolved to FQN where possible (filled in second pass) */
@@ -41,8 +47,6 @@ public final class ClassInfo {
      * themselves a reported caller, implementation, injection point, etc.
      */
     public boolean inScope = true;
-    /** normalized class header (annotations+modifiers+extends/implements) */
-    public String normalizedHeader = "";
     /** spring facts read from the AST at parse time, resolved and dropped by {@link CodeIndex} once all classes are known */
     java.util.List<CodeIndex.SpringOp> springOps;
 
@@ -80,6 +84,24 @@ public final class ClassInfo {
 
     public boolean isInterface() {
         return kind == Kind.INTERFACE;
+    }
+
+    /** simple names of the class's annotations, in source order */
+    public Set<String> annotationNames() {
+        return java.util.Collections.unmodifiableSet(annotations.keySet());
+    }
+
+    /** the class's annotation with this simple name (a new detached node on every call), null when absent */
+    public AnnotationExpr annotation(String simple) {
+        String src = annotations.get(simple);
+        if (src == null) return null;
+        return new JavaParser(new ParserConfiguration().setLanguageLevel(ParserConfiguration.LanguageLevel.JAVA_21))
+                .parseAnnotation(src).getResult().orElseThrow(() -> new IllegalStateException("cannot parse " + src));
+    }
+
+    /** normalized class header (annotations, modifiers, kind, name, extends / implements), printed from the AST */
+    public String normalizedHeader() {
+        return FileSummaries.header(node(), kind, superRaw);
     }
 
     public boolean hasAnnotation(String... simple) {

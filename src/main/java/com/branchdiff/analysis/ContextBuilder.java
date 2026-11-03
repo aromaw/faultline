@@ -1089,7 +1089,7 @@ public final class ContextBuilder {
     private Side methodSide(String id, CodeIndex idx) {
         MethodInfo m = method(id, idx);
         if (m == null) return Side.ABSENT;
-        return new Side(true, m.normalizedDecl, range(m, idx), null);
+        return new Side(true, m.normalizedDecl(), range(m, idx), null);
     }
 
     private static Loc range(MethodInfo m, CodeIndex idx) {
@@ -1131,7 +1131,7 @@ public final class ContextBuilder {
             for (BodyDeclaration<?> m : c.node().getMembers()) first = Math.min(first, Ast.line(m) - 1);
             end = Math.max(begin, Math.min(first, begin + 60));
         }
-        return new Side(true, c.normalizedHeader, new Loc(c.file, begin, Math.max(begin, end), c.line), null);
+        return new Side(true, c.normalizedHeader(), new Loc(c.file, begin, Math.max(begin, end), c.line), null);
     }
 
     private static Side configSide(String key, CodeIndex idx) {

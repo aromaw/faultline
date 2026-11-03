@@ -4,6 +4,7 @@ import com.branchdiff.index.SpringModel.BeanDef;
 import com.branchdiff.index.SpringModel.ConfigPropsClass;
 import com.branchdiff.index.SpringModel.InjectionPoint;
 import com.branchdiff.index.SpringModel.ValueRef;
+import com.branchdiff.index.FileSummaries.FileSummary;
 import com.branchdiff.model.Snapshot;
 import com.branchdiff.util.Ast;
 import com.branchdiff.util.Names;
@@ -120,8 +121,8 @@ public final class CodeIndex {
             if (path.endsWith(".java") && !isTestPath(path)) siblings.add(path);
         }
         // parse in parallel, keep only the summaries; merge sequentially in file order (deterministic)
-        List<FileSummary> svc = idx.summarize(service, snapshot.files(), true);
-        List<FileSummary> sib = idx.summarize(siblings, snapshot.siblingFiles(), false);
+        List<FileSummary> svc = idx.summarize(service, snapshot.files());
+        List<FileSummary> sib = idx.summarize(siblings, snapshot.siblingFiles());
         for (FileSummary f : svc) {
             if (f.problem != null) idx.parseErrors.add(f.path + ": " + f.problem);
         }
@@ -231,23 +232,9 @@ public final class CodeIndex {
 
     // ------------------------------------------------------------------ indexing
 
-    /** what parsing one file contributes; no AST is kept */
-    private static final class FileSummary {
-        final String path;
-        String problem;
-        boolean parsed;
-        String pkg = "";
-        final List<ClassInfo> types = new ArrayList<>();
-        final List<Boolean> topLevel = new ArrayList<>();
-
-        FileSummary(String path) {
-            this.path = path;
-        }
-    }
-
     private static final int CHUNK = 16;
 
-    private List<FileSummary> summarize(List<String> paths, Map<String, String> contents, boolean inScope) {
+    private List<FileSummary> summarize(List<String> paths, Map<String, String> contents) {
         int chunks = (paths.size() + CHUNK - 1) / CHUNK;
         // the first failure (typically OutOfMemoryError) stops the other chunks too: a parallel stream would keep
         // running them after rethrowing, holding memory the caller is trying to release
@@ -259,7 +246,7 @@ public final class CodeIndex {
                 JavaParser parser = new JavaParser(parserConfig());
                 for (int i = ci * CHUNK; i < Math.min(paths.size(), (ci + 1) * CHUNK) && failed.get() == null; i++) {
                     String path = paths.get(i);
-                    out.add(summarize(parser, path, contents.get(path), inScope));
+                    out.add(FileSummaries.decode(FileSummaries.extract(parser, contents.get(path)), path, this));
                 }
             } catch (RuntimeException | Error e) {
                 out = null;
@@ -273,31 +260,6 @@ public final class CodeIndex {
         List<FileSummary> res = new ArrayList<>(paths.size());
         for (List<FileSummary> p : parts) res.addAll(p);
         return res;
-    }
-
-    private FileSummary summarize(JavaParser parser, String path, String src, boolean inScope) {
-        FileSummary f = new FileSummary(path);
-        ParseResult<CompilationUnit> r = parser.parse(src);
-        if (!r.isSuccessful()) f.problem = r.getProblems().stream().findFirst().map(Object::toString).orElse("parse error");
-        if (r.getResult().isEmpty()) return f;
-        CompilationUnit cu = r.getResult().get();
-        Ast.dropTokens(cu);
-        f.parsed = true;
-        f.pkg = cu.getPackageDeclaration().map(p -> p.getNameAsString()).orElse("");
-        List<ClassInfo.Import> imports = new ArrayList<>();
-        for (ImportDeclaration imp : cu.getImports()) imports.add(new ClassInfo.Import(imp.getNameAsString(), imp.isStatic(), imp.isAsterisk()));
-        List<ClassInfo.Import> imps = List.copyOf(imports);
-        int ti = -1;
-        for (TypeDeclaration<?> td : cu.findAll(TypeDeclaration.class)) {
-            ti++;
-            boolean member = td.isTopLevelType() || td.getParentNode().map(p -> p instanceof TypeDeclaration).orElse(false);
-            if (!member) continue;
-            Optional<String> fqnOpt = td.getFullyQualifiedName();
-            if (fqnOpt.isEmpty()) continue;
-            f.types.add(indexType(path, f.pkg, td, ti, fqnOpt.get(), inScope, imps));
-            f.topLevel.add(td.isTopLevelType());
-        }
-        return f;
     }
 
     private void register(FileSummary f, boolean inScope) {
@@ -324,122 +286,11 @@ public final class CodeIndex {
                 if (f.topLevel.get(i)) shadowedSiblingClasses.add(ci.fqn + " (" + f.path + ")");
                 continue;
             }
+            ci.inScope = inScope;
+            if (!inScope) ci.springOps = null;
             classes.put(ci.fqn, ci);
             for (MethodInfo mi : ci.methods.values()) if (mi.hasNode()) methodsById.put(mi.id(), mi);
         }
-    }
-
-    private ClassInfo indexType(String path, String pkg, TypeDeclaration<?> td, int typeIndex, String fqn, boolean inScope,
-                                List<ClassInfo.Import> imports) {
-        ClassInfo.Kind kind;
-        boolean isAbstract = false;
-        List<String> supers = new ArrayList<>();
-        Set<String> typeParams = new LinkedHashSet<>();
-        if (td instanceof ClassOrInterfaceDeclaration c) {
-            kind = c.isInterface() ? ClassInfo.Kind.INTERFACE : ClassInfo.Kind.CLASS;
-            isAbstract = c.isAbstract() || c.isInterface();
-            c.getExtendedTypes().forEach(t -> supers.add(t.asString()));
-            c.getImplementedTypes().forEach(t -> supers.add(t.asString()));
-            c.getTypeParameters().forEach(tp -> typeParams.add(tp.getNameAsString()));
-        } else if (td instanceof EnumDeclaration en) {
-            kind = ClassInfo.Kind.ENUM;
-            en.getImplementedTypes().forEach(t -> supers.add(t.asString()));
-        } else if (td instanceof RecordDeclaration rd) {
-            kind = ClassInfo.Kind.RECORD;
-            rd.getImplementedTypes().forEach(t -> supers.add(t.asString()));
-            rd.getTypeParameters().forEach(tp -> typeParams.add(tp.getNameAsString()));
-        } else if (td instanceof AnnotationDeclaration) {
-            kind = ClassInfo.Kind.ANNOTATION;
-        } else {
-            kind = ClassInfo.Kind.CLASS;
-        }
-        String outer = td.getParentNode().filter(p -> p instanceof TypeDeclaration)
-                .flatMap(p -> ((TypeDeclaration<?>) p).getFullyQualifiedName()).orElse(null);
-        ClassInfo ci = new ClassInfo(fqn, td.getNameAsString(), pkg, kind, isAbstract, path, Ast.line(td), outer, this,
-                typeIndex, imports);
-        ci.inScope = inScope;
-        ci.superRaw.addAll(supers);
-        ci.typeParams.addAll(typeParams);
-        // detached copies: the summary must not keep the file's AST alive
-        for (AnnotationExpr a : td.getAnnotations()) ci.annotations.put(Names.simpleName(a.getNameAsString()), a.clone());
-        // header for "class-level changed" detection
-        StringBuilder header = new StringBuilder();
-        td.getAnnotations().forEach(a -> header.append(Ast.normalized(a)).append('\n'));
-        header.append(td.getModifiers()).append(' ').append(kind).append(' ').append(td.getNameAsString()).append(' ').append(supers);
-        ci.normalizedHeader = header.toString();
-
-        int memberIndex = -1;
-        for (BodyDeclaration<?> m : td.getMembers()) {
-            memberIndex++;
-            if (m instanceof FieldDeclaration f) {
-                Map<String, AnnotationExpr> anns = new LinkedHashMap<>();
-                f.getAnnotations().forEach(a -> anns.put(Names.simpleName(a.getNameAsString()), a.clone()));
-                boolean st = f.isStatic() || kind == ClassInfo.Kind.INTERFACE;
-                boolean fin = f.isFinal() || kind == ClassInfo.Kind.INTERFACE;
-                for (VariableDeclarator v : f.getVariables()) {
-                    String raw = v.getType().asString();
-                    FieldInfo fi = new FieldInfo(ci, v.getNameAsString(), raw, Names.simpleErased(raw),
-                            st, fin, v.getInitializer().isPresent(), false, anns, Ast.line(v));
-                    fi.initializer = v.getInitializer().map(Ast::normalized).orElse(null);
-                    ci.fields.put(v.getNameAsString(), fi);
-                }
-            } else if (m instanceof MethodDeclaration md) {
-                addMethod(ci, md, memberIndex, md.getNameAsString(), md.getType().asString(), false, md.isStatic(),
-                        md.getBody().isEmpty(), md.isDefault());
-            } else if (m instanceof ConstructorDeclaration cd) {
-                addMethod(ci, cd, memberIndex, "<init>", fqn, true, false, false, false);
-            }
-        }
-        if (td instanceof EnumDeclaration en) {
-            for (EnumConstantDeclaration ec : en.getEntries()) {
-                FieldInfo fi = new FieldInfo(ci, ec.getNameAsString(), td.getNameAsString(),
-                        td.getNameAsString(), true, true, true, true, Map.of(), Ast.line(ec));
-                StringBuilder init = new StringBuilder("(");
-                for (int i = 0; i < ec.getArguments().size(); i++) {
-                    if (i > 0) init.append(", ");
-                    init.append(Ast.normalized(ec.getArguments().get(i)));
-                }
-                init.append(')');
-                for (BodyDeclaration<?> b : ec.getClassBody()) init.append('\n').append(Ast.normalized(b));
-                fi.initializer = init.toString();
-                ci.fields.put(ec.getNameAsString(), fi);
-            }
-        }
-        if (td instanceof RecordDeclaration rd) {
-            for (Parameter p : rd.getParameters()) {
-                String raw = p.getType().asString();
-                ci.fields.put(p.getNameAsString(), new FieldInfo(ci, p.getNameAsString(), raw, Names.simpleErased(raw),
-                        false, true, false, false, Map.of(), Ast.line(p)));
-                String key = MethodInfo.key(p.getNameAsString(), List.of());
-                if (!ci.methods.containsKey(key)) {
-                    ci.methods.put(key, new MethodInfo(ci, p.getNameAsString(), List.of(), Names.simpleErased(raw), false,
-                            false, false, false, Set.of(), Ast.line(p), Ast.line(p), "record-accessor " + raw, "", -1));
-                }
-            }
-        }
-        if (inScope) {
-            boolean stereotype = false;
-            for (String s : ci.annotations.keySet()) if (STEREOTYPES.contains(s)) stereotype = true;
-            ci.springOps = captureInjection(ci, td, stereotype);
-        }
-        return ci;
-    }
-
-    private void addMethod(ClassInfo ci, CallableDeclaration<?> cd, int memberIndex, String name, String returnRaw, boolean ctor,
-                           boolean isStatic, boolean isAbstract, boolean isDefault) {
-        List<String> params = new ArrayList<>();
-        for (Parameter p : cd.getParameters()) {
-            String t = Names.simpleErased(p.getType().asString()) + (p.isVarArgs() ? "[]" : "");
-            params.add(t);
-        }
-        Set<String> anns = new LinkedHashSet<>();
-        cd.getAnnotations().forEach(a -> anns.add(Names.simpleName(a.getNameAsString())));
-        String body = "";
-        if (cd instanceof MethodDeclaration md) body = md.getBody().map(Ast::normalized).orElse("");
-        if (cd instanceof ConstructorDeclaration c) body = Ast.normalized(c.getBody());
-        MethodInfo mi = new MethodInfo(ci, name, params, ctor ? ci.simpleName : Names.simpleErased(returnRaw), ctor,
-                isStatic, isAbstract && !ctor, isDefault, anns, Ast.line(cd), Ast.endLine(cd), Ast.normalized(cd), body, memberIndex);
-        ci.methods.put(mi.key(), mi);
     }
 
     // ------------------------------------------------------------------ type resolution (import based, no solver)
@@ -619,16 +470,16 @@ public final class CodeIndex {
 
     private void collectSpring() {
         for (ClassInfo c : classes.values()) {
-            AnnotationExpr ms = c.annotations.get("MapperScan");
+            AnnotationExpr ms = c.annotation("MapperScan");
             if (ms != null) mapperScanPackages.addAll(Ast.stringValues(ms, "value", "basePackages"));
         }
         for (ClassInfo c : classes.values()) {
             boolean stereotype = false;
-            for (String s : c.annotations.keySet()) if (STEREOTYPES.contains(s)) stereotype = true;
+            for (String s : c.annotationNames()) if (STEREOTYPES.contains(s)) stereotype = true;
             Set<String> names = new LinkedHashSet<>();
             if (stereotype && !c.isInterface()) {
                 for (String s : NAMED_STEREOTYPES) {
-                    AnnotationExpr a = c.annotations.get(s);
+                    AnnotationExpr a = c.annotation(s);
                     if (a != null) names.addAll(Ast.stringValues(a, "value"));
                 }
                 names.removeIf(String::isBlank);
@@ -643,7 +494,7 @@ public final class CodeIndex {
                             isMyBatisMapper(c) ? "mybatis-mapper" : "interface-proxy", c.file, c.line));
                 }
             }
-            AnnotationExpr cp = c.annotations.get("ConfigurationProperties");
+            AnnotationExpr cp = c.annotation("ConfigurationProperties");
             if (cp != null) {
                 List<String> prefixes = Ast.stringValues(cp, "value", "prefix");
                 if (!prefixes.isEmpty() && c.inScope) configPropsClasses.add(new ConfigPropsClass(c.fqn, prefixes.get(0), c.file, c.line));
@@ -657,7 +508,7 @@ public final class CodeIndex {
 
     /**
      * Injection points, {@code @Value} / {@code Environment#getProperty} references and {@code @Bean} methods of a
-     * class, read from its AST while it is parsed; type names are resolved later ({@link #collectSpring}), when every
+     * class, read from its AST while it is parsed ({@link FileSummaries}); type names are resolved later ({@link #collectSpring}), when every
      * class of the version is known.
      */
     sealed interface SpringOp permits ValueOp, InjectOp, BeanOp, RefOp {
@@ -672,7 +523,7 @@ public final class CodeIndex {
     record BeanOp(String typeRaw, Set<String> names, String kind, int line) implements SpringOp {
     }
 
-    record RefOp(ValueRef ref) implements SpringOp {
+    record RefOp(String member, String key, String defaultValue, String raw, String via, int line) implements SpringOp {
     }
 
     private void collectInjection(ClassInfo c) {
@@ -686,89 +537,10 @@ public final class CodeIndex {
                 String t = resolveType(b.typeRaw(), c);
                 beans.add(new BeanDef(t != null ? t : Names.eraseGenerics(b.typeRaw()), b.names(), b.kind(), c.file, b.line()));
             } else if (op instanceof RefOp r) {
-                valueRefs.add(r.ref());
+                valueRefs.add(new ValueRef(c.fqn, r.member(), r.key(), r.defaultValue(), r.raw(), r.via(), c.file, r.line()));
             }
         }
         c.springOps = null;
-    }
-
-    private static List<SpringOp> captureInjection(ClassInfo c, TypeDeclaration<?> td, boolean isBean) {
-        List<SpringOp> ops = new ArrayList<>();
-        boolean lombokRequired = c.hasAnnotation("RequiredArgsConstructor");
-        boolean lombokAll = c.hasAnnotation("AllArgsConstructor");
-        for (FieldDeclaration f : td.getFields()) {
-            for (VariableDeclarator v : f.getVariables()) {
-                String member = "field " + v.getNameAsString();
-                Optional<AnnotationExpr> val = Ast.annotation(f, "Value");
-                if (val.isPresent()) {
-                    ops.add(new ValueOp(member, Ast.stringValues(val.get(), "value"), Ast.line(v)));
-                    continue;
-                }
-                boolean annotated = Ast.hasAnnotation(f, "Autowired", "Inject", "Resource");
-                boolean lombok = isBean && !f.isStatic() && v.getInitializer().isEmpty()
-                        && ((lombokRequired && f.isFinal()) || lombokAll);
-                if (annotated || lombok) {
-                    String qualifier = qualifierOf(f.getAnnotations());
-                    boolean optional = Ast.annotation(f, "Autowired").flatMap(a -> Ast.attr(a, "required"))
-                            .map(e -> e instanceof BooleanLiteralExpr b && !b.getValue()).orElse(false);
-                    ops.add(new InjectOp(member, v.getType().asString(), qualifier, optional,
-                            annotated ? "field" : "lombok-constructor", Ast.line(v)));
-                }
-            }
-        }
-        if (isBean) {
-            List<ConstructorDeclaration> ctors = td.getConstructors();
-            List<ConstructorDeclaration> chosen = new ArrayList<>();
-            for (ConstructorDeclaration cd : ctors) if (Ast.hasAnnotation(cd, "Autowired", "Inject")) chosen.add(cd);
-            if (chosen.isEmpty() && ctors.size() == 1) chosen.add(ctors.get(0));
-            for (ConstructorDeclaration cd : chosen) addParams(ops, cd.getParameters(), "constructor", "constructor param ");
-        }
-        for (MethodDeclaration md : td.getMethods()) {
-            if (Ast.hasAnnotation(md, "Autowired", "Inject")) {
-                addParams(ops, md.getParameters(), "setter", md.getNameAsString() + "() param ");
-            }
-            Optional<AnnotationExpr> bean = Ast.annotation(md, "Bean");
-            if (bean.isPresent()) {
-                Set<String> names = new LinkedHashSet<>(Ast.stringValues(bean.get(), "value", "name"));
-                if (names.isEmpty()) names.add(md.getNameAsString());
-                ops.add(new BeanOp(md.getType().asString(), names, "@Bean " + c.simpleName + "." + md.getNameAsString() + "()",
-                        Ast.line(md)));
-                addParams(ops, md.getParameters(), "bean-method-param", "@Bean " + md.getNameAsString() + "() param ");
-            }
-            for (Parameter p : md.getParameters()) {
-                if (!Ast.hasAnnotation(md, "Bean", "Autowired", "Inject")) {
-                    Ast.annotation(p, "Value").ifPresent(a -> ops.add(new ValueOp(md.getNameAsString() + "() param " + p.getNameAsString(),
-                            Ast.stringValues(a, "value"), Ast.line(p))));
-                }
-            }
-        }
-        // Environment#getProperty("literal")
-        for (MethodCallExpr call : td.findAll(MethodCallExpr.class)) {
-            String n = call.getNameAsString();
-            if (!(n.equals("getProperty") || n.equals("getRequiredProperty"))) continue;
-            if (call.getArguments().isEmpty() || !(call.getArgument(0) instanceof StringLiteralExpr key)) continue;
-            String scope = call.getScope().map(Node::toString).orElse("");
-            if (!scope.toLowerCase().contains("env")) continue;
-            boolean hasDefault = n.equals("getProperty") && call.getArguments().size() >= 2
-                    && !(call.getArguments().size() == 2 && call.getArgument(1).isClassExpr());
-            String member = call.findAncestor(CallableDeclaration.class).map(cd -> cd.getNameAsString() + "()").orElse("?");
-            ops.add(new RefOp(new ValueRef(c.fqn, member, key.asString(), hasDefault ? "<default>" : null,
-                    call.toString(), "Environment." + n, c.file, Ast.line(call))));
-        }
-        return ops.isEmpty() ? List.of() : ops;
-    }
-
-    private static void addParams(List<SpringOp> ops, NodeList<Parameter> params, String via, String prefix) {
-        for (Parameter p : params) {
-            Optional<AnnotationExpr> val = Ast.annotation(p, "Value");
-            if (val.isPresent()) {
-                ops.add(new ValueOp(prefix + p.getNameAsString(), Ast.stringValues(val.get(), "value"), Ast.line(p)));
-                continue;
-            }
-            boolean optional = Ast.hasAnnotation(p, "Nullable");
-            ops.add(new InjectOp(prefix + p.getNameAsString(), p.getType().asString(), qualifierOf(p.getAnnotations()),
-                    optional, via, Ast.line(p)));
-        }
     }
 
     private void addInjection(ClassInfo c, String member, String typeRaw, String qualifier, boolean optional,
@@ -777,21 +549,6 @@ public final class CodeIndex {
         boolean container = CONTAINER_TYPES.contains(erased);
         String fqn = resolveType(typeRaw, c);
         injectionPoints.add(new InjectionPoint(c.fqn, member, typeRaw, fqn, qualifier, optional || container, via, c.file, line));
-    }
-
-    private static String qualifierOf(NodeList<AnnotationExpr> anns) {
-        for (AnnotationExpr a : anns) {
-            String n = Names.simpleName(a.getNameAsString());
-            if (n.equals("Qualifier") || n.equals("Named")) {
-                List<String> v = Ast.stringValues(a, "value");
-                if (!v.isEmpty()) return v.get(0);
-            }
-            if (n.equals("Resource")) {
-                List<String> v = Ast.stringValues(a, "name");
-                if (!v.isEmpty() && !v.get(0).isBlank()) return v.get(0);
-            }
-        }
-        return null;
     }
 
     private void addValueRefs(ClassInfo c, String member, List<String> raws, int line) {

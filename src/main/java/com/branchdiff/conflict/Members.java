@@ -79,12 +79,12 @@ public final class Members {
         }
         for (ClassInfo c : idx.classes.values()) {
             res.add(new M(new Member("class", "T:" + c.fqn, c.simpleName, path, start(c.node()), Ast.endLine(c.node())),
-                    c.simpleName, c.outerFqn == null ? c.pkg : c.outerFqn, c.normalizedHeader));
+                    c.simpleName, c.outerFqn == null ? c.pkg : c.outerFqn, c.normalizedHeader()));
             for (MethodInfo m : c.methods.values()) {
                 if (m.node() == null) continue;
                 String label = c.simpleName + "#" + (m.constructor ? c.simpleName : m.name) + "(" + String.join(",", m.params) + ")";
                 res.add(new M(new Member(m.constructor ? "constructor" : "method", "M:" + m.id(), label, path, start(m.node()),
-                        Ast.endLine(m.node())), m.name, c.fqn, m.normalizedBody.isEmpty() ? m.normalizedDecl : m.normalizedBody));
+                        Ast.endLine(m.node())), m.name, c.fqn, m.bodyPrint.length() == 0 ? m.normalizedDecl() : m.normalizedBody()));
             }
             for (FieldDeclaration fd : c.node().getFields()) {
                 for (VariableDeclarator v : fd.getVariables()) {

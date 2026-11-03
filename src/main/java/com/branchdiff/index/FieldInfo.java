@@ -1,8 +1,6 @@
 package com.branchdiff.index;
 
-import com.github.javaparser.ast.expr.AnnotationExpr;
-
-import java.util.Map;
+import java.util.Set;
 
 public final class FieldInfo {
     public final ClassInfo owner;
@@ -15,13 +13,14 @@ public final class FieldInfo {
     public final boolean isFinal;
     public final boolean hasInitializer;
     public final boolean enumConstant;
-    public final Map<String, AnnotationExpr> annotations;
+    /** simple names of the field's annotations */
+    public final Set<String> annotations;
     public final int line;
     /** normalized initializer (enum constants: arguments and class body), null when there is none */
     public String initializer;
 
     public FieldInfo(ClassInfo owner, String name, String typeRaw, String type, boolean isStatic, boolean isFinal,
-                     boolean hasInitializer, boolean enumConstant, Map<String, AnnotationExpr> annotations, int line) {
+                     boolean hasInitializer, boolean enumConstant, Set<String> annotations, int line) {
         this.owner = owner;
         this.name = name;
         this.typeRaw = typeRaw;

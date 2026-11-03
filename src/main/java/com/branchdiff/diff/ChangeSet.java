@@ -51,7 +51,7 @@ public final class ChangeSet {
             for (MethodInfo m : bm.values()) {
                 MethodInfo n = om.get(m.key());
                 if (n == null) removed.add(m);
-                else if (!n.normalizedDecl.equals(m.normalizedDecl)) {
+                else if (!n.sameDecl(m)) {
                     boolean declChanged = !n.returnType.equals(m.returnType) || n.isStatic != m.isStatic
                             || n.isAbstract != m.isAbstract;
                     cs.add(new MethodChange(MethodChange.Kind.MODIFIED, fqn, m, n, declChanged, false, false));
@@ -78,9 +78,9 @@ public final class ChangeSet {
                 }
             }
             for (MethodInfo r : new ArrayList<>(removed)) {
-                if (r.constructor || r.normalizedBody.length() < MIN_RENAME_BODY) continue;
+                if (r.constructor || r.bodyPrint.length() < MIN_RENAME_BODY) continue;
                 for (MethodInfo a : added) {
-                    if (!a.constructor && a.normalizedBody.equals(r.normalizedBody)) {
+                    if (!a.constructor && a.sameBody(r)) {
                         removed.remove(r);
                         added.remove(a);
                         cs.add(new MethodChange(MethodChange.Kind.RENAMED, fqn, r, a, false, false, false));
