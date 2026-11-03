@@ -1074,7 +1074,7 @@ public final class ContextBuilder {
     static MethodInfo method(String id, CodeIndex idx) {
         int h = id.indexOf('#');
         if (h < 0) return null;
-        MethodInfo m = idx.methodsById.get(id);
+        MethodInfo m = idx.method(id);
         return m != null ? m : idx.findMethod(id.substring(0, h), id.substring(h + 1));
     }
 

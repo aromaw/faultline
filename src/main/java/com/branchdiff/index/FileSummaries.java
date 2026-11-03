@@ -603,9 +603,10 @@ final class FileSummaries {
             if (len > b.length - pos) throw new IllegalArgumentException("truncated summary");
             String s = new String(b, pos, len, StandardCharsets.UTF_8);
             pos += len;
-            // short strings (type, annotation and member names) repeat across files and versions; the JVM's string
-            // table shares them (and drops them when unused)
-            if (s.length() <= 40) s = s.intern();
+            // names, FQNs, imports, types and initializers repeat across files and across the four versions (most
+            // files are the same blob in several of them); the JVM's string table keeps one copy and drops it when
+            // unused. Interning only short strings left 17 MB of duplicates on ruoyi-vue-pro.
+            s = s.intern();
             seen.add(s);
             return s;
         }
@@ -621,9 +622,12 @@ final class FileSummaries {
         Set<String> strSet() {
             int n = num();
             if (n == 0) return Set.of();
-            Set<String> s = new LinkedHashSet<>();
+            // most member annotation sets have one element (@Schema on a VO field): a singleton is 16 bytes, a
+            // LinkedHashSet about 200. Read-only either way; iteration order stays the source order.
+            if (n == 1) return java.util.Collections.singleton(str());
+            Set<String> s = new LinkedHashSet<>(n * 4 / 3 + 1); // no resize, no oversized table (release 17)
             for (int i = 0; i < n; i++) s.add(str());
-            return s;
+            return java.util.Collections.unmodifiableSet(s);
         }
 
         Fingerprint print() {

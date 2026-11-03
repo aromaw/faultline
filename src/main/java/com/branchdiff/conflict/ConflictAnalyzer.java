@@ -1341,7 +1341,7 @@ public final class ConflictAnalyzer {
         String body = key.substring(key.indexOf(':') + 1);
         switch (key.substring(0, key.indexOf(':'))) {
             case "M": {
-                if (idx.methodsById.containsKey(body)) return true;
+                if (idx.method(body) != null) return true;
                 int h = body.indexOf('#');
                 if (h < 0) return false;
                 return idx.findMethod(body.substring(0, h), body.substring(h + 1)) != null;
@@ -1367,7 +1367,7 @@ public final class ConflictAnalyzer {
         String body = key.substring(key.indexOf(':') + 1);
         switch (key.substring(0, key.indexOf(':'))) {
             case "M": {
-                MethodInfo m = idx.methodsById.get(body);
+                MethodInfo m = idx.method(body);
                 if (m == null && body.contains("#")) m = idx.findMethod(body.substring(0, body.indexOf('#')), body.substring(body.indexOf('#') + 1));
                 return m == null ? null : m.owner.file;
             }
@@ -1390,7 +1390,7 @@ public final class ConflictAnalyzer {
     static String locationOf(String key, CodeIndex idx) {
         String body = key.substring(key.indexOf(':') + 1);
         if (key.startsWith("M:")) {
-            MethodInfo m = idx.methodsById.get(body);
+            MethodInfo m = idx.method(body);
             return m == null ? fileOf(key, idx) : m.location();
         }
         if (key.startsWith("F:")) {

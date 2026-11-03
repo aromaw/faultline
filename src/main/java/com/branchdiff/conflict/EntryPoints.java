@@ -46,7 +46,7 @@ public final class EntryPoints {
     /** the entry point a node key ("M:...") is, or null */
     public EntryPoint describe(String key) {
         if (!key.startsWith("M:")) return null;
-        MethodInfo m = idx.methodsById.get(key.substring(2));
+        MethodInfo m = idx.method(key.substring(2));
         if (m == null || m.node() == null) return null;
         ClassInfo c = m.owner;
         EntryPoint e = null;
@@ -133,7 +133,7 @@ public final class EntryPoints {
         List<String> res = new ArrayList<>();
         res.add(key);
         if (!key.startsWith("M:")) return res;
-        MethodInfo m = idx.methodsById.get(key.substring(2));
+        MethodInfo m = idx.method(key.substring(2));
         if (m == null) return res;
         for (String anc : idx.ancestors(m.owner.fqn)) {
             if (anc.equals(m.owner.fqn)) continue;

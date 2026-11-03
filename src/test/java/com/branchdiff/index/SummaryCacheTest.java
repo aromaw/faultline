@@ -343,6 +343,25 @@ class SummaryCacheTest {
         assertFalse(Files.exists(tmp.resolve("summaries")));
     }
 
+    /** methods are found by id through their class; a class declared twice keeps the first one's other methods */
+    @Test
+    void methodByIdWithDuplicateClassesAndRecordAccessors() {
+        Map<String, String> files = new LinkedHashMap<>();
+        files.put("a/src/main/java/x/Dup.java", "package x; public class Dup { void onlyFirst() { } void both() { int a; } }");
+        files.put("b/src/main/java/x/Dup.java", "package x; public class Dup { void both() { int b; } void onlySecond() { } }");
+        files.put("a/src/main/java/x/Rec.java", "package x; public record Rec(int n) { void m() { } }");
+        CodeIndex idx = CodeIndex.build(new Snapshot("ours", "ours", "sha", "", files), null, false, SummaryCache.disabled());
+        assertEquals("b/src/main/java/x/Dup.java", idx.method("x.Dup#both()").owner.file, "the later declaration wins");
+        assertEquals("b/src/main/java/x/Dup.java", idx.method("x.Dup#onlySecond()").owner.file);
+        assertEquals("a/src/main/java/x/Dup.java", idx.method("x.Dup#onlyFirst()").owner.file, "still found by id");
+        assertNotNull(idx.method("x.Rec#m()"));
+        assertNotNull(idx.classes.get("x.Rec").methods.get("n()"), "the accessor is a method of the class");
+        assertNull(idx.method("x.Rec#n()"), "but has no declaration, so no id");
+        assertNull(idx.method("x.Nope#m()"));
+        assertNull(idx.method("x.Dup#missing()"));
+        assertNull(idx.method("no-hash"));
+    }
+
     /** whole reports (sample repo, branch mode) with the default cache cold, warm and disabled */
     @Test
     void reportsAreTheSameColdWarmAndDisabled() throws Exception {

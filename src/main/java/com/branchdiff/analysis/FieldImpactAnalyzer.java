@@ -199,7 +199,7 @@ public final class FieldImpactAnalyzer {
             if (caller == null) return;
             memberName = "#" + caller.key();
             MethodChange oc = oursChanges.byNewId.get(caller.id());
-            MethodInfo theirsCaller = theirs.methodsById.get(caller.id());
+            MethodInfo theirsCaller = theirs.method(caller.id());
             if (!base.classes.containsKey(c.fqn) || (oc != null && oc.kind == MethodChange.Kind.ADDED)) {
                 sev = Severity.HIGH;
                 why = "the referencing code was ADDED by ours: the merge will not update it";

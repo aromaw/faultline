@@ -135,7 +135,7 @@ public final class ImpactAnalyzer {
     private Finding siteFinding(MethodChange ch, MethodInfo caller, Node site, boolean certain) {
         MethodChange oc = oursChanges.byNewId.get(caller.id());
         boolean oursClassOnly = !base.classes.containsKey(caller.owner.fqn);
-        MethodInfo theirsCaller = theirs.methodsById.get(caller.id());
+        MethodInfo theirsCaller = theirs.method(caller.id());
         Severity sev;
         String why;
         if (oursClassOnly || (oc != null && (oc.kind == MethodChange.Kind.ADDED))) {

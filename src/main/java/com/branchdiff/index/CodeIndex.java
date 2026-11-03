@@ -72,7 +72,12 @@ public final class CodeIndex {
 
     public final Snapshot snapshot;
     public final Map<String, ClassInfo> classes = new LinkedHashMap<>();
-    public final Map<String, MethodInfo> methodsById = new LinkedHashMap<>();
+    /**
+     * Methods of a service class that a later file with the same FQN replaced in {@link #classes} (two modules
+     * declaring one class), by id: {@link #method} still finds them, as it did when every method was kept in a map by
+     * id. Empty in almost every project.
+     */
+    private final Map<String, MethodInfo> replacedMethods = new java.util.HashMap<>();
     /** sibling classes not indexed because the service dir declares the same FQN */
     public final List<String> shadowedSiblingClasses = new ArrayList<>();
     public final List<String> parseErrors = new ArrayList<>();
@@ -319,9 +324,28 @@ public final class CodeIndex {
             }
             ci.inScope = inScope;
             if (!inScope) ci.springOps = null;
-            classes.put(ci.fqn, ci);
-            for (MethodInfo mi : ci.methods.values()) if (mi.hasNode()) methodsById.put(mi.id(), mi);
+            ClassInfo prev = classes.put(ci.fqn, ci);
+            if (prev != null) {
+                for (MethodInfo mi : prev.methods.values()) if (mi.hasNode()) replacedMethods.put(mi.id(), mi);
+            }
         }
+    }
+
+    /**
+     * The method (or constructor) with this {@link MethodInfo#id() id}, declared in the source (record accessors have
+     * no id here); null when there is none. Looked up through {@link #classes} rather than kept in a map by id: the
+     * id strings of all methods of four versions took 14 MB on ruoyi-vue-pro.
+     */
+    public MethodInfo method(String id) {
+        int hash = id.indexOf('#');
+        if (hash > 0) {
+            ClassInfo c = classes.get(id.substring(0, hash));
+            if (c != null) {
+                MethodInfo m = c.methods.get(id.substring(hash + 1));
+                if (m != null && m.hasNode()) return m;
+            }
+        }
+        return replacedMethods.isEmpty() ? null : replacedMethods.get(id);
     }
 
     // ------------------------------------------------------------------ type resolution (import based, no solver)
