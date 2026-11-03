@@ -29,4 +29,14 @@ public final class Options {
     public String pick;
     /** conflict mode: mainline ref; the tenant's fork point is merge-base(tenant, mainline) */
     public String mainline;
+    /** progress messages of a long analysis (the GUI shows them); null = none */
+    public java.util.function.Consumer<String> progress;
+    /** polled between analysis phases; when it returns true the analysis stops with a CancellationException */
+    public java.util.function.BooleanSupplier cancelled;
+
+    /** reports a phase and stops the analysis if it was cancelled */
+    public void phase(String what) {
+        if (cancelled != null && cancelled.getAsBoolean()) throw new java.util.concurrent.CancellationException("analysis cancelled");
+        if (progress != null) progress.accept(what);
+    }
 }

@@ -26,6 +26,7 @@ public final class ConflictCommand {
         git.run("rev-parse", "--git-dir");
         ConflictSession s;
         if (o.pick != null) {
+            o.phase("simulating the cherry-pick (git merge-tree)");
             s = ConflictSession.simulate(git, o.onto != null ? o.onto : "HEAD", o.pick);
         } else {
             if (o.onto != null) throw new IllegalArgumentException("--onto needs --pick");
@@ -43,6 +44,7 @@ public final class ConflictCommand {
         if (o.verbose) System.err.println("[faultline] fork point (merge-base of tenant and mainline) = " + fork);
         o.ours = s.tenant;
         o.theirs = s.featureTip;
+        o.phase("indexing the fork point");
         Snapshot forkSnap = new SnapshotLoader(git).load("fork", fork, fork, SnapshotLoader.normalizeDir(o.serviceDir), List.of());
         CodeIndex forkIndex = CodeIndex.build(forkSnap, null, o.includeTests);
         analyzer = new Analyzer(o);
@@ -59,7 +61,12 @@ public final class ConflictCommand {
             contents.putAll(ca.contents);
             if (o.verbose) System.err.println("[faultline] conflict analysis in " + (System.nanoTime() - t0) / 1_000_000 + " ms");
         };
-        Report r = analyzer.runFromGit(s.featureBase);
+        Report r;
+        try {
+            r = analyzer.runFromGit(s.featureBase);
+        } finally {
+            analyzer.after = null; // the callback holds the fork index (ASTs)
+        }
         r.repo = git.repo().toString();
         r.refs.put("mergeBase", s.featureBase);
         r.refs.put("fork", fork);

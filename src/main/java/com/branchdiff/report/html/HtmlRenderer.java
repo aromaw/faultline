@@ -57,6 +57,26 @@ public final class HtmlRenderer {
         };
     }
 
+    /**
+     * File contents read straight from git objects, for callers that no longer hold the snapshots (the GUI drops them
+     * after the analysis to keep memory low). Same contents as {@link #source} for every path.
+     */
+    public static FileSource gitSource(GitRunner git, String baseCommit, String oursCommit, String theirsCommit) {
+        return (side, path) -> {
+            String c = switch (side) {
+                case "base" -> baseCommit;
+                case "ours" -> oursCommit;
+                default -> theirsCommit;
+            };
+            if (c == null || git == null) return null;
+            try {
+                return git.run("cat-file", "blob", c + ":" + path);
+            } catch (RuntimeException e) {
+                return null;
+            }
+        };
+    }
+
     public static String render(Report r, FileSource src) {
         return render(r, src, Map.of());
     }

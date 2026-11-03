@@ -70,6 +70,7 @@ public final class Analyzer {
         String dir = SnapshotLoader.normalizeDir(opt.serviceDir);
         List<String> siblings = SiblingModules.discover(git, List.of(oursC, theirsC, baseC), dir, opt.siblings);
         if (!siblings.isEmpty()) log("sibling modules (" + opt.siblings + "): " + siblings);
+        opt.phase("reading the three versions from git");
         Snapshot base = loader.load("base", baseC, baseC, dir, siblings);
         Snapshot ours = loader.load("ours", opt.ours, oursC, dir, siblings);
         Snapshot theirs = loader.load("theirs", opt.theirs, theirsC, dir, siblings);
@@ -112,9 +113,15 @@ public final class Analyzer {
             TypeSolver sOurs = wsOurs.typeSolver(opt.includeTests, warnings);
             TypeSolver sTheirs = wsTheirs.typeSolver(opt.includeTests, warnings);
             log("parsing ...");
+            opt.phase("parsing base");
+            long tParse = System.nanoTime();
             CodeIndex iBase = CodeIndex.build(base, null, opt.includeTests);
+            opt.phase("parsing ours (tenant)");
             CodeIndex iOurs = CodeIndex.build(ours, sOurs, opt.includeTests);
+            opt.phase("parsing theirs (pick)");
             CodeIndex iTheirs = CodeIndex.build(theirs, sTheirs, opt.includeTests);
+            log("parsed " + (iBase.units.size() + iOurs.units.size() + iTheirs.units.size()) + " java files in "
+                    + (System.nanoTime() - tParse) / 1_000_000 + " ms");
             for (CodeIndex i : List.of(iBase, iOurs, iTheirs)) {
                 for (String e : i.shadowedSiblingClasses) warnings.add("[" + i.snapshot.label() + "] sibling class ignored, the service declares the same FQN: " + e);
                 for (String e : i.parseErrors) warnings.add("[" + i.snapshot.label() + "] parse problem: " + e);
@@ -130,6 +137,8 @@ public final class Analyzer {
             log("change sets: theirs=" + csTheirs.changes.size() + " ours=" + csOurs.changes.size()
                     + " (incl. siblings: theirs=" + csTheirsAll.changes.size() + " ours=" + csOursAll.changes.size() + ")");
 
+            opt.phase("semantic checks");
+            long tFind = System.nanoTime();
             List<Finding> findings = new ArrayList<>();
             DependencyAnalyzer dep = new DependencyAnalyzer(iBase, iOurs, iTheirs);
             findings.addAll(safe("dependency closure", () -> dep.analyze(csTheirs)));
@@ -144,6 +153,7 @@ public final class Analyzer {
                     .thenComparing(f -> f.confidence).thenComparing(f -> f.symbol));
 
             for (int i = 0; i < findings.size(); i++) findings.get(i).id = i + 1;
+            log("findings in " + (System.nanoTime() - tFind) / 1_000_000 + " ms");
 
             Report r = new Report();
             r.generatedAt = OffsetDateTime.now().toString();
@@ -154,6 +164,7 @@ public final class Analyzer {
             r.findings = findings;
             r.warnings = warnings;
             r.predictedTextualConflicts = textualConflicts(base, ours, theirs);
+            opt.phase("dependency chains and reverse impact");
             long t0 = System.nanoTime();
             boolean libs = wsOurs.classpathOk && wsTheirs.classpathOk;
             ContextBuilder cb = null;
@@ -206,10 +217,13 @@ public final class Analyzer {
             r.changeSets.put("ours", listChanges(csOurs));
             if (after != null) {
                 if (cb == null) cb = new ContextBuilder(iBase, iOurs, iTheirs, libs);
+                opt.phase("explaining conflict hunks");
                 after.accept(new Context(iBase, iOurs, iTheirs, cb, csTheirs, csTheirsAll, findings, r, warnings, libs));
             }
             return r;
         } finally {
+            // the symbol solver keeps one facade (with its caches and type solver) per type solver in a static map
+            com.github.javaparser.symbolsolver.javaparsermodel.JavaParserFacade.clearInstances();
             wsOurs.close();
             wsTheirs.close();
             if (!opt.keepTemp) tmp.toFile().delete();

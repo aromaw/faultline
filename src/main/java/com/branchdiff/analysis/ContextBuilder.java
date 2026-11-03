@@ -78,7 +78,8 @@ public final class ContextBuilder {
     private final boolean librariesComparable;
     private final ContextModel model = new ContextModel();
     private final Map<String, List<Edge>> forward = new HashMap<>();
-    private Map<String, List<Edge>> reverse;
+    /** key -> users in ours, filled on demand by {@link #usersOfKey} */
+    private final Map<String, List<Edge>> reverse = new HashMap<>();
     private final Map<String, Boolean> libMissing = new HashMap<>();
     private final Map<String, String> mavenPom = new HashMap<>();
     private int treeBudget;
@@ -191,7 +192,7 @@ public final class ContextBuilder {
     /** direct users of {@code key} in ours: [user key, "path:line"] */
     public List<String[]> usersOf(String key) {
         List<String[]> res = new ArrayList<>();
-        for (Edge e : reverse().getOrDefault(key, List.of())) res.add(new String[] {e.to, e.at});
+        for (Edge e : usersOfKey(key)) res.add(new String[] {e.to, e.at});
         return res;
     }
 
@@ -379,7 +380,7 @@ public final class ContextBuilder {
             t.cycle = true;
             return t;
         }
-        List<Edge> users = reverse().getOrDefault(key, List.of());
+        List<Edge> users = usersOfKey(key);
         if (users.isEmpty()) return t;
         if (depth >= MAX_IMPACT_DEPTH || nodeLimitHit) {
             t.truncated = true;
@@ -586,36 +587,125 @@ public final class ContextBuilder {
 
     // ------------------------------------------------------------------ reverse edges (ours)
 
-    Map<String, List<Edge>> reverse() {
-        if (reverse != null) return reverse;
-        reverse = new HashMap<>();
+    /**
+     * Users of {@code key} in ours (reverse edges), computed on demand. Symbol resolution is the expensive part, so
+     * only the ours members whose source mentions the key's simple name (identifier tokens) are resolved, and each
+     * member is resolved at most once. Every dependency {@link DependencyAnalyzer#collect} reports is derived from a
+     * name written in the member (call name, type name, field name, method reference), so this prefilter returns the
+     * same edges, in the same order, as resolving every member of the project.
+     */
+    List<Edge> usersOfKey(String key) {
+        List<Edge> cached = reverse.get(key);
+        if (cached != null) return cached;
+        if (revEntries == null) indexReverseEntries();
+        List<Edge> l = new ArrayList<>();
+        String name = simpleNameOfKey(key);
+        if (name != null) {
+            for (RevEntry en : revByName.getOrDefault(name, List.of())) {
+                for (RevEdge r : revEdges(en)) if (r.key.equals(key)) addEdge(l, en.from, r.at, r.uncertain);
+            }
+        }
+        for (Edge e : staticReverse().getOrDefault(key, List.of())) addEdge(l, e.to, e.at, e.uncertain);
+        l.sort(Comparator.comparing(Edge::to));
+        reverse.put(key, l);
+        return l;
+    }
+
+    /** a member of ours whose dependencies may give reverse edges: a method, or a field with an initializer */
+    private record RevEntry(ClassInfo owner, MethodInfo method, FieldDeclaration field, String from) {
+    }
+
+    private record RevEdge(String key, String at, boolean uncertain) {
+    }
+
+    private List<RevEntry> revEntries;
+    private final Map<String, List<RevEntry>> revByName = new HashMap<>();
+    private final Map<RevEntry, List<RevEdge>> revEdgeCache = new java.util.IdentityHashMap<>();
+    private Map<String, List<Edge>> staticReverse;
+
+    /** same iteration order as a full scan: per class, its methods then its initialized fields */
+    private void indexReverseEntries() {
+        revEntries = new ArrayList<>();
         for (ClassInfo c : ours.classes.values()) {
             if (!c.inScope) continue;
             for (MethodInfo m : c.methods.values()) {
                 if (m.node == null) continue;
-                String from = "M:" + m.id();
-                try {
-                    for (Map.Entry<Dep, Integer> e : oursDeps.collect(m).entrySet()) {
-                        String k = depKey(e.getKey(), ours);
-                        if (k != null && !k.equals(from)) addRev(k, from, c.file + ":" + e.getValue(), !e.getKey().certain());
-                    }
-                } catch (RuntimeException | StackOverflowError ignored) {
-                    // one unparsable method must not hide the others
-                }
+                index(new RevEntry(c, m, null, "M:" + m.id()), m.node);
             }
             for (FieldDeclaration fd : c.node.getFields()) {
                 if (fd.getVariables().stream().noneMatch(v -> v.getInitializer().isPresent())) continue;
-                String from = "F:" + c.fqn + "." + fd.getVariable(0).getNameAsString();
-                try {
-                    for (Map.Entry<Dep, Integer> e : oursDeps.collect(fd, c, null).entrySet()) {
-                        String k = depKey(e.getKey(), ours);
-                        if (k != null && !k.equals(from) && !k.startsWith("T:")) addRev(k, from, c.file + ":" + e.getValue(), !e.getKey().certain());
-                    }
-                } catch (RuntimeException | StackOverflowError ignored) {
-                    // see above
-                }
+                index(new RevEntry(c, null, fd, "F:" + c.fqn + "." + fd.getVariable(0).getNameAsString()), fd);
             }
         }
+    }
+
+    private void index(RevEntry e, com.github.javaparser.ast.Node node) {
+        revEntries.add(e);
+        Set<String> names = new HashSet<>();
+        var tokens = node.getTokenRange();
+        if (tokens.isEmpty()) {
+            names.add("*"); // no tokens kept: the entry matches every name
+        } else {
+            for (com.github.javaparser.JavaToken t : tokens.get()) if (t.getCategory().isIdentifier()) names.add(t.getText());
+        }
+        for (String n : names) revByName.computeIfAbsent(n, k -> new ArrayList<>()).add(e);
+    }
+
+    private List<RevEdge> revEdges(RevEntry en) {
+        List<RevEdge> res = revEdgeCache.get(en);
+        if (res != null) return res;
+        res = new ArrayList<>();
+        try {
+            if (en.method != null) {
+                for (Map.Entry<Dep, Integer> e : oursDeps.collect(en.method).entrySet()) {
+                    String k = depKey(e.getKey(), ours);
+                    if (k != null && !k.equals(en.from)) res.add(new RevEdge(k, en.owner.file + ":" + e.getValue(), !e.getKey().certain()));
+                }
+            } else {
+                for (Map.Entry<Dep, Integer> e : oursDeps.collect(en.field, en.owner, null).entrySet()) {
+                    String k = depKey(e.getKey(), ours);
+                    if (k != null && !k.equals(en.from) && !k.startsWith("T:")) {
+                        res.add(new RevEdge(k, en.owner.file + ":" + e.getValue(), !e.getKey().certain()));
+                    }
+                }
+            }
+        } catch (RuntimeException | StackOverflowError ignored) {
+            // one unparsable member must not hide the others (the edges found before the failure are kept)
+        }
+        revEdgeCache.put(en, res);
+        return res;
+    }
+
+    /** the simple name a member must mention to depend on {@code key}; null for keys no member dependency produces */
+    static String simpleNameOfKey(String key) {
+        int colon = key.indexOf(':');
+        if (colon < 0) return null;
+        String body = key.substring(colon + 1);
+        switch (key.substring(0, colon)) {
+            case "M": {
+                int h = body.indexOf('#');
+                if (h < 0) return null;
+                String sig = body.substring(h + 1);
+                String n = sig.contains("(") ? sig.substring(0, sig.indexOf('(')) : sig;
+                return n.equals("<init>") ? lastSegment(body.substring(0, h)) : n;
+            }
+            case "F":
+            case "T":
+                return lastSegment(body);
+            default:
+                return null;
+        }
+    }
+
+    private static String lastSegment(String s) {
+        int i = Math.max(s.lastIndexOf('.'), s.lastIndexOf('$'));
+        return i < 0 ? s : s.substring(i + 1);
+    }
+
+    /** reverse edges that need no symbol resolution: config values, injections, mapper statements */
+    private Map<String, List<Edge>> staticReverse() {
+        if (staticReverse != null) return staticReverse;
+        staticReverse = new HashMap<>();
         for (ValueRef v : ours.valueRefs) {
             if (ours.classes.containsKey(v.ownerFqn()) && ours.classes.get(v.ownerFqn()).inScope) {
                 addRev("CFG:" + v.key(), memberKey(v.ownerFqn(), v.member(), ours), v.location(), false);
@@ -629,12 +719,14 @@ public final class ContextBuilder {
                 for (MethodInfo m : ours.findMethodsByName(ns, st.id())) addRev("SQL:" + ns + "#" + st.id(), "M:" + m.id(), m.location(), false);
             }
         }
-        for (List<Edge> l : reverse.values()) l.sort(Comparator.comparing(Edge::to));
-        return reverse;
+        return staticReverse;
     }
 
     private void addRev(String to, String from, String at, boolean uncertain) {
-        List<Edge> l = reverse.computeIfAbsent(to, k -> new ArrayList<>());
+        addEdge(staticReverse.computeIfAbsent(to, k -> new ArrayList<>()), from, at, uncertain);
+    }
+
+    private static void addEdge(List<Edge> l, String from, String at, boolean uncertain) {
         for (Edge e : l) if (e.to.equals(from)) return;
         l.add(new Edge(from, at, uncertain));
     }
