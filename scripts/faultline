@@ -1,0 +1,61 @@
+#!/bin/sh
+# faultline launcher with small-footprint JVM defaults.
+#
+#   faultline                 opens the GUI
+#   faultline gui [...]       opens the GUI (see `faultline --help`)
+#   faultline conflicts ...   command line analysis
+#
+# Environment:
+#   JAVA_HOME / FAULTLINE_JAVA   java to use (default: $JAVA_HOME/bin/java, else java on PATH)
+#   FAULTLINE_JAR                the jar (default: next to this script, or ../target/branch-diff-tool.jar)
+#   FAULTLINE_XMX                maximum heap (default 1g; a RuoYi-Vue-sized project (~270 Java files) needs ~300 MB)
+#   FAULTLINE_CDS=1              use an AppCDS archive of the app's classes (created by the first run, in
+#                                ~/.cache/faultline). Off by default: on the reference box it did not measurably
+#                                speed up the start (see README).
+#   FAULTLINE_JAVA_OPTS          extra JVM options
+set -e
+DIR=$(cd "$(dirname "$0")" && pwd)
+JAR=${FAULTLINE_JAR:-}
+if [ -z "$JAR" ]; then
+  for c in "$DIR/faultline.jar" "$DIR/branch-diff-tool.jar" "$DIR/../target/branch-diff-tool.jar"; do
+    if [ -f "$c" ]; then JAR=$c; break; fi
+  done
+fi
+if [ -z "$JAR" ] || [ ! -f "$JAR" ]; then
+  echo "faultline: jar not found (set FAULTLINE_JAR, or run mvn package)" >&2
+  exit 1
+fi
+JAVA=${FAULTLINE_JAVA:-}
+if [ -z "$JAVA" ]; then
+  if [ -n "$JAVA_HOME" ] && [ -x "$JAVA_HOME/bin/java" ]; then JAVA="$JAVA_HOME/bin/java"; else JAVA=java; fi
+fi
+
+# Measured on RuoYi-Vue (README, GUI section): G1 with low free-heap ratios gives the memory of the analysis back
+# after it (RSS ~195 MB vs ~450 MB with -XX:+UseSerialGC, which keeps its heap committed); two JIT compiler threads
+# instead of 4 save ~30 MB idle at ~10 % analysis time.
+OPTS="-XX:+UseG1GC -Xmx${FAULTLINE_XMX:-1g} -XX:MinHeapFreeRatio=10 -XX:MaxHeapFreeRatio=30 -XX:CICompilerCount=2"
+OPTS="$OPTS -Dapple.awt.application.name=faultline -Xdock:name=faultline"
+case "$(uname -s)" in Darwin) ;; *) OPTS=$(echo "$OPTS" | sed 's/ -Xdock:name=faultline//') ;; esac
+
+# AppCDS: archive the classes of the first run, map them on later runs (faster start-up, less RSS).
+if [ "${FAULTLINE_CDS:-0}" = "1" ]; then
+  CACHE=${XDG_CACHE_HOME:-$HOME/.cache}/faultline
+  mkdir -p "$CACHE" 2>/dev/null || true
+  # cheap identity of jar + JDK (no hashing of the jar, no extra JVM start)
+  JREL=$(dirname "$(dirname "$(command -v "$JAVA")")")/release
+  VER=$(sed -n 's/^JAVA_VERSION="\([0-9]*\).*/\1/p' "$JREL" 2>/dev/null | head -1)
+  [ -n "$VER" ] || VER=$("$JAVA" -version 2>&1 | sed -n 's/.*version "\([0-9]*\).*/\1/p' | head -1)
+  STAMP=$(ls -lL "$JAR" "$(command -v "$JAVA")" 2>/dev/null | cksum | cut -d' ' -f1)
+  JSA="$CACHE/faultline-$VER-$STAMP.jsa"
+  if [ "${VER:-0}" -ge 19 ]; then
+    OPTS="$OPTS -XX:+AutoCreateSharedArchive -XX:SharedArchiveFile=$JSA"
+  elif [ -f "$JSA" ]; then
+    OPTS="$OPTS -XX:SharedArchiveFile=$JSA"
+  elif [ "${VER:-0}" -ge 13 ]; then
+    OPTS="$OPTS -XX:ArchiveClassesAtExit=$JSA"
+  fi
+  OPTS="$OPTS -Xlog:cds=off -Xlog:cds+dynamic=off"
+fi
+
+# shellcheck disable=SC2086
+exec "$JAVA" $OPTS $FAULTLINE_JAVA_OPTS -jar "$JAR" "$@"

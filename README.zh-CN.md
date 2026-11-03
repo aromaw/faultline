@@ -91,6 +91,58 @@ java -jar target/branch-diff-tool.jar conflicts --repo . --onto tenant --pick '0
 6. **保留租户**。在租户的反向调用图中，从 ours 侧成员一直追到入口。
 7. **清单**。需要的符号按文件分组，依赖排在前面。
 
+## 桌面 GUI
+
+一个很小的 Swing 窗口（FlatLaf + RSyntaxTextArea；不用 JavaFX，也不内嵌浏览器），直接调用同一套分析代码，
+不调用命令行，也不会修改仓库。
+
+```bash
+scripts/faultline gui                  # 带调优 JVM 参数的启动脚本（推荐）
+java -jar target/branch-diff-tool.jar gui
+java -jar target/branch-diff-tool.jar  # 桌面环境下不带参数也会打开 GUI
+```
+
+- 用 File › Open 打开项目，最近项目记在 `~/.faultline/gui.properties`。
+- 选目标（tenant）分支和主线分支，下拉框里有本地和远程分支。
+- Commits 页列出 `target..mainline` 的提交（不含合并提交，最多最近 5000 个）。可以按关键词、`author:`、`sha:`
+  过滤；用 shift/ctrl/cmd 多选，或勾选 Pick 列（空格键切换）。不管点选顺序如何，都按从旧到新的顺序应用。
+- Analyze 在后台跑离线模拟（`git merge-tree`），有进度和 Cancel。Cancel 在进入下一阶段时生效。
+- Conflicts 页左侧是 文件 › hunk 树，带严重度圆点；右侧是三栏（Ours | Base | Theirs）或两栏 diff，下方是
+  Why / Take theirs / Take ours / Checklist / Dependency chain 页签。点击 `File.java:123` 这类引用，会在右侧只读打开代码。
+- Export 导出与命令行相同的 HTML / Markdown / JSON 报告。
+- 用 View › Toggle Light / Dark Theme 或工具栏上的主题按钮切换浅色/深色主题。
+
+严重度圆点只是 GUI 的启发式标记：红色表示文件被删除，或者有缺失/已改动、但不来自本次 pick 的依赖；
+橙色表示入口点、孤儿代码、tenant 事件或不确定的依赖。
+
+### 内存与启动
+
+`scripts/faultline` 使用
+`-XX:+UseG1GC -Xmx1g -XX:MinHeapFreeRatio=10 -XX:MaxHeapFreeRatio=30 -XX:CICompilerCount=2`。
+可用环境变量：
+
+- `FAULTLINE_XMX`：堆上限，默认 `1g`。RuoYi-Vue 约需 300 MB，256 MB 也能跑完。
+- `FAULTLINE_JAVA_OPTS`：额外参数。`-XX:TieredStopAtLevel=1` 可少占约 30 MB RSS，但分析慢约 40%。
+- `FAULTLINE_CDS=1`：开启 AppCDS，第一次运行时把归档写入 `~/.cache/faultline/`。JDK 19+ 用
+  `-XX:+AutoCreateSharedArchive`；JDK 13–18 先用 `-XX:ArchiveClassesAtExit`，之后用 `-XX:SharedArchiveFile`。
+  手动方式：先运行 `java -XX:ArchiveClassesAtExit=fl.jsa -jar …jar gui`，
+  以后运行 `java -XX:SharedArchiveFile=fl.jsa -jar …jar gui`。
+
+选 G1 加较低的 free ratio，是因为分析结束后它会把堆还给操作系统；Serial GC 实测分析后仍常驻约 450 MB。
+
+分析时，每个文件解析完就丢弃 parser token；反向边（“谁调用了它”）只对需要的符号按需解析。
+每次分析结束都会清空 JavaParser symbol solver 缓存。
+
+实测环境：Linux（JDK 21，8 核，磁盘缓存已预热），RuoYi-Vue，把 `dbe9834e` pick 到 `tenant`：
+
+| | 窗口显示 | 空闲 RSS | 峰值 RSS | 分析后 RSS | 分析耗时 |
+|---|---|---|---|---|---|
+| `java -jar` | 约 0.5 s | 约 165 MB | 575–800 MB | 约 320 MB | 3.6–4.2 s |
+| `scripts/faultline` | 约 0.5 s | 约 130 MB | 416–526 MB | 约 195 MB | 4.1–4.4 s |
+| `FAULTLINE_CDS=1` | 约 0.39 s | 约 145 MB | | | 3.8–3.9 s |
+
+GUI 让 jar 增大约 1.9 MB，未用到的语法高亮模式已剔除。以上数据尚未在 macOS 上测过。
+
 ## 在 RuoYi-Vue 上的验证
 
 `/workspace/oss-eval/conflict-mode/SCENARIO.md` 记录了在 RuoYi-Vue 克隆上的一次真实运行。租户分支于 2025-10-05 分叉，带有租户自己的修改。从主线 pick 了两个最近的功能：

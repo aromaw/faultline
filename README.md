@@ -91,6 +91,65 @@ Each pick is simulated with `git merge-tree --write-tree --merge-base=<pick>^ <s
 6. **Take ours**. The tenant's reverse call graph goes from the ours-side members up to entry points.
 7. **Checklist**. The needs are grouped per file and ordered with dependencies first.
 
+## Desktop GUI
+
+A small Swing window (FlatLaf + RSyntaxTextArea; no JavaFX, no embedded browser) on top of the same
+analysis. It does not shell out to the CLI and never changes the repository.
+
+```bash
+scripts/faultline gui                  # launcher with tuned JVM flags (recommended)
+java -jar target/branch-diff-tool.jar gui
+java -jar target/branch-diff-tool.jar  # no arguments on a desktop also opens the GUI
+```
+
+- Open a project with File › Open (recent projects are kept in `~/.faultline/gui.properties`).
+- Pick the target (tenant) and mainline branches. Both lists include local and remote branches.
+- The Commits tab lists `target..mainline` (non-merge commits, newest 5000). Filter by words, `author:`
+  or `sha:`. Select with shift/ctrl/cmd-click, or tick the Pick column (Space toggles). Commits always
+  apply oldest first, whatever order you click them in.
+- Analyze runs the offline simulation (`git merge-tree`) in the background, with progress and Cancel.
+  Cancel takes effect at the next phase.
+- The Conflicts tab shows a file › hunk tree with severity dots, a 3-pane (Ours | Base | Theirs) or
+  2-pane diff, and the Why / Take theirs / Take ours / Checklist / Dependency chain tabs. Click any
+  `File.java:123` reference to open it read-only on the right.
+- Export writes the same HTML, Markdown or JSON report as the CLI.
+- View › Toggle Light / Dark Theme, or the theme button in the toolbar, switches themes.
+
+Severity dots are a GUI-only heuristic. Red means a deleted file or a missing or changed dependency
+that does not come from the pick. Orange means entry points, orphans, tenant events, or uncertain needs.
+
+### Memory and startup
+
+`scripts/faultline` runs
+`-XX:+UseG1GC -Xmx1g -XX:MinHeapFreeRatio=10 -XX:MaxHeapFreeRatio=30 -XX:CICompilerCount=2`.
+Variables:
+
+- `FAULTLINE_XMX`: heap cap, default `1g`. RuoYi-Vue needs about 300 MB, and 256 MB also works.
+- `FAULTLINE_JAVA_OPTS`: extra flags. `-XX:TieredStopAtLevel=1` saves about 30 MB of RSS but makes
+  the analysis about 40% slower.
+- `FAULTLINE_CDS=1`: enables AppCDS. The archive is written to `~/.cache/faultline/` on the first run.
+  On JDK 19+ this uses `-XX:+AutoCreateSharedArchive`; on JDK 13–18 it uses `-XX:ArchiveClassesAtExit`
+  and then `-XX:SharedArchiveFile`. To do it by hand:
+  `java -XX:ArchiveClassesAtExit=fl.jsa -jar …jar gui`, then
+  `java -XX:SharedArchiveFile=fl.jsa -jar …jar gui`.
+
+G1 with low free ratios is used because it returns heap to the OS after an analysis. Serial GC kept
+about 450 MB resident in our runs.
+
+The analysis drops parser tokens after parsing and resolves reverse edges ("who calls this") only for
+the symbols it needs. After each run it clears the JavaParser symbol-solver cache.
+
+Measured on Linux (JDK 21, 8 CPUs, warm disk cache), RuoYi-Vue, pick `dbe9834e` onto `tenant`:
+
+| | window shown | idle RSS | peak RSS | RSS after analysis | analysis |
+|---|---|---|---|---|---|
+| `java -jar` | ~0.5 s | ~165 MB | 575–800 MB | ~320 MB | 3.6–4.2 s |
+| `scripts/faultline` | ~0.5 s | ~130 MB | 416–526 MB | ~195 MB | 4.1–4.4 s |
+| `FAULTLINE_CDS=1` | ~0.39 s | ~145 MB | | | 3.8–3.9 s |
+
+The GUI adds about 1.9 MB to the jar; unused syntax modes are stripped. These numbers have not been
+measured on macOS.
+
 ## Validation on RuoYi-Vue
 
 `/workspace/oss-eval/conflict-mode/SCENARIO.md` describes a real run on a RuoYi-Vue clone. A tenant branch forked 2025-10-05 has tenant-local edits. Two recent mainline features were picked onto it:
