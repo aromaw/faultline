@@ -74,6 +74,7 @@ public final class Analyzer {
         Snapshot base = loader.load("base", baseC, baseC, dir, siblings);
         Snapshot ours = loader.load("ours", opt.ours, oursC, dir, siblings);
         Snapshot theirs = loader.load("theirs", opt.theirs, theirsC, dir, siblings);
+        com.branchdiff.util.HeapLog.mark("versions read");
         if (ours.files().keySet().stream().noneMatch(p -> p.endsWith(".java"))
                 && theirs.files().keySet().stream().noneMatch(p -> p.endsWith(".java"))) {
             warnings.add("No .java files found under service dir '" + dir + "' in ours or theirs");
@@ -116,10 +117,13 @@ public final class Analyzer {
             opt.phase("parsing base");
             long tParse = System.nanoTime();
             CodeIndex iBase = CodeIndex.build(base, null, opt.includeTests);
+            com.branchdiff.util.HeapLog.mark("base indexed");
             opt.phase("parsing ours (tenant)");
             CodeIndex iOurs = CodeIndex.build(ours, sOurs, opt.includeTests);
+            com.branchdiff.util.HeapLog.mark("ours indexed");
             opt.phase("parsing theirs (pick)");
             CodeIndex iTheirs = CodeIndex.build(theirs, sTheirs, opt.includeTests);
+            com.branchdiff.util.HeapLog.mark("theirs indexed");
             log("parsed " + (iBase.javaFileCount() + iOurs.javaFileCount() + iTheirs.javaFileCount()) + " java files in "
                     + (System.nanoTime() - tParse) / 1_000_000 + " ms (summary cache: "
                     + com.branchdiff.index.SummaryCache.getDefault().stats() + ")");
@@ -135,6 +139,7 @@ public final class Analyzer {
             ChangeSet csOursAll = ChangeSet.compute("ours", iBase, iOurs);
             ChangeSet csTheirs = csTheirsAll.scoped(iBase, iTheirs);
             ChangeSet csOurs = csOursAll.scoped(iBase, iOurs);
+            com.branchdiff.util.HeapLog.mark("change sets");
             log("change sets: theirs=" + csTheirs.changes.size() + " ours=" + csOurs.changes.size()
                     + " (incl. siblings: theirs=" + csTheirsAll.changes.size() + " ours=" + csOursAll.changes.size() + ")");
 
@@ -154,6 +159,7 @@ public final class Analyzer {
                     .thenComparing(f -> f.confidence).thenComparing(f -> f.symbol));
 
             for (int i = 0; i < findings.size(); i++) findings.get(i).id = i + 1;
+            com.branchdiff.util.HeapLog.mark("findings");
             log("findings in " + (System.nanoTime() - tFind) / 1_000_000 + " ms");
 
             Report r = new Report();
@@ -219,7 +225,9 @@ public final class Analyzer {
             if (after != null) {
                 if (cb == null) cb = new ContextBuilder(iBase, iOurs, iTheirs, libs);
                 opt.phase("explaining conflict hunks");
+                com.branchdiff.util.HeapLog.mark("context");
                 after.accept(new Context(iBase, iOurs, iTheirs, cb, csTheirs, csTheirsAll, findings, r, warnings, libs));
+                com.branchdiff.util.HeapLog.mark("conflict analysis");
             }
             return r;
         } finally {

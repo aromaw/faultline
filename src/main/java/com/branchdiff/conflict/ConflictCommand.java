@@ -47,6 +47,7 @@ public final class ConflictCommand {
         o.phase("indexing the fork point");
         Snapshot forkSnap = new SnapshotLoader(git).load("fork", fork, fork, SnapshotLoader.normalizeDir(o.serviceDir), List.of());
         CodeIndex forkIndex = CodeIndex.build(forkSnap, null, o.includeTests);
+        com.branchdiff.util.HeapLog.mark("fork indexed");
         analyzer = new Analyzer(o);
         String mainline = o.mainline;
         analyzer.after = ctx -> {
