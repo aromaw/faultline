@@ -102,26 +102,48 @@ java -jar target/branch-diff-tool.jar gui
 java -jar target/branch-diff-tool.jar  # 桌面环境下不带参数也会打开 GUI
 ```
 
-- 用 File › Open 打开项目，最近项目记在 `~/.faultline/gui.properties`。
-- 选目标（tenant）分支和主线分支，下拉框里有本地和远程分支。
-- Commits 页列出 `target..mainline` 的提交（不含合并提交，最多最近 5000 个）。可以按关键词、`author:`、`sha:`
-  过滤；用 shift/ctrl/cmd 多选，或勾选 Pick 列（空格键切换）。不管点选顺序如何，都按从旧到新的顺序应用。
-- Analyze 在后台跑离线模拟（`git merge-tree`），有进度和 Cancel。Cancel 在进入下一阶段时生效。
-- Conflicts 页左侧是 文件 › hunk 树，带严重度圆点；右侧是三栏（Ours | Base | Theirs）或两栏 diff，下方是
-  Why / Take theirs / Take ours / Checklist / Dependency chain 页签。点击 `File.java:123` 这类引用，会在右侧只读打开代码。
-- Export 导出与命令行相同的 HTML / Markdown / JSON 报告。
-- 用 View › Toggle Light / Dark Theme 或工具栏上的主题按钮切换浅色/深色主题。
+窗口顶部按编号列出四个步骤，完成的步骤会变成绿色对勾。
 
-严重度圆点只是 GUI 的启发式标记：红色表示文件被删除，或者有缺失/已改动、但不来自本次 pick 的依赖；
-橙色表示入口点、孤儿代码、tenant 事件或不确定的依赖。
+1. **Project（项目）**：点 *Open Project…*（或 File › Open、Ctrl/⌘+O，或欢迎页上的最近项目）。
+   最近项目记在 `~/.faultline/gui.properties`。
+2. **Branches（分支）**：*Pick onto (target)* 是 tenant 分支，*Commits from (mainline)* 是提交所在的主线分支。
+   点分支按钮（或让按钮获得焦点后直接打字；Ctrl/⌘+T、Ctrl/⌘+M 也能打开）会弹出类似 IntelliJ IDEA 的
+   分支搜索框：本地分支和远程分支分两组列出，边输入边过滤（不区分大小写的子串匹配；空格分隔的每个词都要
+   匹配，例如 `origin acme` 能找到 `origin/tenant/acme`）。↑/↓ 移动，Enter 选中，Esc 关闭。
+3. **Commits（提交）**：Commits 页列出 `target..mainline` 的提交（不含合并提交，最多最近 5000 个）。可以按提交
+   信息、作者或哈希过滤（`author:`、`sha:` 只匹配对应字段）。勾选 Pick 列，或选中若干行后按空格 /
+   点 *Pick Selected*；*Clear Picks* 取消全部勾选。不管点选顺序如何，都按从旧到新的顺序应用。
+4. **Analyze（分析）**：蓝色的 *Analyze N commits* 按钮（Ctrl/⌘+Enter）在后台跑离线模拟（`git merge-tree`）。
+   状态栏显示当前阶段、*Cancel* 按钮（在进入下一阶段时生效）和堆内存占用。
+
+结果：
+
+- Conflicts 页是 文件 › hunk 树，带 HIGH / MEDIUM / LOW 标签；上方一行汇总（冲突 hunk 数、冲突文件数、
+  干净合并的文件数、检查清单步骤数、需要考虑的提交数）。
+- hunk 视图并排显示 Ours（tenant）| Base（pick 的父提交）| Theirs（本次 pick），也可切成 Ours | Theirs，
+  滚动同步；下方页签为 *Why it conflicts*（为什么冲突）、*Take theirs → needs*（主线代码的依赖）、
+  *Keep ours → callers*（tenant 中受影响的入口和调用方）、*Checklist* 和 *Dependency chain*。点击任意一行或
+  `File.java:123` 这类引用，会在右侧只读打开代码。
+- *Export Report* 导出与命令行相同的 HTML / Markdown / JSON 报告。
+- *Dark Theme* / *Light Theme*（或 View › Toggle Light / Dark Theme）切换深色/浅色主题。
+
+每个按钮都有文字和提示（tooltip）。没有内容的面板会提示下一步该做什么。
+
+严重度标签只是 GUI 的启发式标记：HIGH 表示文件被删除，或者有缺失/已改动、但不来自本次 pick 的依赖；
+MEDIUM 表示入口点、孤儿代码、tenant 的改动或不确定的依赖。
+
+应用图标（窗口、任务栏、macOS Dock）是手写的 `assets/icon/faultline.svg`；`assets/icon/render.py`
+生成 PNG（16–1024 px）、`faultline.icns` 和 `faultline.ico`。
 
 ### 内存与启动
 
 `scripts/faultline` 使用
-`-XX:+UseG1GC -Xmx1g -XX:MinHeapFreeRatio=10 -XX:MaxHeapFreeRatio=30 -XX:CICompilerCount=2`。
-可用环境变量：
+`-XX:+UseG1GC -Xmx<堆大小> -XX:MinHeapFreeRatio=10 -XX:MaxHeapFreeRatio=30 -XX:CICompilerCount=2`
+（macOS 上另加 `-Xdock:name=faultline -Xdock:icon=…/faultline.icns`）。可用环境变量：
 
-- `FAULTLINE_XMX`：堆上限，默认 `1g`。RuoYi-Vue 约需 300 MB，256 MB 也能跑完。
+- `FAULTLINE_XMX`：堆上限，例如 `4g`。默认取物理内存的四分之一，最少 1 GB，最多 8 GB。启动脚本在 macOS 上用
+  `sysctl -n hw.memsize` 读内存，在 Linux 上读 `/proc/meminfo` 和 cgroup 限制（容器）。约 7000 个 Java 文件的
+  Spring/MyBatis 项目（ruoyi-vue-pro）峰值堆约 0.6 GB；RuoYi-Vue 用 256 MB 也能跑完。
 - `FAULTLINE_JAVA_OPTS`：额外参数。`-XX:TieredStopAtLevel=1` 可少占约 30 MB RSS，但分析慢约 40%。
 - `FAULTLINE_CDS=1`：开启 AppCDS，第一次运行时把归档写入 `~/.cache/faultline/`。JDK 19+ 用
   `-XX:+AutoCreateSharedArchive`；JDK 13–18 先用 `-XX:ArchiveClassesAtExit`，之后用 `-XX:SharedArchiveFile`。
@@ -130,18 +152,32 @@ java -jar target/branch-diff-tool.jar  # 桌面环境下不带参数也会打开
 
 选 G1 加较低的 free ratio，是因为分析结束后它会把堆还给操作系统；Serial GC 实测分析后仍常驻约 450 MB。
 
-分析时，每个文件解析完就丢弃 parser token；反向边（“谁调用了它”）只对需要的符号按需解析。
-每次分析结束都会清空 JavaParser symbol solver 缓存。
+直接 `java -jar … gui` 时使用 JVM 默认堆，同样是物理内存的四分之一；如果低于约 900 MB，启动时状态栏会提示。
 
-实测环境：Linux（JDK 21，8 核，磁盘缓存已预热），RuoYi-Vue，把 `dbe9834e` pick 到 `tenant`：
+如果分析仍然内存不足，GUI 会停止分析、释放其数据和缓存，并弹出提示：当前上限是多少，以及如何用更大的堆
+重新启动（`FAULTLINE_XMX=2g scripts/faultline gui` 或 `java -Xmx2g -jar …`）。窗口可以继续使用。
+
+分析如何控制内存：
+
+- 代码索引只保留每个 Java 文件的摘要（类型、成员、import、注解）。完整语法树按需重新解析，放进一个按源码大小
+  限额的缓存（默认堆的 1/160，至少 200 万字符；`-Dfaultline.astCacheChars=N`）。修复前，四个版本（fork、base、
+  ours、theirs）的所有文件都一直保持解析状态，每个源码字符约占 25–30 字节堆，这就是大项目上
+  `Java heap space` 报错的原因。
+- 全项目扫描（调用方、类型使用、注入）先在源码文本里查找标识符，只解析提到它的文件。
+- symbol solver 的单文件缓存有上限（`-Dfaultline.solverCacheSize=N`，默认 64），各版本之间相同的文件内容共享。
+- 解析完就丢弃 parser token；反向边（“谁调用了它”）只对需要的符号按需解析。每次分析结束都会清空 JavaParser 缓存。
+
+实测环境：Linux（JDK 21，8 核，16 GB，磁盘缓存已预热），GUI 自动化运行，pick 到 `tenant`：
 
 | | 窗口显示 | 空闲 RSS | 峰值 RSS | 分析后 RSS | 分析耗时 |
 |---|---|---|---|---|---|
-| `java -jar` | 约 0.5 s | 约 165 MB | 575–800 MB | 约 320 MB | 3.6–4.2 s |
-| `scripts/faultline` | 约 0.5 s | 约 130 MB | 416–526 MB | 约 195 MB | 4.1–4.4 s |
-| `FAULTLINE_CDS=1` | 约 0.39 s | 约 145 MB | | | 3.8–3.9 s |
+| RuoYi-Vue `dbe9834e`，`scripts/faultline`（默认 4 GB） | 约 0.6 s | 约 140 MB | 495–630 MB | 约 205 MB | 3.5–3.7 s |
+| RuoYi-Vue `dbe9834e`，`java -jar` | 约 0.6 s | 约 165 MB | 543–583 MB | 约 315 MB | 3.4–3.8 s |
+| ruoyi-vue-pro `5f839f5bb0`（解析 17476 个 Java 文件），`FAULTLINE_XMX=1g` | 约 0.6 s | 约 145 MB | 763–927 MB | 约 235 MB | 16.3–16.5 s |
 
-GUI 让 jar 增大约 1.9 MB，未用到的语法高亮模式已剔除。以上数据尚未在 macOS 上测过。
+改为只保留摘要的索引之前，ruoyi-vue-pro 在 1 GB 下报 `Java heap space`，需要 6 GB 堆（RSS 2.8–3.6 GB，34–37 s）；
+现在 1 GB 下存活堆峰值约 0.56 GB，报告内容不变。新窗口比之前的 GUI 晚约 0.1 s 出现（0.59–0.64 s，之前
+0.49–0.57 s）。GUI 让 jar 增大约 2 MB，未用到的语法高亮模式已剔除。以上数据尚未在 macOS 上测过。
 
 ## 在 RuoYi-Vue 上的验证
 

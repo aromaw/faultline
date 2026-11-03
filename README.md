@@ -102,29 +102,52 @@ java -jar target/branch-diff-tool.jar gui
 java -jar target/branch-diff-tool.jar  # no arguments on a desktop also opens the GUI
 ```
 
-- Open a project with File › Open (recent projects are kept in `~/.faultline/gui.properties`).
-- Pick the target (tenant) and mainline branches. Both lists include local and remote branches.
-- The Commits tab lists `target..mainline` (non-merge commits, newest 5000). Filter by words, `author:`
-  or `sha:`. Select with shift/ctrl/cmd-click, or tick the Pick column (Space toggles). Commits always
-  apply oldest first, whatever order you click them in.
-- Analyze runs the offline simulation (`git merge-tree`) in the background, with progress and Cancel.
-  Cancel takes effect at the next phase.
-- The Conflicts tab shows a file › hunk tree with severity dots, a 3-pane (Ours | Base | Theirs) or
-  2-pane diff, and the Why / Take theirs / Take ours / Checklist / Dependency chain tabs. Click any
-  `File.java:123` reference to open it read-only on the right.
-- Export writes the same HTML, Markdown or JSON report as the CLI.
-- View › Toggle Light / Dark Theme, or the theme button in the toolbar, switches themes.
+The window walks through four numbered steps in its header; each turns into a green check when done.
 
-Severity dots are a GUI-only heuristic. Red means a deleted file or a missing or changed dependency
-that does not come from the pick. Orange means entry points, orphans, tenant events, or uncertain needs.
+1. **Project**: *Open Project…* (or File › Open, Ctrl/⌘+O, or a recent project on the welcome page).
+   Recent projects are kept in `~/.faultline/gui.properties`.
+2. **Branches**: *Pick onto (target)* is the tenant branch, *Commits from (mainline)* the branch the
+   commits come from. Click a branch button (or focus it and start typing; Ctrl/⌘+T and Ctrl/⌘+M open
+   them) to get a search popup like IntelliJ IDEA's: it lists local and remote branches in two groups and
+   filters as you type (case-insensitive substring; every space-separated word must match, so
+   `origin acme` finds `origin/tenant/acme`). ↑/↓ move, Enter selects, Esc closes.
+3. **Commits**: the Commits tab lists `target..mainline` (non-merge commits, newest 5000). Filter by
+   message, author or hash (`author:` and `sha:` narrow to one field). Tick the Pick column, or select
+   rows and press Space / *Pick Selected*; *Clear Picks* unticks all. Commits always apply oldest first,
+   whatever order you click them in.
+4. **Analyze**: the blue *Analyze N commits* button (Ctrl/⌘+Enter) runs the offline simulation
+   (`git merge-tree`) in the background. The status bar shows the phase, a *Cancel* button (it takes
+   effect at the next phase) and the heap in use.
+
+Results:
+
+- The Conflicts tab shows a file › hunk tree with HIGH / MEDIUM / LOW badges, and a summary row (conflict
+  hunks, conflicted files, files merged cleanly, checklist steps, commits to consider).
+- The hunk view shows Ours (tenant) | Base (pick parent) | Theirs (the pick) side by side (or Ours |
+  Theirs), with synced scrolling, and the tabs *Why it conflicts*, *Take theirs → needs* (dependencies of
+  the mainline code), *Keep ours → callers* (affected entry points and callers in the tenant), *Checklist*
+  and *Dependency chain*. Click any row or `File.java:123` reference to open it read-only on the right.
+- *Export Report* writes the same HTML, Markdown or JSON report as the CLI.
+- *Dark Theme* / *Light Theme* (or View › Toggle Light / Dark Theme) switches themes.
+
+Every button has a text label and a tooltip. Panels without content show what to do next.
+
+Severity badges are a GUI-only heuristic. HIGH means a deleted file, or a missing or changed dependency
+that does not come from the pick. MEDIUM means entry points, orphans, tenant edits, or uncertain needs.
+
+The app icon (window, taskbar, macOS Dock) is drawn by hand in `assets/icon/faultline.svg`;
+`assets/icon/render.py` renders the PNGs (16–1024 px), `faultline.icns` and `faultline.ico`.
 
 ### Memory and startup
 
 `scripts/faultline` runs
-`-XX:+UseG1GC -Xmx1g -XX:MinHeapFreeRatio=10 -XX:MaxHeapFreeRatio=30 -XX:CICompilerCount=2`.
-Variables:
+`-XX:+UseG1GC -Xmx<heap> -XX:MinHeapFreeRatio=10 -XX:MaxHeapFreeRatio=30 -XX:CICompilerCount=2`
+(on macOS also `-Xdock:name=faultline -Xdock:icon=…/faultline.icns`). Variables:
 
-- `FAULTLINE_XMX`: heap cap, default `1g`. RuoYi-Vue needs about 300 MB, and 256 MB also works.
+- `FAULTLINE_XMX`: heap cap, e.g. `4g`. The default is a quarter of the physical memory, at least 1 GB
+  and at most 8 GB. The launcher reads the memory with `sysctl -n hw.memsize` on macOS, and from
+  `/proc/meminfo` and the cgroup limit (containers) on Linux. A ~7,000-file Spring/MyBatis project
+  (ruoyi-vue-pro) peaks at about 0.6 GB of heap; RuoYi-Vue runs in 256 MB.
 - `FAULTLINE_JAVA_OPTS`: extra flags. `-XX:TieredStopAtLevel=1` saves about 30 MB of RSS but makes
   the analysis about 40% slower.
 - `FAULTLINE_CDS=1`: enables AppCDS. The archive is written to `~/.cache/faultline/` on the first run.
@@ -136,19 +159,40 @@ Variables:
 G1 with low free ratios is used because it returns heap to the OS after an analysis. Serial GC kept
 about 450 MB resident in our runs.
 
-The analysis drops parser tokens after parsing and resolves reverse edges ("who calls this") only for
-the symbols it needs. After each run it clears the JavaParser symbol-solver cache.
+Plain `java -jar … gui` uses the JVM's default heap, which is also a quarter of the physical memory.
+If that is below about 900 MB, the status bar says so at start-up.
 
-Measured on Linux (JDK 21, 8 CPUs, warm disk cache), RuoYi-Vue, pick `dbe9834e` onto `tenant`:
+If an analysis still runs out of memory, the GUI stops it, drops its data and caches, and shows a
+message with the current limit and the command to restart with a bigger one
+(`FAULTLINE_XMX=2g scripts/faultline gui` or `java -Xmx2g -jar …`). The window stays usable.
+
+How the analysis keeps memory low:
+
+- The code index keeps only summaries (types, members, imports, annotations) of each Java file. Full
+  syntax trees are parsed again on demand into a cache bounded by source size (by default 1/160 of the
+  heap, at least 2 M characters; `-Dfaultline.astCacheChars=N`). Before this, all four versions (fork,
+  base, ours, theirs) of every file stayed parsed, about 25–30 bytes of heap per source character. That
+  was the cause of the `Java heap space` error on large projects.
+- Whole-project scans (callers, type usages, injections) first check the source text for the
+  identifier and parse only the files that mention it.
+- The symbol solvers' per-file caches are bounded (`-Dfaultline.solverCacheSize=N`, default 64), and
+  identical file contents are shared between versions.
+- Parser tokens are dropped after parsing, and reverse edges ("who calls this") are resolved only for
+  the symbols that are needed. After each run the JavaParser caches are cleared.
+
+Measured on Linux (JDK 21, 8 CPUs, 16 GB, warm disk cache), GUI automation, pick onto `tenant`:
 
 | | window shown | idle RSS | peak RSS | RSS after analysis | analysis |
 |---|---|---|---|---|---|
-| `java -jar` | ~0.5 s | ~165 MB | 575–800 MB | ~320 MB | 3.6–4.2 s |
-| `scripts/faultline` | ~0.5 s | ~130 MB | 416–526 MB | ~195 MB | 4.1–4.4 s |
-| `FAULTLINE_CDS=1` | ~0.39 s | ~145 MB | | | 3.8–3.9 s |
+| RuoYi-Vue `dbe9834e`, `scripts/faultline` (4 GB default) | ~0.6 s | ~140 MB | 495–630 MB | ~205 MB | 3.5–3.7 s |
+| RuoYi-Vue `dbe9834e`, `java -jar` | ~0.6 s | ~165 MB | 543–583 MB | ~315 MB | 3.4–3.8 s |
+| ruoyi-vue-pro `5f839f5bb0` (17,476 Java files parsed), `FAULTLINE_XMX=1g` | ~0.6 s | ~145 MB | 763–927 MB | ~235 MB | 16.3–16.5 s |
 
-The GUI adds about 1.9 MB to the jar; unused syntax modes are stripped. These numbers have not been
-measured on macOS.
+Before the summary-only index, the ruoyi-vue-pro run failed with `Java heap space` at 1 GB and needed
+a 6 GB heap (2.8–3.6 GB RSS, 34–37 s). At 1 GB it now peaks at about 0.56 GB of live heap. The reports
+are unchanged. The window now appears about 0.1 s later than the previous GUI (0.59–0.64 s vs
+0.49–0.57 s). The GUI adds about 2 MB to the jar; unused syntax modes are stripped. These numbers have
+not been measured on macOS.
 
 ## Validation on RuoYi-Vue
 
