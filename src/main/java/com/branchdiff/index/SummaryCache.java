@@ -325,11 +325,23 @@ public final class SummaryCache {
         Path parent = p.getParent();
         Path tmp = null;
         try {
-            if (knownDirs.add(parent.toString())) Files.createDirectories(parent);
+            // created before it is marked as known: a thread that only checked the mark would otherwise write into a
+            // directory another thread has not created yet (and lose the entry)
+            String key = parent.toString();
+            if (!knownDirs.contains(key)) {
+                Files.createDirectories(parent);
+                knownDirs.add(key);
+            }
             tmp = parent.resolve(p.getFileName() + ".tmp-" + ProcessHandle.current().pid() + "-"
                     + Long.toHexString(ThreadLocalRandom.current().nextLong()));
             byte[] data = wrap(blobId, payload);
-            Files.write(tmp, data, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
+            try {
+                Files.write(tmp, data, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
+            } catch (NoSuchFileException e) {
+                // the directory was removed since (prune or 'cache clear' in another process): create it again
+                Files.createDirectories(parent);
+                Files.write(tmp, data, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
+            }
             try {
                 Files.move(tmp, p, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
             } catch (AtomicMoveNotSupportedException e) {

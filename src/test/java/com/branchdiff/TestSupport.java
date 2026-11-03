@@ -14,6 +14,23 @@ public final class TestSupport {
     private TestSupport() {
     }
 
+    /**
+     * Builds the sample repository with scripts/create-sample.sh into {@code repo}. Skipped (assumption) only when
+     * bash, git or python3 is missing; a script that runs and fails is a test failure, so a platform difference (BSD
+     * sed on macOS) cannot silently skip the sample-based tests.
+     */
+    public static void createSample(java.nio.file.Path repo) throws java.io.IOException, InterruptedException {
+        java.nio.file.Path script = java.nio.file.Path.of("scripts/create-sample.sh").toAbsolutePath();
+        org.junit.jupiter.api.Assertions.assertTrue(java.nio.file.Files.exists(script), script.toString());
+        Process tools = new ProcessBuilder("bash", "-c", "command -v git && command -v python3")
+                .redirectErrorStream(true).start();
+        tools.getInputStream().readAllBytes();
+        org.junit.jupiter.api.Assumptions.assumeTrue(tools.waitFor() == 0, "the sample needs bash, git and python3");
+        Process p = new ProcessBuilder("bash", script.toString(), repo.toString()).redirectErrorStream(true).start();
+        String out = new String(p.getInputStream().readAllBytes());
+        org.junit.jupiter.api.Assertions.assertEquals(0, p.waitFor(), "scripts/create-sample.sh failed:\n" + out);
+    }
+
     /** files given as alternating path, content */
     public static Snapshot snap(String label, String... pathAndContent) {
         Map<String, String> files = new LinkedHashMap<>();

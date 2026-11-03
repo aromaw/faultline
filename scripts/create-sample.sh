@@ -1056,7 +1056,10 @@ public final class OrderConstants {
     }
 }
 EOF
-sed -i 's/private String currency = OrderConstants.DEFAULT_CURRENCY;/private String currency = "CNY";/; /import com.example.order.constants.OrderConstants;/d' $J/model/Order.java
+# no 'sed -i': GNU and BSD (macOS) sed disagree on its argument
+sed -e 's/private String currency = OrderConstants.DEFAULT_CURRENCY;/private String currency = "CNY";/' \
+    -e '/import com.example.order.constants.OrderConstants;/d' "$J/model/Order.java" > "$J/model/Order.java.tmp"
+mv "$J/model/Order.java.tmp" "$J/model/Order.java"
 
 # G7b: calculatePrice also adds tax, but at the beginning (clean textual merge, double tax semantically)
 python3 - "$J/service/PricingService.java" <<'EOF'

@@ -16,7 +16,6 @@ import java.util.function.Predicate;
 import static com.branchdiff.TestSupport.dump;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * Builds the sample repo with scripts/create-sample.sh (real git branches) and checks every planted gap is
@@ -32,12 +31,8 @@ class SampleRepoEndToEndTest {
 
     @BeforeAll
     static void build() throws Exception {
-        Path script = Path.of("scripts/create-sample.sh").toAbsolutePath();
-        assumeTrue(script.toFile().exists());
         Path repo = tmp.resolve("sample");
-        Process p = new ProcessBuilder("bash", script.toString(), repo.toString()).redirectErrorStream(true).start();
-        String out = new String(p.getInputStream().readAllBytes());
-        assumeTrue(p.waitFor() == 0, "sample creation failed (needs bash, git, python3): " + out);
+        com.branchdiff.TestSupport.createSample(repo);
         Options o = new Options();
         o.repo = repo;
         o.ours = "ours";

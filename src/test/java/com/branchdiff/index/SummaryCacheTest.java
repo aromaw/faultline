@@ -30,7 +30,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /** The summary cache must never change a result: cold, warm, disabled, damaged and concurrently written alike. */
 class SummaryCacheTest {
@@ -235,6 +234,59 @@ class SummaryCacheTest {
         assertEquals(0, warm.rejected() + warm.misses(), warm.stats());
     }
 
+    /**
+     * Many threads writing into a fresh cache: the first writer of a fan-out directory used to mark it as created
+     * before creating it, and a writer that only saw the mark failed and lost its entry (about one round in two
+     * before the fix).
+     */
+    @Test
+    void concurrentWritersIntoAFreshCacheLoseNoEntry() throws Exception {
+        int threads = 16, perThread = 8;
+        ExecutorService pool = Executors.newFixedThreadPool(threads);
+        try {
+            for (int round = 0; round < 20; round++) {
+                SummaryCache c = SummaryCache.at(tmp.resolve("r" + round), 1L << 30);
+                List<byte[]> ids = new ArrayList<>();
+                for (int i = 0; i < threads * perThread; i++) ids.add(SummaryCache.blobId("round " + round + " file " + i));
+                java.util.concurrent.CyclicBarrier start = new java.util.concurrent.CyclicBarrier(threads);
+                List<Callable<Void>> writers = new ArrayList<>();
+                for (int t = 0; t < threads; t++) {
+                    List<byte[]> mine = ids.subList(t * perThread, (t + 1) * perThread);
+                    writers.add(() -> {
+                        start.await();
+                        for (byte[] id : mine) c.put(id, new byte[]{1, 2, 3});
+                        return null;
+                    });
+                }
+                for (Future<Void> f : pool.invokeAll(writers)) f.get();
+                for (byte[] id : ids) assertTrue(Files.exists(c.entryPath(id)), "round " + round + ": entry lost, " + c.stats());
+                assertEquals(ids.size(), c.writes(), c.stats());
+            }
+        } finally {
+            pool.shutdown();
+        }
+    }
+
+    /** a directory this cache created and another process removed (prune, 'cache clear') is created again */
+    @Test
+    void writesIntoADirectoryRemovedSinceItWasCreated() throws IOException {
+        SummaryCache c = SummaryCache.at(tmp, 1L << 30);
+        byte[] first = SummaryCache.blobId("first");
+        byte[] second = null;
+        for (int i = 0; second == null; i++) {
+            byte[] id = SummaryCache.blobId("candidate " + i);
+            if (id[0] == first[0]) second = id; // same 2-hex directory
+        }
+        c.put(first, new byte[]{1});
+        Path dir = c.entryPath(first).getParent();
+        Files.delete(c.entryPath(first));
+        Files.delete(dir);
+        c.put(second, new byte[]{2});
+        assertTrue(Files.exists(c.entryPath(second)), c.stats());
+        assertEquals(2, c.writes(), c.stats());
+        assertNotNull(c.get(second));
+    }
+
     @Test
     void pruneKeepsTheCacheUnderItsLimitAndClearEmptiesIt() throws IOException {
         Snapshot s = corpus();
@@ -386,12 +438,8 @@ class SummaryCacheTest {
     /** whole reports (sample repo, branch mode) with the default cache cold, warm and disabled */
     @Test
     void reportsAreTheSameColdWarmAndDisabled() throws Exception {
-        Path script = Path.of("scripts/create-sample.sh").toAbsolutePath();
-        assumeTrue(script.toFile().exists());
         Path repo = tmp.resolve("sample");
-        Process p = new ProcessBuilder("bash", script.toString(), repo.toString()).redirectErrorStream(true).start();
-        String out = new String(p.getInputStream().readAllBytes());
-        assumeTrue(p.waitFor() == 0, "sample creation failed: " + out);
+        com.branchdiff.TestSupport.createSample(repo);
         Path dir = tmp.resolve("cache");
         List<String> reports = new ArrayList<>();
         for (SummaryCache c : List.of(SummaryCache.disabled(), SummaryCache.at(dir, 1L << 30), SummaryCache.at(dir, 1L << 30))) {
