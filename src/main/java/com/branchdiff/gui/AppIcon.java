@@ -1,0 +1,55 @@
+package com.branchdiff.gui;
+
+import javax.imageio.ImageIO;
+import javax.swing.JFrame;
+import java.awt.Image;
+import java.awt.Taskbar;
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ * The faultline app icon (assets/icon/faultline.svg, rendered to PNGs by assets/icon/render.py): window icons in
+ * several sizes, and the Dock / taskbar icon where {@link Taskbar} supports it (macOS).
+ */
+final class AppIcon {
+    static final int[] SIZES = {16, 32, 48, 64, 128, 256, 512};
+    private static List<Image> images;
+
+    private AppIcon() {
+    }
+
+    static synchronized List<Image> images() {
+        if (images != null) return images;
+        List<Image> res = new ArrayList<>();
+        for (int s : SIZES) {
+            Image i = load(s);
+            if (i != null) res.add(i);
+        }
+        images = List.copyOf(res);
+        return images;
+    }
+
+    static Image load(int size) {
+        try (InputStream in = AppIcon.class.getResourceAsStream("icons/faultline-" + size + ".png")) {
+            return in == null ? null : ImageIO.read(in);
+        } catch (IOException e) {
+            return null;
+        }
+    }
+
+    /** window icons, plus the Dock icon on macOS (ignored where unsupported) */
+    static void install(JFrame frame) {
+        List<Image> imgs = images();
+        if (imgs.isEmpty()) return;
+        frame.setIconImages(imgs);
+        try {
+            if (Taskbar.isTaskbarSupported() && Taskbar.getTaskbar().isSupported(Taskbar.Feature.ICON_IMAGE)) {
+                Taskbar.getTaskbar().setIconImage(imgs.get(imgs.size() - 1));
+            }
+        } catch (RuntimeException | Error ignored) {
+            // no taskbar on this platform / headless
+        }
+    }
+}
