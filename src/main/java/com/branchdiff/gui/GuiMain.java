@@ -137,7 +137,11 @@ public final class GuiMain {
                     measure("peak-rss-kb", rssKb("VmHWM"));
                     measure("peak-rss-before-analysis-kb", hwmBefore);
                 }
-                if (m.lastError != null) System.err.println("[faultline gui] error: " + m.lastError);
+                if (m.lastError != null) {
+                    System.err.println("[faultline gui] error: " + m.lastError);
+                    settle();
+                    shot(m, a, "03-error-" + theme);
+                }
                 if (m.results() != null && m.results().result() != null) {
                     onEdt(() -> m.results().selectHunk(a.hunk));
                     settle();
@@ -162,8 +166,11 @@ public final class GuiMain {
                     Thread.sleep(2000); // the GUI collects the analysis garbage 300 ms after it ends
                     measure("rss-after-analysis-kb", rssKb("VmRSS"));
                     measure("heap-used-after-analysis-mb", usedHeapMb());
+                    System.gc();
+                    measure("heap-used-after-gc-mb", usedHeapMb());
                 }
             }
+            if (a.thenRepo != null) second(m, a); // e.g. after an out-of-memory error: the window must still work
         } catch (Exception e) {
             System.err.println("[faultline gui] automation failed: " + e);
             e.printStackTrace();
@@ -174,6 +181,27 @@ public final class GuiMain {
                 System.exit(0); // a normal exit, so -XX:ArchiveClassesAtExit can write the AppCDS archive
             }
         }
+    }
+
+    /** a second analysis in the same window (--then-repo, --then-pick, same branch names) */
+    private static void second(MainFrame m, Args a) throws Exception {
+        m.lastError = null;
+        onEdt(() -> m.openProject(a.thenRepo));
+        idle(m);
+        if (a.onto != null || a.mainline != null) {
+            onEdt(() -> m.setBranches(a.onto, a.mainline));
+            idle(m);
+        }
+        Set<String> shas = expand(new GitRunner(a.thenRepo.toAbsolutePath().normalize()), a.thenPick);
+        onEdt(() -> m.commits.check(shas));
+        long t0 = System.nanoTime();
+        onEdt(m::analyze);
+        waitFor(() -> !m.isAnalyzing() && m.busy.get() == 0, 600_000);
+        measure("second-analysis-wall-ms", (System.nanoTime() - t0) / 1_000_000);
+        System.err.println("[faultline gui] second analysis: " + (m.lastError != null ? "error: " + m.lastError
+                : m.results() != null && m.results().result() != null ? m.results().result().report().conflicts.files.size() + " conflicted file(s)" : "no result"));
+        settle();
+        shot(m, a, "06-second-analysis-" + (Prefs.load().dark() ? "dark" : "light"));
     }
 
     /** selects the first row / tree node with a location so the source view shows something */
@@ -296,7 +324,8 @@ public final class GuiMain {
 
     static final class Args {
         Path repo;
-        String onto, mainline, pick, hunk, branchSearch;
+        String onto, mainline, pick, hunk, branchSearch, thenPick;
+        Path thenRepo;
         boolean analyze, measure, exit, toggleTheme;
         Boolean dark;
         Path screenshots, export;
@@ -314,6 +343,8 @@ public final class GuiMain {
                     case "--pick" -> a.pick = args[++i];
                     case "--hunk" -> a.hunk = args[++i];
                     case "--branch-search" -> a.branchSearch = args[++i];
+                    case "--then-repo" -> a.thenRepo = Path.of(args[++i]);
+                    case "--then-pick" -> a.thenPick = args[++i];
                     case "--analyze" -> a.analyze = true;
                     case "--dark" -> a.dark = true;
                     case "--light" -> a.dark = false;
