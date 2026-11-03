@@ -25,6 +25,8 @@ public final class Main {
             whether the tenant has it, and what keeping ours breaks (tenant callers up to HTTP endpoints / jobs).
 
             Usage:
+              faultline gui [--repo <path>] [--onto <tenant>] [--mainline <ref>] [--pick <spec>] [--analyze]
+                  desktop GUI (Swing + FlatLaf). Running the jar without arguments on a desktop opens it too.
               faultline conflicts [--repo <path>] [options]
                   analyze the repository's current cherry-pick / merge / revert (CHERRY_PICK_HEAD / MERGE_HEAD /
                   REVERT_HEAD and the unmerged index entries, stages 1/2/3). This is the default when no --theirs is given.
@@ -71,6 +73,11 @@ public final class Main {
     }
 
     public static void main(String[] args) {
+        // "faultline gui", or no arguments at all on a desktop (double-click on the jar): the Swing GUI
+        if ((args.length > 0 && args[0].equals("gui")) || (args.length == 0 && !java.awt.GraphicsEnvironment.isHeadless())) {
+            com.branchdiff.gui.GuiMain.main(args);
+            return;
+        }
         Options o;
         try {
             o = parse(args);

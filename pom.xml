@@ -39,6 +39,18 @@
       <version>4.12</version>
     </dependency>
     <dependency>
+      <!-- GUI look and feel: IntelliJ light / Darcula themes (Apache License 2.0) -->
+      <groupId>com.formdev</groupId>
+      <artifactId>flatlaf</artifactId>
+      <version>3.7.2</version>
+    </dependency>
+    <dependency>
+      <!-- GUI code views with Java / XML syntax highlighting (BSD 3-Clause) -->
+      <groupId>com.fifesoft</groupId>
+      <artifactId>rsyntaxtextarea</artifactId>
+      <version>3.6.3</version>
+    </dependency>
+    <dependency>
       <groupId>org.junit.jupiter</groupId>
       <artifactId>junit-jupiter</artifactId>
       <version>${junit.version}</version>
@@ -84,6 +96,57 @@
                     <exclude>META-INF/*.RSA</exclude>
                     <exclude>module-info.class</exclude>
                     <exclude>META-INF/versions/*/module-info.class</exclude>
+                  </excludes>
+                </filter>
+                <filter>
+                  <!-- the GUI highlights Java / XML / YAML / properties / SQL / web files only: drop the other
+                       languages' token makers (~1.5 MB uncompressed) -->
+                  <artifact>com.fifesoft:rsyntaxtextarea</artifact>
+                  <excludes>
+                    <exclude>org/fife/ui/rsyntaxtextarea/modes/ActionScriptTokenMaker*.class</exclude>
+                    <exclude>org/fife/ui/rsyntaxtextarea/modes/Assembler6502TokenMaker*.class</exclude>
+                    <exclude>org/fife/ui/rsyntaxtextarea/modes/AssemblerX86TokenMaker*.class</exclude>
+                    <exclude>org/fife/ui/rsyntaxtextarea/modes/BBCodeTokenMaker*.class</exclude>
+                    <exclude>org/fife/ui/rsyntaxtextarea/modes/CPlusPlusTokenMaker*.class</exclude>
+                    <exclude>org/fife/ui/rsyntaxtextarea/modes/CSharpTokenMaker*.class</exclude>
+                    <exclude>org/fife/ui/rsyntaxtextarea/modes/CTokenMaker*.class</exclude>
+                    <exclude>org/fife/ui/rsyntaxtextarea/modes/ClojureTokenMaker*.class</exclude>
+                    <exclude>org/fife/ui/rsyntaxtextarea/modes/CsvTokenMaker*.class</exclude>
+                    <exclude>org/fife/ui/rsyntaxtextarea/modes/DTokenMaker*.class</exclude>
+                    <exclude>org/fife/ui/rsyntaxtextarea/modes/DartTokenMaker*.class</exclude>
+                    <exclude>org/fife/ui/rsyntaxtextarea/modes/DelphiTokenMaker*.class</exclude>
+                    <exclude>org/fife/ui/rsyntaxtextarea/modes/DockerTokenMaker*.class</exclude>
+                    <exclude>org/fife/ui/rsyntaxtextarea/modes/DtdTokenMaker*.class</exclude>
+                    <exclude>org/fife/ui/rsyntaxtextarea/modes/FortranTokenMaker*.class</exclude>
+                    <exclude>org/fife/ui/rsyntaxtextarea/modes/GoTokenMaker*.class</exclude>
+                    <exclude>org/fife/ui/rsyntaxtextarea/modes/HandlebarsTokenMaker*.class</exclude>
+                    <exclude>org/fife/ui/rsyntaxtextarea/modes/HostsTokenMaker*.class</exclude>
+                    <exclude>org/fife/ui/rsyntaxtextarea/modes/HtaccessTokenMaker*.class</exclude>
+                    <exclude>org/fife/ui/rsyntaxtextarea/modes/IniTokenMaker*.class</exclude>
+                    <exclude>org/fife/ui/rsyntaxtextarea/modes/JSPTokenMaker*.class</exclude>
+                    <exclude>org/fife/ui/rsyntaxtextarea/modes/JshintrcTokenMaker*.class</exclude>
+                    <exclude>org/fife/ui/rsyntaxtextarea/modes/LatexTokenMaker*.class</exclude>
+                    <exclude>org/fife/ui/rsyntaxtextarea/modes/LessTokenMaker*.class</exclude>
+                    <exclude>org/fife/ui/rsyntaxtextarea/modes/LispTokenMaker*.class</exclude>
+                    <exclude>org/fife/ui/rsyntaxtextarea/modes/LuaTokenMaker*.class</exclude>
+                    <exclude>org/fife/ui/rsyntaxtextarea/modes/MakefileTokenMaker*.class</exclude>
+                    <exclude>org/fife/ui/rsyntaxtextarea/modes/MxmlTokenMaker*.class</exclude>
+                    <exclude>org/fife/ui/rsyntaxtextarea/modes/NSISTokenMaker*.class</exclude>
+                    <exclude>org/fife/ui/rsyntaxtextarea/modes/PHPTokenMaker*.class</exclude>
+                    <exclude>org/fife/ui/rsyntaxtextarea/modes/PerlTokenMaker*.class</exclude>
+                    <exclude>org/fife/ui/rsyntaxtextarea/modes/PowerShellTokenMaker*.class</exclude>
+                    <exclude>org/fife/ui/rsyntaxtextarea/modes/ProtoTokenMaker*.class</exclude>
+                    <exclude>org/fife/ui/rsyntaxtextarea/modes/PythonTokenMaker*.class</exclude>
+                    <exclude>org/fife/ui/rsyntaxtextarea/modes/RubyTokenMaker*.class</exclude>
+                    <exclude>org/fife/ui/rsyntaxtextarea/modes/RustTokenMaker*.class</exclude>
+                    <exclude>org/fife/ui/rsyntaxtextarea/modes/SASTokenMaker*.class</exclude>
+                    <exclude>org/fife/ui/rsyntaxtextarea/modes/ScalaTokenMaker*.class</exclude>
+                    <exclude>org/fife/ui/rsyntaxtextarea/modes/TclTokenMaker*.class</exclude>
+                    <exclude>org/fife/ui/rsyntaxtextarea/modes/TypeScriptTokenMaker*.class</exclude>
+                    <exclude>org/fife/ui/rsyntaxtextarea/modes/UnixShellTokenMaker*.class</exclude>
+                    <exclude>org/fife/ui/rsyntaxtextarea/modes/VhdlTokenMaker*.class</exclude>
+                    <exclude>org/fife/ui/rsyntaxtextarea/modes/VisualBasicTokenMaker*.class</exclude>
+                    <exclude>org/fife/ui/rsyntaxtextarea/modes/WindowsBatchTokenMaker*.class</exclude>
                   </excludes>
                 </filter>
               </filters>
