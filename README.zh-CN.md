@@ -125,7 +125,8 @@ java -jar target/branch-diff-tool.jar  # 桌面环境下不带参数也会打开
 
 窗口顶部按编号列出四个步骤，完成的步骤会变成绿色对勾。
 
-1. **Project（项目）**：点 *Open Project…*（或 File › Open、Ctrl/⌘+O，或欢迎页上的最近项目）。
+1. **Project（项目）**：还没打开项目时，侧栏显示 *Open Folder…* 和最近项目（点一下即可打开），也可以把文件夹拖到窗口上。
+   之后，顶部的项目按钮会先列出最近项目，再给出 *Open Folder…*。macOS 上的文件夹对话框是系统原生的 Finder 对话框。
    最近项目记在 `~/.faultline/gui.properties`。
 2. **Branches（分支）**：*Pick onto (target)* 是 tenant 分支，*Commits from (mainline)* 是提交所在的主线分支。
    点分支按钮（或让按钮获得焦点后直接打字；Ctrl/⌘+T、Ctrl/⌘+M 也能打开）会弹出类似 IntelliJ IDEA 的
@@ -152,10 +153,17 @@ java -jar target/branch-diff-tool.jar  # 桌面环境下不带参数也会打开
 - *Export* 导出与命令行相同的 HTML / Markdown / JSON 报告。
 - *Dark* / *Light*（或 View › Toggle Light / Dark Theme）切换深色/浅色主题。
 
+侧栏（Commits / Conflicts）可以拖到任意宽度，直到完全隐藏。View › *Show Sidebar*（Ctrl/⌘+B）或分隔条上的箭头可以隐藏
+和恢复侧栏，宽度会被记住。
+
+出错时窗口会显示错误，并把详细信息写入 `~/.faultline/logs/gui.log`；通过 `scripts/faultline` 启动时，JVM 的崩溃报告
+（`hs_err_pid*.log`）也放在同一目录。报告问题时请附上这些文件。
+
 每个按钮都有文字和提示（tooltip）。没有内容的面板会提示下一步该做什么。窗口在所有平台上都使用 FlatLaf 的
-macOS 风格浅色/深色主题：圆角控件、无网格线的表格、浅色底的标签和徽章。字体为内置的 JetBrains Mono Nerd Font
-（窗口、代码和图标都用它，图标取自字体里的 VS Code codicons；字体里没有的字符，例如中文，由系统的后备字体显示）；View › *Nerd Font (JetBrains Mono)* 可切回系统字体，
-选择会被记住。字体文件采用 SIL Open Font License（`src/main/resources/com/branchdiff/gui/fonts/OFL.txt`），让 jar 增大约 3 MB。
+macOS 风格浅色/深色主题：圆角控件、无网格线的表格、浅色底的标签和徽章。字体为内置的 Maple Mono NF CN
+（带中文字形的等宽 Nerd Font），窗口、代码和图标都用它（图标取自字体里的 VS Code codicons）。中文字形必须在字体本身里：
+macOS 上的 Java 不会为从 jar 加载的字体回退到其他字体。View › *Nerd Font (Maple Mono, with Chinese)* 可切回系统字体，
+选择会被记住。字体文件采用 SIL Open Font License（`src/main/resources/com/branchdiff/gui/fonts/OFL.txt`），让 jar 增大约 19 MB。
 
 严重度标签只是 GUI 的启发式标记：HIGH 表示文件被删除，或者有缺失/已改动、但不来自本次 pick 的依赖；
 MEDIUM 表示入口点、孤儿代码、tenant 的改动或不确定的依赖。

@@ -156,6 +156,54 @@ class GuiLogicTest {
         return n;
     }
 
+    @Test
+    void droppedFolderOrFileOpensItsFolder() throws Exception {
+        Path dir = Files.createDirectories(tmp.resolve("proj"));
+        Path file = Files.writeString(dir.resolve("pom.xml"), "<project/>");
+        List<Path> opened = new ArrayList<>();
+        FolderDrop drop = new FolderDrop(opened::add);
+        for (Path p : List.of(dir, file)) {
+            java.awt.datatransfer.Transferable t = new java.awt.datatransfer.Transferable() {
+                public java.awt.datatransfer.DataFlavor[] getTransferDataFlavors() {
+                    return new java.awt.datatransfer.DataFlavor[] {java.awt.datatransfer.DataFlavor.javaFileListFlavor};
+                }
+
+                public boolean isDataFlavorSupported(java.awt.datatransfer.DataFlavor f) {
+                    return f.equals(java.awt.datatransfer.DataFlavor.javaFileListFlavor);
+                }
+
+                public Object getTransferData(java.awt.datatransfer.DataFlavor f) {
+                    return List.of(p.toFile());
+                }
+            };
+            assertTrue(drop.importData(new javax.swing.TransferHandler.TransferSupport(new javax.swing.JPanel(), t)));
+        }
+        assertEquals(List.of(dir, dir), opened);
+    }
+
+    @Test
+    void sidebarCanShrinkToNothingHidesAndComesBackAtItsWidth() throws Exception {
+        org.junit.jupiter.api.Assumptions.assumeFalse(java.awt.GraphicsEnvironment.isHeadless(), "needs a display");
+        Prefs prefs = new Prefs(tmp.resolve("gui.properties"));
+        assertEquals(MainFrame.DEFAULT_SIDEBAR, prefs.sidebarWidth(MainFrame.DEFAULT_SIDEBAR));
+        prefs.setSidebarWidth(320);
+        javax.swing.SwingUtilities.invokeAndWait(() -> {
+            MainFrame m = new MainFrame(prefs);
+            try {
+                javax.swing.JSplitPane split = (javax.swing.JSplitPane) m.frame.getContentPane().getComponent(1);
+                assertEquals(0, split.getLeftComponent().getMinimumSize().width, "the sidebar has no minimum width");
+                assertEquals(320, split.getDividerLocation(), "remembered width");
+                m.showSidebar(false);
+                assertEquals(0, split.getDividerLocation());
+                m.showSidebar(true);
+                assertEquals(320, split.getDividerLocation());
+            } finally {
+                m.frame.dispose();
+            }
+        });
+        assertEquals(320, new Prefs(tmp.resolve("gui.properties")).sidebarWidth(1), "saved");
+    }
+
     // ------------------------------------------------------------------ prefs and locations
 
     @Test

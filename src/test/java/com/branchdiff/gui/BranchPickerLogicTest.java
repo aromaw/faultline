@@ -90,6 +90,7 @@ class BranchPickerLogicTest {
         java.awt.Font f = NerdFont.font(java.awt.Font.PLAIN, 13);
         assertEquals(NerdFont.FAMILY, f.getFamily());
         assertTrue(f.canDisplay('\ue725'), "Nerd Font icon (git branch)");
+        assertEquals(-1, f.canDisplayUpTo("修复菜单排序：保持租户顺序"), "Chinese is in the font itself (macOS does not fall back)");
         assertEquals(java.awt.Font.BOLD, NerdFont.font(java.awt.Font.BOLD, 13).getStyle());
         assertNotNull(NerdFont.class.getResource("fonts/OFL.txt"), "the font's license ships with it");
         for (Ui.Glyph g : Ui.Glyph.values()) assertTrue(f.canDisplay(Ui.nerdGlyph(g).charAt(0)), "Nerd Font has the icon " + g);

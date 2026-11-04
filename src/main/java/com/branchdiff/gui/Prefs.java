@@ -79,6 +79,20 @@ public final class Prefs {
         save();
     }
 
+    /** width of the sidebar (Commits / Conflicts) in pixels; {@code def} when never set */
+    public int sidebarWidth(int def) {
+        try {
+            return Integer.parseInt(p.getProperty("sidebar.width", String.valueOf(def)).trim());
+        } catch (NumberFormatException e) {
+            return def;
+        }
+    }
+
+    public void setSidebarWidth(int w) {
+        p.setProperty("sidebar.width", String.valueOf(w));
+        save();
+    }
+
     /** whether the window uses the bundled Nerd Font (the default) or the theme's system font */
     public boolean nerdFont() {
         return !"system".equals(p.getProperty("font"));

@@ -78,11 +78,14 @@ public final class GuiMain {
             if (e instanceof OutOfMemoryError) {
                 MainFrame.releaseMemory();
                 SwingUtilities.invokeLater(m::outOfMemory);
-            } else if (prev != null) {
-                prev.uncaughtException(t, e);
             } else {
-                System.err.println("Exception in thread \"" + t.getName() + "\" " + e);
-                e.printStackTrace();
+                java.nio.file.Path log = CrashLog.write(t, e);
+                if (prev != null) prev.uncaughtException(t, e);
+                else {
+                    System.err.println("Exception in thread \"" + t.getName() + "\" " + e);
+                    e.printStackTrace();
+                }
+                SwingUtilities.invokeLater(() -> m.unexpectedError(e, log));
             }
         });
     }

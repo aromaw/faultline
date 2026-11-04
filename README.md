@@ -133,8 +133,10 @@ java -jar target/branch-diff-tool.jar  # no arguments on a desktop also opens th
 
 The window walks through four numbered steps in its header; each turns into a green check when done.
 
-1. **Project**: *Open Project…* (or File › Open, Ctrl/⌘+O, or a recent project on the welcome page).
-   Recent projects are kept in `~/.faultline/gui.properties`.
+1. **Project**: with no project open, the sidebar shows *Open Folder…* and the recent projects (one click
+   opens one). You can also drop a folder onto the window. Later, the header's project button lists the
+   recent projects first, then *Open Folder…*. On macOS the folder dialog is the native Finder one. Recent
+   projects are kept in `~/.faultline/gui.properties`.
 2. **Branches**: *Pick onto (target)* is the tenant branch, *Commits from (mainline)* the branch the
    commits come from. Click a branch button (or focus it and start typing; Ctrl/⌘+T and Ctrl/⌘+M open
    them) to get a search popup like IntelliJ IDEA's: it lists local and remote branches in two groups and
@@ -166,12 +168,21 @@ Results:
 - *Export* writes the same HTML, Markdown or JSON report as the CLI.
 - *Dark* / *Light* (or View › Toggle Light / Dark Theme) switches themes.
 
+The sidebar (Commits / Conflicts) can be dragged to any width, down to hidden. View › *Show Sidebar*
+(Ctrl/⌘+B) or the arrows on the divider hide it and bring it back; its width is remembered.
+
+If something goes wrong, the window shows the error and writes the details to
+`~/.faultline/logs/gui.log`. JVM crash reports (`hs_err_pid*.log`) go to the same folder when the app
+was started with `scripts/faultline`. Please send those files with a bug report.
+
 Every button has a text label and a tooltip. Panels without content show what to do next. The window uses
 FlatLaf's macOS-style light and dark themes on every platform, with rounded controls, tables without grid
-lines and tinted chips and badges. The font is the bundled JetBrains Mono Nerd Font (window, code and icons, which are the font's VS Code codicons;
-characters it lacks, such as Chinese, come from the system's fallback fonts); View › *Nerd Font (JetBrains
-Mono)* switches back to the system font and is remembered. The font files are under the SIL Open Font
-License (`src/main/resources/com/branchdiff/gui/fonts/OFL.txt`) and add about 3 MB to the jar.
+lines and tinted chips and badges. The font is the bundled Maple Mono NF CN, a monospace Nerd Font with
+Chinese glyphs, for the window, the code and the icons (the font's VS Code codicons). The Chinese glyphs
+must be in the font itself: Java on macOS does not fall back to other fonts for a font loaded from the
+jar. View › *Nerd Font (Maple Mono, with Chinese)* switches back to the system font and is remembered.
+The font files are under the SIL Open Font License (`src/main/resources/com/branchdiff/gui/fonts/OFL.txt`)
+and add about 19 MB to the jar.
 
 Severity badges are a GUI-only heuristic. HIGH means a deleted file, or a missing or changed dependency
 that does not come from the pick. MEDIUM means entry points, orphans, tenant edits, or uncertain needs.

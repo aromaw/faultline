@@ -19,6 +19,7 @@
 #   FAULTLINE_JAVA_OPTS          extra JVM options (they come last, so they override the defaults), e.g.
 #                                -Dfaultline.parseThreads=N, -XX:ReservedCodeCacheSize=48m
 #   FAULTLINE_PRINT_OPTS=1       print the JVM options and exit (no java start)
+# Crash reports: the GUI writes unhandled errors to ~/.faultline/logs/gui.log, the JVM its hs_err files there.
 set -e
 DIR=$(cd "$(dirname "$0")" && pwd)
 JAR=${FAULTLINE_JAR:-}
@@ -74,6 +75,9 @@ XMX=${FAULTLINE_XMX:-$(default_xmx)}
 GC_OPTS=${FAULTLINE_GC_OPTS:--XX:+UseG1GC -XX:MinHeapFreeRatio=10 -XX:MaxHeapFreeRatio=30 -XX:GCTimeRatio=4}
 OPTS="$GC_OPTS -Xmx$XMX -XX:CICompilerCount=2"
 OPTS="$OPTS -Dapple.awt.application.name=faultline"
+# JVM crash reports next to the GUI's own crash log (~/.faultline/logs/gui.log), not in the working directory
+LOGS="$HOME/.faultline/logs"
+case "$LOGS" in *" "*) ;; *) OPTS="$OPTS -XX:ErrorFile=$LOGS/hs_err_pid%p.log" ;; esac
 DOCK_ICON=
 if [ "$OS" = Darwin ]; then
   OPTS="$OPTS -Xdock:name=faultline"
@@ -106,5 +110,6 @@ if [ "${FAULTLINE_PRINT_OPTS:-0}" = "1" ]; then
   echo "$OPTS${DOCK_ICON:+ $DOCK_ICON}"
   exit 0
 fi
+mkdir -p "$LOGS" 2>/dev/null || true
 # shellcheck disable=SC2086
 exec "$JAVA" $OPTS ${DOCK_ICON:+"$DOCK_ICON"} $FAULTLINE_JAVA_OPTS -jar "$JAR" "$@"

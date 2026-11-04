@@ -49,6 +49,7 @@ import java.awt.event.KeyEvent;
 import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
@@ -85,6 +86,10 @@ final class MainFrame {
     private ResultsPanel results;
     final JTabbedPane left = new JTabbedPane();
     private final JPanel commitsHolder = new JPanel(new CardLayout());
+    /** sidebar (Commits / Conflicts) | detail */
+    private final JSplitPane split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT);
+    static final int DEFAULT_SIDEBAR = 500;
+    private javax.swing.JCheckBoxMenuItem sidebarItem;
     private final JPanel right = new JPanel(new CardLayout());
     private final JPanel welcome = new JPanel(new BorderLayout());
     private final JPanel conflictsHolder = new JPanel(new BorderLayout());
@@ -108,9 +113,7 @@ final class MainFrame {
 
         left.putClientProperty("JTabbedPane.tabType", "underlined");
         left.putClientProperty("JTabbedPane.tabHeight", 34);
-        commitsHolder.add(emptyState(Ui.Glyph.FOLDER, "No project open",
-                "Open a git repository to list the mainline commits that are not on the target branch yet.",
-                "Open Project\u2026", this::chooseProject), "empty");
+        commitsHolder.add(new ProjectPicker(prefs, this::chooseProject, this::openProject), "empty");
         commitsHolder.add(commits, "commits");
         left.addTab("Commits", Ui.icon(Ui.Glyph.COMMIT), commitsHolder, "Mainline commits that are not on the target branch");
         showNoAnalysis();
@@ -118,11 +121,24 @@ final class MainFrame {
         left.addChangeListener(e -> showRight());
 
         right.add(welcome, "welcome"); // filled by updateActions()
-        JSplitPane split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, left, right);
-        split.setResizeWeight(0.4);
-        split.setDividerLocation(600);
+        // the sidebar can be dragged as narrow as wanted (down to hidden) and remembers its width; the toolbars in
+        // it used to set its minimum width, so it could not be made narrower than about 580 px
+        left.setMinimumSize(new Dimension(0, 0));
+        right.setMinimumSize(new Dimension(360, 0));
+        split.setLeftComponent(left);
+        split.setRightComponent(right);
+        split.setResizeWeight(0.0);
+        split.setOneTouchExpandable(true);
+        split.setDividerLocation(prefs.sidebarWidth(DEFAULT_SIDEBAR));
         split.setBorder(null);
+        split.addPropertyChangeListener(JSplitPane.DIVIDER_LOCATION_PROPERTY, e -> {
+            int w = split.getDividerLocation();
+            if (w > 40) prefs.setSidebarWidth(w);
+            if (sidebarItem != null) sidebarItem.setSelected(w > 40);
+        });
         frame.add(split, BorderLayout.CENTER);
+        // drop a project folder anywhere on the window to open it
+        frame.setTransferHandler(new FolderDrop(this::openProject));
         frame.add(statusBar(), BorderLayout.SOUTH);
         Dimension screen = Toolkit.getDefaultToolkit().getScreenSize();
         frame.setSize(new Dimension(Math.min(1500, screen.width * 9 / 10), Math.min(940, screen.height * 9 / 10)));
@@ -200,8 +216,12 @@ final class MainFrame {
         JMenuItem t = new JMenuItem("Toggle Light / Dark Theme", Ui.icon(Ui.Glyph.THEME));
         t.addActionListener(e -> toggleTheme());
         view.add(t);
-        javax.swing.JCheckBoxMenuItem nerd = new javax.swing.JCheckBoxMenuItem("Nerd Font (JetBrains Mono)", prefs.nerdFont());
-        nerd.setToolTipText("Use the bundled JetBrains Mono Nerd Font for the window and the code; off: the system font");
+        sidebarItem = new javax.swing.JCheckBoxMenuItem("Show Sidebar", true);
+        sidebarItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_B, mod));
+        sidebarItem.addActionListener(e -> showSidebar(sidebarItem.isSelected()));
+        view.add(sidebarItem);
+        javax.swing.JCheckBoxMenuItem nerd = new javax.swing.JCheckBoxMenuItem("Nerd Font (Maple Mono, with Chinese)", prefs.nerdFont());
+        nerd.setToolTipText("Use the bundled Maple Mono NF CN for the window, the code and the icons; off: the system font");
         nerd.addActionListener(e -> setNerdFont(nerd.isSelected()));
         view.add(nerd);
         JMenuItem find = new JMenuItem("Filter Commits", Ui.icon(Ui.Glyph.SEARCH));
@@ -232,7 +252,7 @@ final class MainFrame {
         c.fill = GridBagConstraints.VERTICAL;
 
         openButton.setToolTipText("Open a git repository (" + shortcutText() + "O)");
-        openButton.addActionListener(e -> chooseProject());
+        openButton.addActionListener(e -> projectMenu());
         project.setFont(project.getFont().deriveFont(Font.BOLD));
         JPanel s1 = row(openButton, stack(project, projectPath));
 
@@ -305,8 +325,8 @@ final class MainFrame {
     private void styleAnalyze() {
         String base = "font: bold +1; arc: 10; margin: 6,16,6,18; iconTextGap: 8;";
         analyze.putClientProperty("FlatLaf.style", analyze.isEnabled() ? base
-                + "background: #3D7BF7; foreground: #FFFFFF; hoverBackground: #346BDB; pressedBackground: #2D5EC2;"
-                + "borderColor: #2F67D8; focusedBorderColor: #9DBBFB" : base);
+                + "background: " + Ui.hex(Ui.ACCENT) + "; foreground: #FFFFFF; hoverBackground: #4361E0; pressedBackground: #3A54C7;"
+                + "borderColor: #4361E0; focusedBorderColor: #A5B6FA" : base);
         analyze.setIcon(Ui.icon(Ui.Glyph.PLAY, analyze.isEnabled() ? Color.WHITE : null));
     }
 
@@ -472,7 +492,7 @@ final class MainFrame {
         box.add(Box.createVerticalStrut(24));
         int n = commits.chosen().size();
         String[][] s = {
-                {"Open a git repository", git == null ? "File \u203A Open Project\u2026 or a recent project below" : "Opened " + repo},
+                {"Open a git repository", git == null ? "Open Folder\u2026 or a recent project on the left, or drop a folder onto the window" : "Opened " + shortPath(repo.toString())},
                 {"Choose the target and the mainline branch", "click a branch button and type to search, e.g. \u201Corigin dev\u201D"},
                 {"Check the mainline commits to pick", n == 0 ? "click the Pick box, or select rows and press Space" : n + (n == 1 ? " commit" : " commits") + " picked, applied oldest first"},
                 {"Analyze", "an offline simulation with git merge-tree: the worktree, index and refs are not touched"}};
@@ -490,19 +510,7 @@ final class MainFrame {
             d.setBorder(BorderFactory.createEmptyBorder(2, 32, 14, 0));
             box.add(d);
         }
-        List<String> rec = prefs.recentProjects();
-        if (!rec.isEmpty() && git == null) {
-            box.add(Box.createVerticalStrut(10));
-            box.add(Ui.heading("Recent projects", 0));
-            box.add(Box.createVerticalStrut(4));
-            for (String p : rec) {
-                JButton b = new JButton(p, Ui.icon(Ui.Glyph.FOLDER));
-                b.putClientProperty("JButton.buttonType", "borderless");
-                b.setToolTipText("Open " + p);
-                b.addActionListener(e -> openProject(Path.of(p)));
-                box.add(b);
-            }
-        }
+        // the recent projects are in the sidebar (ProjectPicker)
         for (java.awt.Component x : box.getComponents()) ((JComponent) x).setAlignmentX(0f);
         JScrollPane sp = new JScrollPane(box);
         sp.setBorder(null);
@@ -530,11 +538,76 @@ final class MainFrame {
 
     // ------------------------------------------------------------------ project / branches / commits
 
+    private long lastErrorDialog;
+
+    /**
+     * An exception nobody handled: the window stays usable; the details are in the crash log (at most one dialog
+     * every 10 s, so a repeating error does not flood the screen).
+     */
+    void unexpectedError(Throwable e, Path log) {
+        lastError = "unexpected error: " + e;
+        status("Unexpected error: " + e + (log != null ? " (details: " + log + ")" : ""));
+        long now = System.currentTimeMillis();
+        if (GuiMain.automated || now - lastErrorDialog < 10_000) return;
+        lastErrorDialog = now;
+        JOptionPane.showMessageDialog(frame, "faultline hit an unexpected error:\n" + e
+                        + (log != null ? "\n\nThe details were saved to\n" + log + "\nPlease send that file with a description of what you did." : ""),
+                "faultline: unexpected error", JOptionPane.WARNING_MESSAGE);
+    }
+
+    /** View › Show Sidebar (Ctrl/⌘+B): hides the Commits / Conflicts sidebar or brings it back at its last width */
+    void showSidebar(boolean show) {
+        split.setDividerLocation(show ? Math.max(200, prefs.sidebarWidth(DEFAULT_SIDEBAR)) : 0);
+    }
+
+    /**
+     * Picks a project folder: the native folder dialog on macOS (Finder's, with its sidebar, recents and search),
+     * Swing's chooser elsewhere.
+     */
     void chooseProject() {
-        JFileChooser fc = new JFileChooser(repo != null ? repo.toFile() : new File(System.getProperty("user.home")));
-        fc.setDialogTitle("Open git repository");
+        File start = repo != null ? repo.toFile() : new File(System.getProperty("user.home"));
+        if (System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("mac")) {
+            String prev = System.getProperty("apple.awt.fileDialogForDirectories");
+            System.setProperty("apple.awt.fileDialogForDirectories", "true");
+            try {
+                java.awt.FileDialog d = new java.awt.FileDialog(frame, "Open a git repository", java.awt.FileDialog.LOAD);
+                d.setDirectory(start.getParent() != null ? start.getParent() : start.getPath());
+                d.setVisible(true);
+                if (d.getFile() != null) openProject(Path.of(d.getDirectory(), d.getFile()));
+            } finally {
+                if (prev == null) System.clearProperty("apple.awt.fileDialogForDirectories");
+                else System.setProperty("apple.awt.fileDialogForDirectories", prev);
+            }
+            return;
+        }
+        JFileChooser fc = new JFileChooser(start);
+        fc.setDialogTitle("Open a git repository");
         fc.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
         if (fc.showOpenDialog(frame) == JFileChooser.APPROVE_OPTION) openProject(fc.getSelectedFile().toPath());
+    }
+
+    /** the header's project button: recent projects first, then "Open Folder…" */
+    private void projectMenu() {
+        List<String> recents = new ArrayList<>(prefs.recentProjects());
+        if (repo != null) recents.remove(repo.toString());
+        if (recents.isEmpty()) {
+            chooseProject();
+            return;
+        }
+        JPopupMenu m = new JPopupMenu();
+        for (String p : recents) {
+            Path path = Path.of(p);
+            JMenuItem it = new JMenuItem((path.getFileName() != null ? path.getFileName() : path) + "   " + shortPath(p),
+                    Ui.icon(Ui.Glyph.FOLDER));
+            it.setToolTipText(p);
+            it.addActionListener(a -> openProject(path));
+            m.add(it);
+        }
+        m.addSeparator();
+        JMenuItem other = new JMenuItem("Open Folder\u2026", Ui.icon(Ui.Glyph.SEARCH));
+        other.addActionListener(a -> chooseProject());
+        m.add(other);
+        m.show(openButton, 0, openButton.getHeight());
     }
 
     void openProject(Path dir) {
