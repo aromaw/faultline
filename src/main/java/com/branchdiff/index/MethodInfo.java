@@ -19,6 +19,8 @@ public final class MethodInfo {
     public final boolean isStatic;
     public final boolean isAbstract;
     public final boolean isDefault;
+    /** whether the last parameter is variadic ({@code T...}; its param type is then written {@code T[]}) */
+    public final boolean varargs;
     public final Set<String> annotations;
     public final int line;
     public final int endLine;
@@ -32,8 +34,8 @@ public final class MethodInfo {
     final int memberIndex;
 
     public MethodInfo(ClassInfo owner, String name, List<String> params, String returnType, boolean constructor,
-                      boolean isStatic, boolean isAbstract, boolean isDefault, Set<String> annotations, int line,
-                      int endLine, Fingerprint declPrint, Fingerprint bodyPrint, String declText, String bodyText,
+                      boolean isStatic, boolean isAbstract, boolean isDefault, boolean varargs, Set<String> annotations,
+                      int line, int endLine, Fingerprint declPrint, Fingerprint bodyPrint, String declText, String bodyText,
                       int memberIndex) {
         this.owner = owner;
         this.name = name;
@@ -43,6 +45,7 @@ public final class MethodInfo {
         this.isStatic = isStatic;
         this.isAbstract = isAbstract;
         this.isDefault = isDefault;
+        this.varargs = varargs;
         this.annotations = annotations;
         this.line = line;
         this.endLine = endLine;

@@ -30,13 +30,20 @@ public class GitRunner {
     }
 
     public String run(String... args) {
+        return run(Map.of(), args);
+    }
+
+    /** {@link #run(String...)} with extra environment variables */
+    public String run(Map<String, String> env, String... args) {
         List<String> cmd = new ArrayList<>();
         cmd.add("git");
         cmd.add("-C");
         cmd.add(repo.toString());
         cmd.addAll(List.of(args));
         try {
-            Process p = new ProcessBuilder(cmd).redirectErrorStream(false).start();
+            ProcessBuilder pb = new ProcessBuilder(cmd).redirectErrorStream(false);
+            pb.environment().putAll(env);
+            Process p = pb.start();
             p.getOutputStream().close();
             byte[] out = p.getInputStream().readAllBytes();
             byte[] err = p.getErrorStream().readAllBytes();
@@ -61,7 +68,46 @@ public class GitRunner {
     public record Result(int exit, String out, String err) {
     }
 
+    /** git subcommand -> {calls, nanoseconds}, for --verbose ({@link #stats()}) */
+    private static final java.util.concurrent.ConcurrentHashMap<String, long[]> STATS = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** "log 412 calls 61.2 s, cat-file ..." since the last {@link #resetStats()}, slowest first */
+    public static String stats() {
+        List<Map.Entry<String, long[]>> es = new ArrayList<>(STATS.entrySet());
+        es.sort((x, y) -> Long.compare(y.getValue()[1], x.getValue()[1]));
+        List<String> parts = new ArrayList<>();
+        for (Map.Entry<String, long[]> e : es) {
+            parts.add(String.format(java.util.Locale.ROOT, "%s %d calls %.1f s", e.getKey(), e.getValue()[0], e.getValue()[1] / 1e9));
+        }
+        return parts.isEmpty() ? "no calls" : String.join(", ", parts);
+    }
+
+    public static void resetStats() {
+        STATS.clear();
+    }
+
+    private static String subcommand(String[] args) {
+        for (int i = 0; i < args.length; i++) {
+            if (args[i].equals("-c") || args[i].equals("-C")) i++;
+            else if (!args[i].startsWith("-")) return args[i];
+        }
+        return "?";
+    }
+
     public Result exec(String... args) {
+        long t0 = System.nanoTime();
+        try {
+            return execTimed(args);
+        } finally {
+            long[] st = STATS.computeIfAbsent(subcommand(args), k -> new long[2]);
+            synchronized (st) {
+                st[0]++;
+                st[1] += System.nanoTime() - t0;
+            }
+        }
+    }
+
+    private Result execTimed(String... args) {
         List<String> cmd = new ArrayList<>();
         cmd.add("git");
         cmd.add("-C");
@@ -100,15 +146,111 @@ public class GitRunner {
         return r.exit() == 0 ? r.out().trim() : null;
     }
 
-    /** content of {@code path} at {@code rev}, null when it does not exist there */
+    /** content of {@code path} at {@code rev}, null when it does not exist there (or is not a file) */
     public String show(String rev, String path) {
-        Result r = exec("cat-file", "blob", rev + ":" + path);
-        return r.exit() == 0 ? r.out() : null;
+        return catFile(rev + ":" + path);
     }
 
+    /** content of blob {@code sha}, null when there is no such blob */
     public String blob(String sha) {
-        Result r = exec("cat-file", "blob", sha);
-        return r.exit() == 0 ? r.out() : null;
+        return catFile(sha);
+    }
+
+    /**
+     * One long-running {@code git cat-file --batch} serves every {@link #show} / {@link #blob}: a conflict analysis
+     * of 10 picks read ~11,000 file versions, and a process per read took half a minute. Same answers as
+     * {@code git cat-file blob <spec>}: null for a missing object or one that is not a blob.
+     */
+    private final CatFile catFile = new CatFile();
+
+    private String catFile(String spec) {
+        if (spec.indexOf('\n') >= 0 || spec.indexOf('\r') >= 0) {
+            Result r = exec("cat-file", "blob", spec); // cannot be written as one line of the batch protocol
+            return r.exit() == 0 ? r.out() : null;
+        }
+        long t0 = System.nanoTime();
+        try {
+            return catFile.read(repo, spec);
+        } finally {
+            long[] st = STATS.computeIfAbsent("cat-file --batch", k -> new long[2]);
+            synchronized (st) {
+                st[0]++;
+                st[1] += System.nanoTime() - t0;
+            }
+        }
+    }
+
+    /** stops the cat-file process (it also stops when this runner is garbage-collected, or with the JVM) */
+    public void close() {
+        catFile.close();
+    }
+
+    private static final java.lang.ref.Cleaner CLEANER = java.lang.ref.Cleaner.create();
+
+    /** the batch process; registered with {@link #CLEANER} so that an unused runner does not leave git running */
+    private final class CatFile {
+        private final State state = new State();
+
+        CatFile() {
+            CLEANER.register(GitRunner.this, state);
+        }
+
+        String read(Path repo, String spec) {
+            synchronized (state) {
+                for (int attempt = 0; ; attempt++) {
+                    try {
+                        if (state.p == null || !state.p.isAlive()) state.start(repo);
+                        state.out.write((spec + "\n").getBytes(StandardCharsets.UTF_8));
+                        state.out.flush();
+                        String header = readLine(state.in);
+                        if (header.isEmpty()) throw new IOException("cat-file --batch ended");
+                        String[] parts = header.split(" ");
+                        if (parts.length != 3) return null; // "<spec> missing" / "ambiguous"
+                        int size = Integer.parseInt(parts[2]);
+                        byte[] data = state.in.readNBytes(size);
+                        if (data.length != size || state.in.read() != '\n') throw new IOException("short read for " + spec);
+                        return "blob".equals(parts[1]) ? new String(data, StandardCharsets.UTF_8) : null;
+                    } catch (IOException | NumberFormatException e) {
+                        state.run();
+                        if (attempt > 0) {
+                            Result r = exec("cat-file", "blob", spec);
+                            return r.exit() == 0 ? r.out() : null;
+                        }
+                    }
+                }
+            }
+        }
+
+        void close() {
+            synchronized (state) {
+                state.run();
+            }
+        }
+    }
+
+    private static final class State implements Runnable {
+        Process p;
+        OutputStream out;
+        InputStream in;
+
+        void start(Path repo) throws IOException {
+            p = new ProcessBuilder("git", "-C", repo.toString(), "cat-file", "--batch")
+                    .redirectError(ProcessBuilder.Redirect.DISCARD).start();
+            out = new java.io.BufferedOutputStream(p.getOutputStream());
+            in = new java.io.BufferedInputStream(p.getInputStream(), 1 << 16);
+        }
+
+        @Override
+        public void run() {
+            if (p == null) return;
+            try {
+                out.close(); // git exits at the end of its input
+            } catch (IOException ignored) {
+                // already gone
+            }
+            p.destroy();
+            p = null;
+        }
     }
 
     public String resolveCommit(String ref) {

@@ -167,7 +167,7 @@ public final class ConflictSession {
                 }
             }
             s.steps.add(st);
-            if (i < s.picks.size() - 1) state = commitTree(git, tree, state, "faultline simulated pick of " + c);
+            if (i < s.picks.size() - 1) state = commitTree(git, tree, state, "faultline simulated pick of " + c, c);
         }
         s.featureBase = parentOf(git, s.picks.get(0));
         boolean contiguous = true;
@@ -179,7 +179,7 @@ public final class ConflictSession {
             String f = s.featureBase;
             for (String c : s.picks) {
                 MergeTree mt = mergeTree(git, parentOf(git, c), f, c, true);
-                f = commitTree(git, mt.tree, f, "faultline feature tip " + c);
+                f = commitTree(git, mt.tree, f, "faultline feature tip " + c, c);
             }
             s.featureTip = f;
             s.messages.add("picks are not contiguous on mainline: the feature's own changes are taken from a synthetic commit "
@@ -249,10 +249,14 @@ public final class ConflictSession {
 
     // ------------------------------------------------------------------ helpers
 
-    /** an unreferenced commit object (no ref is created or moved) */
-    static String commitTree(GitRunner git, String tree, String parent, String msg) {
-        return git.run("-c", "user.name=faultline", "-c", "user.email=faultline@localhost", "commit-tree", tree, "-p", parent,
-                "-m", msg).trim();
+    /**
+     * An unreferenced commit object (no ref is created or moved), dated like the pick it simulates: the same
+     * analysis then writes the same commits, so its reports are the same on every run.
+     */
+    static String commitTree(GitRunner git, String tree, String parent, String msg, String pick) {
+        String date = git.run("log", "-1", "--format=%ad", "--date=raw", pick).trim();
+        return git.run(java.util.Map.of("GIT_AUTHOR_DATE", date, "GIT_COMMITTER_DATE", date), "-c", "user.name=faultline",
+                "-c", "user.email=faultline@localhost", "commit-tree", tree, "-p", parent, "-m", msg).trim();
     }
 
     static String parentOf(GitRunner git, String c) {

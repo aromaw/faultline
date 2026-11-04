@@ -41,6 +41,7 @@ import com.github.javaparser.symbolsolver.JavaSymbolSolver;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -373,6 +374,7 @@ public final class CodeIndex {
             }
             ci.inScope = inScope;
             if (!inScope) ci.springOps = null;
+            methodsByName = null;
             ClassInfo prev = classes.put(ci.fqn, ci);
             if (prev != null) {
                 for (MethodInfo mi : prev.methods.values()) if (mi.hasNode()) replacedMethods.put(mi.id(), mi);
@@ -531,6 +533,24 @@ public final class CodeIndex {
             if (ac != null && ac.methods.containsKey(key)) return ac.methods.get(key);
         }
         return null;
+    }
+
+    /** method name -> the methods of that name in every class, in class order (built on first use) */
+    private Map<String, List<MethodInfo>> methodsByName;
+
+    /**
+     * The methods called {@code name} in any class of the index, in the order of {@link #classes} (for calls whose
+     * receiver type is unknown). Scanning every class per call took most of a 10-commit analysis of a large project.
+     */
+    public synchronized List<MethodInfo> methodsNamedAnywhere(String name) {
+        if (methodsByName == null) {
+            Map<String, List<MethodInfo>> m = new HashMap<>();
+            for (ClassInfo c : classes.values()) {
+                for (MethodInfo mi : c.methods.values()) m.computeIfAbsent(mi.name, k -> new ArrayList<>(1)).add(mi);
+            }
+            methodsByName = m;
+        }
+        return methodsByName.getOrDefault(name, List.of());
     }
 
     public List<MethodInfo> findMethodsByName(String classFqn, String name) {

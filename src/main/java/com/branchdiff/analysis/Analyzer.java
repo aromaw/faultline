@@ -234,6 +234,7 @@ public final class Analyzer {
             // the symbol solver keeps one facade (with its caches and type solver) per type solver in a static map
             com.github.javaparser.symbolsolver.javaparsermodel.JavaParserFacade.clearInstances();
             log("AST cache: " + com.branchdiff.index.AstCache.stats());
+            log("git: " + com.branchdiff.git.GitRunner.stats());
             // the cached ASTs of this run reference its type solvers (temp sources, jar indexes): drop them
             com.branchdiff.index.AstCache.clear();
             wsOurs.close();

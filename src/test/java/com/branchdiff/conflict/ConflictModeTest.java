@@ -192,6 +192,109 @@ class ConflictModeTest {
     }
 
     @Test
+    void fileHistoryIsTheSameWithTheFastPlainLogAndWithFollow(@TempDir Path dir) throws Exception {
+        git(dir, "init", "-q", "-b", "main");
+        Path f = dir.resolve("src/demo/RoleService.java");
+        Files.createDirectories(f.getParent());
+        Files.writeString(f, V1);
+        commit(dir, "fork point");
+        String fork = git(dir, "rev-parse", "HEAD").trim();
+        // a side branch merged back: the plain log lists the merge, --follow does not
+        git(dir, "checkout", "-q", "-b", "side");
+        Files.writeString(f, V1.replace("updateRole(Role role)", "modifyRole(Role role)"));
+        commit(dir, "rename on a side branch");
+        git(dir, "checkout", "-q", "main");
+        Files.writeString(dir.resolve("README"), "x\n");
+        commit(dir, "unrelated");
+        git(dir, "-c", "user.name=t", "-c", "user.email=t@x", "merge", "-q", "--no-ff", "-m", "merge side", "side");
+        // a file renamed in the window: only --follow finds its older commits
+        Path g = dir.resolve("src/demo/Other.java");
+        Files.writeString(g, "package demo;\nclass Other {\n    int a() { return 1; }\n}\n");
+        commit(dir, "add Other");
+        Files.writeString(g, Files.readString(g).replace("return 1;", "return 2;"));
+        commit(dir, "edit Other");
+        git(dir, "mv", "src/demo/Other.java", "src/demo/Moved.java");
+        commit(dir, "move Other");
+        String tip = git(dir, "rev-parse", "HEAD").trim();
+
+        History h = new History(new GitRunner(dir));
+        for (String path : List.of("src/demo/RoleService.java", "src/demo/Moved.java", "src/demo/Other.java", "README")) {
+            String follow = git(dir, "-c", "core.quotePath=false", "log", "--follow", "-M", "--name-status",
+                    "--format=%x1e%H", fork + ".." + tip, "--", path);
+            List<String> expected = new ArrayList<>();
+            for (String chunk : follow.split("\u001e")) if (!chunk.isBlank()) expected.add(chunk.split("\n")[0].trim());
+            java.util.Collections.reverse(expected);
+            List<String> got = new ArrayList<>();
+            for (History.FileCommit fc : h.fileCommits(fork, tip, path)) got.add(fc.commit().sha());
+            assertEquals(expected, got, path);
+        }
+        assertEquals(3, h.fileCommits(fork, tip, "src/demo/Moved.java").size(), "followed through the move");
+
+        // the plain log is used only when every commit merely modifies the path
+        assertTrue(History.onlyModifications("\u001ea\u001f\n\nM\tx\n\u001eb\u001f\n\nM\tx\n"));
+        assertFalse(History.onlyModifications(""), "empty: the path may not exist at the end, ask --follow");
+        assertFalse(History.onlyModifications("\u001ea\u001f\n\nA\tx\n"));
+        assertFalse(History.onlyModifications("\u001ea\u001f\n\nR090\ty\tx\n"));
+        assertFalse(History.onlyModifications("\u001ea\u001f\n"), "a commit without a status line");
+
+        // a prefetched history is the same as one read on demand
+        History p = new History(new GitRunner(dir));
+        p.prefetch(fork, tip, "src/demo/Moved.java");
+        assertEquals(h.fileCommits(fork, tip, "src/demo/Moved.java").toString(), p.fileCommits(fork, tip, "src/demo/Moved.java").toString());
+    }
+
+    @Test
+    void oneCatFileProcessReadsLikeSeparateOnes(@TempDir Path dir) throws Exception {
+        git(dir, "init", "-q", "-b", "main");
+        Files.createDirectories(dir.resolve("src/a b"));
+        Files.writeString(dir.resolve("src/a b/X.java"), "class X {}\n// é\n");
+        Files.writeString(dir.resolve("empty.txt"), "");
+        commit(dir, "files");
+        String head = git(dir, "rev-parse", "HEAD").trim();
+        GitRunner g = new GitRunner(dir);
+        for (int round = 0; round < 2; round++) {
+            assertEquals("class X {}\n// é\n", g.show(head, "src/a b/X.java"), "path with a space, UTF-8 content");
+            assertEquals("", g.show(head, "empty.txt"));
+            assertNull(g.show(head, "src/missing.java"), "missing path");
+            assertNull(g.show(head, "src"), "a directory is not a file");
+            assertNull(g.show("0000000000000000000000000000000000000000", "empty.txt"), "unknown commit");
+            String blob = git(dir, "rev-parse", head + ":empty.txt").trim();
+            assertEquals("", g.blob(blob));
+            assertNull(g.blob(head), "a commit is not a blob");
+            g.close(); // the next read starts a new process
+        }
+    }
+
+    @Test
+    void simulatedPicksAreTheSameCommitsOnEveryRun(@TempDir Path dir) throws Exception {
+        git(dir, "init", "-q", "-b", "main");
+        Path f = dir.resolve("src/demo/RoleService.java");
+        Files.createDirectories(f.getParent());
+        Files.writeString(f, V1);
+        commit(dir, "fork point");
+        git(dir, "checkout", "-q", "-b", "tenant");
+        Files.writeString(f, V1.replace("cache.evict(role.getRoleId());", "cache.evict(role.getRoleId()); // tenant"));
+        commit(dir, "tenant edit");
+        git(dir, "checkout", "-q", "main");
+        Files.writeString(f, V1.replace("cache.evict(role.getRoleId());", "cache.evictAll();"));
+        commit(dir, "first pick");
+        Files.writeString(dir.resolve("README"), "x\n");
+        commit(dir, "unrelated");
+        Files.writeString(f, Files.readString(f).replace("log.info(\"updated {}\", role.getRoleId());", "log.info(\"done\");"));
+        commit(dir, "second pick");
+        String second = git(dir, "rev-parse", "HEAD").trim(), first = git(dir, "rev-parse", "HEAD~2").trim();
+
+        GitRunner g = new GitRunner(dir);
+        ConflictSession a = ConflictSession.simulate(g, "tenant", first + "," + second);
+        Thread.sleep(1100); // commit-tree would otherwise stamp a later second into the commits
+        ConflictSession b = ConflictSession.simulate(g, "tenant", first + "," + second);
+        assertEquals(a.featureTip, b.featureTip);
+        assertEquals(a.steps.get(1).ours, b.steps.get(1).ours, "the simulated first pick");
+        assertTrue(git(dir, "log", "-1", "--format=%ad %cd", "--date=raw", a.steps.get(1).ours)
+                .startsWith(git(dir, "log", "-1", "--format=%ad", "--date=raw", first).trim()), "dated like the pick");
+    }
+
+    @Test
     void liveCherryPickAndOfflineSimulationSeeTheSameConflict(@TempDir Path dir) throws Exception {
         git(dir, "init", "-q", "-b", "main");
         Path f = dir.resolve("src/demo/RoleService.java");

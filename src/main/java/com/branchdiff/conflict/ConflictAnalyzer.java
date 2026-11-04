@@ -72,6 +72,8 @@ public final class ConflictAnalyzer {
     /** fork member id -> change to the tenant (renames by the tenant) */
     private Map<String, Change> tenantRenames;
     private final List<String> pickDeclaredSymbols = new ArrayList<>();
+    /** package -> first commit of the window that imports from it ("" when none) */
+    private final Map<String, String> firstImportOf = new HashMap<>();
 
     public ConflictAnalyzer(GitRunner git, ConflictSession session, String mainlineRef, Analyzer.Context ctx,
                             Snapshot forkSnapshot, CodeIndex forkIndex) {
@@ -84,6 +86,47 @@ public final class ConflictAnalyzer {
         this.cb = ctx.context();
         this.deps = new DependencyAnalyzer(ctx.base(), ctx.ours(), ctx.theirs());
         model.mainline = mainlineRef;
+    }
+
+    private void analyzeSteps() {
+        for (int si = 0; si < session.steps.size(); si++) {
+            ConflictSession.Step st = session.steps.get(si);
+            for (Map.Entry<String, ConflictSession.Unmerged> e : st.unmerged.entrySet()) {
+                try {
+                    model.files.add(file(si + 1, st, e.getKey(), e.getValue()));
+                } catch (RuntimeException | StackOverflowError ex) {
+                    model.messages.add("analysis of " + e.getKey() + " failed: " + ex);
+                }
+            }
+            for (String p : st.changed) if (!st.unmerged.containsKey(p) && !model.cleanFiles.contains(p)) model.cleanFiles.add(p);
+        }
+    }
+
+    /**
+     * Starts the git histories the steps will ask for (see {@link #file} and {@link #why}): of every conflicted
+     * file in the mainline window up to the step's base, under its base-side name, and in the tenant window.
+     */
+    private void prefetchFileHistories() {
+        for (ConflictSession.Step st : session.steps) {
+            for (Map.Entry<String, ConflictSession.Unmerged> e : st.unmerged.entrySet()) {
+                String path = e.getKey();
+                ConflictSession.Unmerged u = e.getValue();
+                history.prefetch(forkSha, st.base, path);
+                String kind = u.kind();
+                if (!kind.equals("ADDED_BY_BOTH") && !kind.equals("ADDED_BY_US")) history.prefetch(forkSha, st.base, u.path.getOrDefault(1, path));
+                if (st.ours != null && !kind.equals("DELETED_BY_US")) history.prefetch(forkSha, st.ours, u.path.getOrDefault(2, path));
+            }
+        }
+    }
+
+    /** starts the histories {@link #symbolOrigin} will read for the nodes {@link #annotate} visits */
+    private void prefetchOrigins(TreeNode t) {
+        ContextModel.Node n = cb.model().nodes.get(t.node);
+        if (n != null && (ContextModel.MISSING.equals(n.ours) || ContextModel.CHANGED.equals(n.ours)) && !model.symbols.containsKey(t.node)
+                && !t.node.startsWith("LIB:") && !t.node.startsWith("MVN:") && exists(t.node, ctx.base()) && !exists(t.node, fork)) {
+            history.prefetch(forkSha, session.featureBase, fileOf(t.node, ctx.base()));
+        }
+        for (TreeNode c : t.children) prefetchOrigins(c);
     }
 
     /** merge-base of the tenant and the mainline (or the feature base when no mainline ref is given) */
@@ -106,16 +149,11 @@ public final class ConflictAnalyzer {
         model.tenantCommitsSinceFork = history.count(forkSha, session.tenant);
         if (ctx.report().context == null) ctx.report().context = cb.model();
 
-        for (int si = 0; si < session.steps.size(); si++) {
-            ConflictSession.Step st = session.steps.get(si);
-            for (Map.Entry<String, ConflictSession.Unmerged> e : st.unmerged.entrySet()) {
-                try {
-                    model.files.add(file(si + 1, st, e.getKey(), e.getValue()));
-                } catch (RuntimeException | StackOverflowError ex) {
-                    model.messages.add("analysis of " + e.getKey() + " failed: " + ex);
-                }
-            }
-            for (String p : st.changed) if (!st.unmerged.containsKey(p) && !model.cleanFiles.contains(p)) model.cleanFiles.add(p);
+        prefetchFileHistories();
+        try {
+            analyzeSteps();
+        } finally {
+            history.cancelPrefetches();
         }
         cleanNeeds();
         cleanFileFindings();
@@ -499,6 +537,7 @@ public final class ConflictAnalyzer {
             if (h.takeTheirs.trees.size() >= 12) break;
             TreeNode tree = cb.dependencyTree(n.node);
             h.takeTheirs.trees.add(tree);
+            prefetchOrigins(tree);
             annotate(tree);
         }
         // theirs members of the hunk as roots too (when they are methods with their own dependencies)
@@ -507,6 +546,7 @@ public final class ConflictAnalyzer {
             TreeNode tree = cb.dependencyTree(m.id());
             if (!tree.children.isEmpty() && hasPort(tree)) {
                 h.takeTheirs.trees.add(0, tree);
+                prefetchOrigins(tree);
                 annotate(tree);
             }
         }
@@ -713,8 +753,12 @@ public final class ConflictAnalyzer {
             n.tenantName = counterpart;
             n.tenantLocation = null;
         }
-        GitRunner.Result r = git.exec("log", "--reverse", "--format=%H", "-S", "import " + pkg + ".", forkSha + ".." + session.featureBase);
-        if (r.exit() == 0 && !r.out().isBlank()) n.introducedBy.add(history.commit(r.out().trim().split("\n")[0].trim()));
+        String first = firstImportOf.computeIfAbsent(pkg, p -> {
+            // a pickaxe search over the whole window: seconds on a large project, so once per package
+            GitRunner.Result r = git.exec("log", "--reverse", "--format=%H", "-S", "import " + p + ".", forkSha + ".." + session.featureBase);
+            return r.exit() == 0 && !r.out().isBlank() ? r.out().trim().split("\n")[0].trim() : "";
+        });
+        if (!first.isEmpty()) n.introducedBy.add(history.commit(first));
         n.detail = (classpath ? "on theirs' classpath, not on the tenant's (Maven dependency / version)"
                 : "no tenant source imports anything from " + pkg + " (no classpath to confirm)")
                 + (counterpart != null ? "; the tenant uses " + counterpart : "")
@@ -1002,27 +1046,47 @@ public final class ConflictAnalyzer {
                 + " place(s) of the pick referencing symbols only theirs' side provides.");
     }
 
-    private void orphans(Hunk h, Set<String> theirsDeclared) {
+    /** one symbol used by a method the picks change: its context key and the line of the first use */
+    private record Use(String key, String self, MethodInfo method, int line, MethodChange change) {
+    }
+
+    /**
+     * What every method changed by the picks uses, collected once per analysis. Each conflict hunk looks its
+     * theirs-only symbols up in it; collecting per hunk resolved the same calls again for every hunk (10 picks of
+     * ruoyi-vue-pro: more than 10 minutes and a 4 GB heap of re-parsed files).
+     */
+    private List<Use> theirsUses;
+
+    private List<Use> theirsUses() {
+        if (theirsUses != null) return theirsUses;
+        List<Use> res = new ArrayList<>();
         for (MethodChange ch : ctx.theirsChangesAll().changes) {
             MethodInfo m = ch.newMethod;
             if (m == null || m.node() == null) continue;
-            String self = "M:" + m.id();
-            if (theirsDeclared.contains(self)) continue;
             Map<Dep, Integer> found;
             try {
                 found = deps.collect(m);
             } catch (RuntimeException | StackOverflowError e) {
                 continue;
             }
+            String self = "M:" + m.id();
             for (Map.Entry<Dep, Integer> e : found.entrySet()) {
                 String k = cb.keyOf(e.getKey(), ctx.theirs());
-                if (k == null || !theirsDeclared.contains(k)) continue;
-                if (m.owner.file.equals(h.path) && h.theirs.overlaps(e.getValue(), e.getValue())) continue;
-                cb.nodeOf(self);
-                h.takeOurs.orphans.add(new Orphan(k, self, m.owner.file + ":" + e.getValue(),
-                        (model.cleanFiles.contains(m.owner.file) || !m.owner.file.equals(h.path) ? "merged cleanly / other file" : "same file")
-                                + "; " + ch.kind.name().toLowerCase() + " by the pick"));
+                if (k != null) res.add(new Use(k, self, m, e.getValue(), ch));
             }
+        }
+        return theirsUses = res;
+    }
+
+    private void orphans(Hunk h, Set<String> theirsDeclared) {
+        for (Use u : theirsUses()) {
+            if (theirsDeclared.contains(u.self) || !theirsDeclared.contains(u.key)) continue;
+            MethodInfo m = u.method;
+            if (m.owner.file.equals(h.path) && h.theirs.overlaps(u.line, u.line)) continue;
+            cb.nodeOf(u.self);
+            h.takeOurs.orphans.add(new Orphan(u.key, u.self, m.owner.file + ":" + u.line,
+                    (model.cleanFiles.contains(m.owner.file) || !m.owner.file.equals(h.path) ? "merged cleanly / other file" : "same file")
+                            + "; " + u.change.kind.name().toLowerCase() + " by the pick"));
         }
         // mapper statements declared by theirs' side, used by mapper methods the pick adds
         for (String k : theirsDeclared) {

@@ -57,7 +57,7 @@ import java.util.Set;
  */
 final class FileSummaries {
     /** version of the extraction and of the encoding below */
-    static final int FORMAT = 1;
+    static final int FORMAT = 2; // 2: varargs flag of methods
 
     private FileSummaries() {
     }
@@ -205,7 +205,7 @@ final class FileSummaries {
                 if (!ci.methods.containsKey(key)) {
                     String decl = "record-accessor " + raw;
                     ci.methods.put(key, new MethodInfo(ci, p.getNameAsString(), List.of(), Names.simpleErased(raw), false,
-                            false, false, false, Set.of(), Ast.line(p), Ast.line(p), Fingerprint.of(decl), Fingerprint.EMPTY,
+                            false, false, false, false, Set.of(), Ast.line(p), Ast.line(p), Fingerprint.of(decl), Fingerprint.EMPTY,
                             decl, "", -1));
                 }
             }
@@ -227,7 +227,8 @@ final class FileSummaries {
         Set<String> anns = new LinkedHashSet<>();
         cd.getAnnotations().forEach(a -> anns.add(Names.simpleName(a.getNameAsString())));
         MethodInfo mi = new MethodInfo(ci, name, params, ctor ? ci.simpleName : Names.simpleErased(returnRaw), ctor,
-                isStatic, isAbstract && !ctor, isDefault, anns, Ast.line(cd), Ast.endLine(cd),
+                isStatic, isAbstract && !ctor, isDefault, cd.getParameters().isNonEmpty() && cd.getParameters().getLast().get().isVarArgs(),
+                anns, Ast.line(cd), Ast.endLine(cd),
                 Fingerprint.of(Ast.normalized(cd)), Fingerprint.of(MethodInfo.body(cd)), null, null, memberIndex);
         ci.methods.put(mi.key(), mi);
     }
@@ -363,7 +364,7 @@ final class FileSummaries {
             w.str(m.name);
             w.strs(m.params);
             w.str(m.returnType);
-            w.num((m.constructor ? 1 : 0) | (m.isStatic ? 2 : 0) | (m.isAbstract ? 4 : 0) | (m.isDefault ? 8 : 0));
+            w.num((m.constructor ? 1 : 0) | (m.isStatic ? 2 : 0) | (m.isAbstract ? 4 : 0) | (m.isDefault ? 8 : 0) | (m.varargs ? 16 : 0));
             w.strs(m.annotations);
             w.num(m.line);
             w.num(m.endLine);
@@ -477,7 +478,7 @@ final class FileSummaries {
                 bodyText = r.str();
             }
             MethodInfo mi = new MethodInfo(c, name, params, ret, (flags & 1) != 0, (flags & 2) != 0, (flags & 4) != 0,
-                    (flags & 8) != 0, anns, l, end, decl, body, declText, bodyText, member);
+                    (flags & 8) != 0, (flags & 16) != 0, anns, l, end, decl, body, declText, bodyText, member);
             c.methods.put(mi.key(), mi);
         }
         int nops = r.num();

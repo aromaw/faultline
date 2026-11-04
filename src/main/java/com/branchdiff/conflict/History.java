@@ -13,6 +13,10 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  * Attributes code to commits of a history window ({@code from..to}): which commits touched a file (following
@@ -49,9 +53,16 @@ public final class History {
         List<FileCommit> cached = fileCache.get(key);
         if (cached != null) return cached;
         List<FileCommit> res = new ArrayList<>();
-        String range = from == null ? to : from + ".." + to;
-        GitRunner.Result r = git.exec("-c", "core.quotePath=false", "log", "--follow", "-M", "--name-status",
-                "--format=%x1e%H%x1f%aI%x1f%an%x1f%s", range, "--", path);
+        CompletableFuture<GitRunner.Result> pending = prefetched.remove(key);
+        GitRunner.Result r = null;
+        if (pending != null) {
+            try {
+                r = pending.join();
+            } catch (RuntimeException e) {
+                r = null; // cancelled or failed: ask again below
+            }
+        }
+        if (r == null) r = log(from, to, path);
         if (r.exit() == 0) {
             for (String chunk : r.out().split("\u001e")) {
                 if (chunk.isBlank()) continue;
@@ -83,6 +94,77 @@ public final class History {
         }
         fileCache.put(key, withChanges);
         return withChanges;
+    }
+
+    /**
+     * {@code git log --follow -M --name-status range -- path}. {@code --follow} cannot use the commit-graph's
+     * changed-path filters, so on a large history it takes ~0.5 s per file, and a conflict analysis asks for hundreds
+     * of files. A plain path-limited log without merges is ~60 times faster and prints the same commits as long as
+     * nothing is followed: every entry modifies the path. When it is empty (the path does not exist at the end of the
+     * range) or shows an add, delete, rename or copy, the {@code --follow} log is used, which may continue under an
+     * older name.
+     */
+    private GitRunner.Result log(String from, String to, String path) {
+        String range = from == null ? to : from + ".." + to;
+        String format = "--format=%x1e%H%x1f%aI%x1f%an%x1f%s";
+        GitRunner.Result plain = git.exec("-c", "core.quotePath=false", "log", "--no-merges", "-M", "--name-status", format,
+                range, "--", path);
+        if (plain.exit() == 0 && onlyModifications(plain.out())) return plain;
+        return git.exec("-c", "core.quotePath=false", "log", "--follow", "-M", "--name-status", format, range, "--", path);
+    }
+
+    /** whether a {@code --name-status} log lists at least one commit and only "M" entries */
+    static boolean onlyModifications(String log) {
+        boolean any = false;
+        for (String chunk : log.split("\u001e")) {
+            if (chunk.isBlank()) continue;
+            String[] lines = chunk.split("\n");
+            boolean modified = false;
+            for (int i = 1; i < lines.length; i++) {
+                if (lines[i].isEmpty()) continue;
+                if (!lines[i].startsWith("M\t")) return false;
+                modified = true;
+            }
+            if (!modified) return false; // a commit without a status line: let --follow decide
+            any = true;
+        }
+        return any;
+    }
+
+    /**
+     * Git workers for {@link #prefetch}: each {@code git log} is a process of its own, and a conflict analysis of
+     * several picks needs hundreds of them (one per file, step and side); run side by side they take a fraction of
+     * the time. Daemon threads, so they never keep the JVM alive.
+     */
+    private static final ExecutorService GIT_POOL = Executors.newFixedThreadPool(gitThreads(), r -> {
+        Thread t = new Thread(r, "faultline-git");
+        t.setDaemon(true);
+        return t;
+    });
+
+    /** {@code -Dfaultline.gitThreads=N}; default: the number of cores, at most 8 */
+    static int gitThreads() {
+        int def = Math.min(Runtime.getRuntime().availableProcessors(), 8);
+        return Math.max(1, Integer.getInteger("faultline.gitThreads", def));
+    }
+
+    private final Map<String, CompletableFuture<GitRunner.Result>> prefetched = new ConcurrentHashMap<>();
+
+    /**
+     * Starts reading the history of {@code path} in {@code from..to} in the background; {@link #fileCommits} then
+     * takes the result. The same git command as without it, so the same answers.
+     */
+    public void prefetch(String from, String to, String path) {
+        if (path == null || to == null) return;
+        String key = from + ".." + to + ":" + path;
+        if (fileCache.containsKey(key)) return;
+        prefetched.computeIfAbsent(key, k -> CompletableFuture.supplyAsync(() -> log(from, to, path), GIT_POOL));
+    }
+
+    /** drops the prefetches nobody asked for (after the analysis, or when it is cancelled) */
+    public void cancelPrefetches() {
+        for (CompletableFuture<GitRunner.Result> f : prefetched.values()) f.cancel(false);
+        prefetched.clear();
     }
 
     /** file-level events (added / renamed / deleted) of {@code path} in the window */
@@ -288,8 +370,18 @@ public final class History {
         return r.exit() == 0 ? Integer.parseInt(r.out().trim()) : 0;
     }
 
-    /** paths renamed between two revisions: new path -> old path (git rename detection) */
+    private final Map<String, Map<String, String>> renameCache = new HashMap<>();
+
+    /** paths renamed between two revisions: new path -> old path (git rename detection); cached per pair */
     public Map<String, String> renames(String from, String to) {
+        Map<String, String> cached = renameCache.get(from + ".." + to);
+        if (cached != null) return cached;
+        Map<String, String> res = renamesUncached(from, to);
+        renameCache.put(from + ".." + to, res);
+        return res;
+    }
+
+    private Map<String, String> renamesUncached(String from, String to) {
         Map<String, String> res = new LinkedHashMap<>();
         GitRunner.Result r = git.exec("-c", "core.quotePath=false", "diff", "-M", "--name-status", "--diff-filter=R", from, to);
         if (r.exit() != 0) return res;

@@ -172,7 +172,7 @@ public final class DependencyAnalyzer {
                 return;
             }
         } else {
-            for (ClassInfo c : theirs.classes.values()) cands.addAll(filterArity(c.methodsNamed(name), arity));
+            cands.addAll(filterArity(theirs.methodsNamedAnywhere(name), arity));
             if (cands.isEmpty()) {
                 stats.callsExternal++;
                 return;
@@ -193,10 +193,8 @@ public final class DependencyAnalyzer {
     private static List<MethodInfo> filterArity(List<MethodInfo> ms, int arity) {
         List<MethodInfo> res = new ArrayList<>();
         for (MethodInfo m : ms) {
-            boolean varargs = !m.params.isEmpty() && m.params.get(m.params.size() - 1).endsWith("[]")
-                    && m.node() != null && !m.node().getParameters().isEmpty()
-                    && m.node().getParameter(m.params.size() - 1).isVarArgs();
-            if (m.params.size() == arity || (varargs && arity >= m.params.size() - 1)) res.add(m);
+            // from the summary: asking the AST (m.node()) parsed the file of every candidate with an array parameter
+            if (m.params.size() == arity || (m.varargs && arity >= m.params.size() - 1)) res.add(m);
         }
         return res;
     }
