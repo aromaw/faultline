@@ -83,7 +83,12 @@ final class CodeViews {
         a.setFont(font());
     }
 
+    private static boolean fontNerd;
+
     static Font font() {
+        if (font != null && fontNerd != NerdFont.enabled) font = null; // View › Nerd Font was switched
+        fontNerd = NerdFont.enabled;
+        if (font == null && NerdFont.enabled) font = NerdFont.font(Font.PLAIN, 13);
         if (font == null) {
             // macOS falls back to a CJK font per glyph for physical fonts; elsewhere only the logical "Monospaced"
             // font does, so it is used there (commit messages and comments are often Chinese)

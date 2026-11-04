@@ -72,7 +72,7 @@ final class MainFrame {
     private final JLabel pickedHint = Ui.muted("check them in the list below");
     private final JButton analyze = new JButton("Analyze", Ui.icon(Ui.Glyph.PLAY, Color.WHITE));
     private final JButton cancel = new JButton("Cancel", Ui.icon(Ui.Glyph.STOP, Ui.RED));
-    private final JButton export = new JButton("Export Report \u25BE", Ui.icon(Ui.Glyph.EXPORT));
+    private final JButton export = new JButton("Export \u25BE", Ui.icon(Ui.Glyph.EXPORT));
     private final JButton theme = new JButton(Ui.icon(Ui.Glyph.THEME));
     private final JButton reload = new JButton("Reload", Ui.icon(Ui.Glyph.RELOAD));
     private final JCheckBox maven = new JCheckBox("Use Maven classpath");
@@ -200,6 +200,10 @@ final class MainFrame {
         JMenuItem t = new JMenuItem("Toggle Light / Dark Theme", Ui.icon(Ui.Glyph.THEME));
         t.addActionListener(e -> toggleTheme());
         view.add(t);
+        javax.swing.JCheckBoxMenuItem nerd = new javax.swing.JCheckBoxMenuItem("Nerd Font (JetBrains Mono)", prefs.nerdFont());
+        nerd.setToolTipText("Use the bundled JetBrains Mono Nerd Font for the window and the code; off: the system font");
+        nerd.addActionListener(e -> setNerdFont(nerd.isSelected()));
+        view.add(nerd);
         JMenuItem find = new JMenuItem("Filter Commits", Ui.icon(Ui.Glyph.SEARCH));
         find.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_F, mod));
         find.addActionListener(e -> {
@@ -254,7 +258,7 @@ final class MainFrame {
         for (int i = 0; i < 4; i++) {
             if (i > 0) {
                 c.gridx = 2 * i - 1;
-                c.insets = new Insets(0, 10, 0, 10);
+                c.insets = new Insets(0, 6, 0, 6);
                 // a chevron between the steps instead of a separator bar: the header reads as one flow
                 JLabel chevron = Ui.muted("\u203A");
                 chevron.setFont(chevron.getFont().deriveFont(20f));
@@ -875,7 +879,19 @@ final class MainFrame {
     void toggleTheme() {
         boolean dark = !prefs.dark();
         prefs.setDark(dark);
-        applyLaf(dark);
+        relook();
+    }
+
+    /** View › Nerd Font: the bundled Nerd Font or the theme's system font */
+    void setNerdFont(boolean nerd) {
+        prefs.setNerdFont(nerd);
+        relook();
+    }
+
+    /** applies the theme and font preferences to the open window */
+    private void relook() {
+        boolean dark = prefs.dark();
+        applyLaf(dark, prefs.nerdFont());
         FlatLaf.updateUI();
         CodeViews.dark = dark;
         CodeViews.retheme();
@@ -888,7 +904,12 @@ final class MainFrame {
      * FlatLaf's macOS-style themes (on every platform) with one accent colour and the shared modern defaults of
      * {@link Ui#modernDefaults}: rounded controls, thin overlay-style scroll bars, tables without grid lines.
      */
-    static void applyLaf(boolean dark) {
+    static void applyLaf(boolean dark, boolean nerdFont) {
+        // the bundled Nerd Font for the whole window (labels, tables, menus) and the code views; FlatLaf makes the
+        // fonts composite, so characters the font lacks (CJK) come from the platform's fallback fonts
+        NerdFont.enabled = nerdFont && NerdFont.register();
+        FlatLaf.setPreferredFontFamily(NerdFont.enabled ? NerdFont.FAMILY : null);
+        FlatLaf.setPreferredMonospacedFontFamily(NerdFont.enabled ? NerdFont.FAMILY : null);
         FlatLaf.setGlobalExtraDefaults(java.util.Map.of("@accentColor", Ui.hex(Ui.ACCENT)));
         if (dark) FlatMacDarkLaf.setup();
         else FlatMacLightLaf.setup();

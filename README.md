@@ -163,12 +163,15 @@ Results:
 - First time? Click the first conflict in the tree (it is selected after an analysis), read *Why it
   conflicts*, then *Take theirs → needs* or *Keep ours → callers* for the side you plan to keep, and
   work through the *Checklist*.
-- *Export Report* writes the same HTML, Markdown or JSON report as the CLI.
+- *Export* writes the same HTML, Markdown or JSON report as the CLI.
 - *Dark* / *Light* (or View › Toggle Light / Dark Theme) switches themes.
 
 Every button has a text label and a tooltip. Panels without content show what to do next. The window uses
 FlatLaf's macOS-style light and dark themes on every platform, with rounded controls, tables without grid
-lines and tinted chips and badges.
+lines and tinted chips and badges. The font is the bundled JetBrains Mono Nerd Font (window and code;
+characters it lacks, such as Chinese, come from the system's fallback fonts); View › *Nerd Font (JetBrains
+Mono)* switches back to the system font and is remembered. The font files are under the SIL Open Font
+License (`src/main/resources/com/branchdiff/gui/fonts/OFL.txt`) and add about 3 MB to the jar.
 
 Severity badges are a GUI-only heuristic. HIGH means a deleted file, or a missing or changed dependency
 that does not come from the pick. MEDIUM means entry points, orphans, tenant edits, or uncertain needs.

@@ -85,6 +85,16 @@ class BranchPickerLogicTest {
     }
 
     @Test
+    void bundledNerdFontRegistersWithItsIconsAndLicense() {
+        assertTrue(NerdFont.register(), "font files bundled");
+        java.awt.Font f = NerdFont.font(java.awt.Font.PLAIN, 13);
+        assertEquals(NerdFont.FAMILY, f.getFamily());
+        assertTrue(f.canDisplay('\ue725'), "Nerd Font icon (git branch)");
+        assertEquals(java.awt.Font.BOLD, NerdFont.font(java.awt.Font.BOLD, 13).getStyle());
+        assertNotNull(NerdFont.class.getResource("fonts/OFL.txt"), "the font's license ships with it");
+    }
+
+    @Test
     void macDockIconSitsOnApplesGridOtherPlatformsGetTheFullBleedOne() throws Exception {
         java.awt.Image mac = AppIcon.taskbarImage("Mac OS X");
         assertNotNull(mac);

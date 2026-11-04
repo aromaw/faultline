@@ -32,6 +32,11 @@ final class Ui {
      * without arrows, roomy table rows without grid lines (a faint alternate row instead), plain split dividers.
      */
     static void modernDefaults(boolean dark) {
+        java.awt.Font df = UIManager.getFont("defaultFont");
+        if (NerdFont.enabled && df != null) {
+            // a monospace face is wider: one point smaller keeps the header within a 1440 px screen
+            UIManager.put("defaultFont", new javax.swing.plaf.FontUIResource(df.deriveFont(df.getSize2D() - 1)));
+        }
         UIManager.put("Component.arc", 10);
         UIManager.put("Button.arc", 10);
         UIManager.put("TextComponent.arc", 10);
@@ -103,12 +108,13 @@ final class Ui {
             public void updateUI() {
                 super.updateUI();
                 Font f = UIManager.getFont("Label.font");
-                if (f != null) setFont(f.deriveFont(Font.BOLD));
+                if (f != null) setFont(f.deriveFont(Font.BOLD, f.getSize2D() - 1));
                 setForeground(textOn(color));
             }
         };
+        style(n, "small");
         p.add(n);
-        p.add(new JLabel(what));
+        p.add(label(what, "small"));
         p.setMaximumSize(p.getPreferredSize());
         return p;
     }

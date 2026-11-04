@@ -45,7 +45,7 @@ public final class GuiMain {
         MainFrame[] holder = new MainFrame[1];
         try {
             EventQueue.invokeAndWait(() -> {
-                MainFrame.applyLaf(prefs.dark());
+                MainFrame.applyLaf(prefs.dark(), prefs.nerdFont());
                 MainFrame m = new MainFrame(prefs);
                 holder[0] = m;
                 m.frame.addWindowListener(new WindowAdapter() {

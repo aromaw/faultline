@@ -79,6 +79,16 @@ public final class Prefs {
         save();
     }
 
+    /** whether the window uses the bundled Nerd Font (the default) or the theme's system font */
+    public boolean nerdFont() {
+        return !"system".equals(p.getProperty("font"));
+    }
+
+    public void setNerdFont(boolean nerd) {
+        p.setProperty("font", nerd ? "nerd" : "system");
+        save();
+    }
+
     /** a remembered yes/no choice of the window (e.g. a dismissed hint) */
     public boolean flag(String name) {
         return "true".equals(p.getProperty("flag." + name));
