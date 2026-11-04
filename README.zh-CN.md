@@ -135,7 +135,8 @@ java -jar target/branch-diff-tool.jar  # 桌面环境下不带参数也会打开
    信息、作者或哈希过滤（`author:`、`sha:` 只匹配对应字段）。勾选 Pick 列，或选中若干行后按空格 /
    点 *Pick Selected*；*Clear Picks* 取消全部勾选。不管点选顺序如何，都按从旧到新的顺序应用。
 4. **Analyze（分析）**：蓝色的 *Analyze N commits* 按钮（Ctrl/⌘+Enter）在后台跑离线模拟（`git merge-tree`）。
-   状态栏显示当前阶段、*Cancel* 按钮（在进入下一阶段时生效）和堆内存占用。
+   状态栏显示当前阶段、*Cancel* 按钮（在进入下一阶段时生效）和 *Memory X of Y*：上一次垃圾回收后仍在使用的
+   Java 堆，以及堆上限。（“已用堆”还包括尚未回收的垃圾，即使实际占用很少也会逐渐涨到接近上限；点击该标签可立即回收。）
 
 结果：
 
@@ -143,10 +144,13 @@ java -jar target/branch-diff-tool.jar  # 桌面环境下不带参数也会打开
   干净合并的文件数、检查清单步骤数、需要考虑的提交数）。
 - hunk 视图并排显示 Ours（tenant）| Base（pick 的父提交）| Theirs（本次 pick），也可切成 Ours | Theirs，
   滚动同步；下方页签为 *Why it conflicts*（为什么冲突）、*Take theirs → needs*（主线代码的依赖）、
-  *Keep ours → callers*（tenant 中受影响的入口和调用方）、*Checklist* 和 *Dependency chain*。点击任意一行或
-  `File.java:123` 这类引用，会在右侧只读打开代码。
+  *Keep ours → callers*（tenant 中受影响的入口和调用方）、*Checklist* 和 *Dependency chain*。三栏上方有一行提示，
+  说明各栏是什么（点 *Hide* 永久隐藏）。点击任意一行或 `File.java:123` 这类引用，会在右侧只读打开代码；
+  右侧面板在第一次点击时才出现。
+- 第一次用？分析结束后树中第一个冲突已被选中：先读 *Why it conflicts*，再按准备保留的一侧看
+  *Take theirs → needs* 或 *Keep ours → callers*，最后按 *Checklist* 逐步处理。
 - *Export Report* 导出与命令行相同的 HTML / Markdown / JSON 报告。
-- *Dark Theme* / *Light Theme*（或 View › Toggle Light / Dark Theme）切换深色/浅色主题。
+- *Dark* / *Light*（或 View › Toggle Light / Dark Theme）切换深色/浅色主题。
 
 每个按钮都有文字和提示（tooltip）。没有内容的面板会提示下一步该做什么。
 
@@ -154,7 +158,9 @@ java -jar target/branch-diff-tool.jar  # 桌面环境下不带参数也会打开
 MEDIUM 表示入口点、孤儿代码、tenant 的改动或不确定的依赖。
 
 应用图标（窗口、任务栏、macOS Dock）是手写的 `assets/icon/faultline.svg`；`assets/icon/render.py`
-生成 PNG（16–1024 px）、`faultline.icns` 和 `faultline.ico`。
+生成 PNG（16–1024 px）、`faultline.icns` 和 `faultline.ico`。macOS 上（`faultline.icns` 和 Dock 图像）图标按苹果的
+网格绘制：1024 px 画布上一个 824 px 的圆角方块加柔和阴影，因此和 Dock 里其他图标一样大；窗口图标以及
+Windows / Linux 图标则铺满整个方块。
 
 ### 内存与启动
 
@@ -164,10 +170,11 @@ MEDIUM 表示入口点、孤儿代码、tenant 的改动或不确定的依赖。
 
 - `FAULTLINE_XMX`：堆上限，例如 `4g`。默认取物理内存的四分之一，最少 1 GB，最多 8 GB。启动脚本在 macOS 上用
   `sysctl -n hw.memsize` 读内存，在 Linux 上读 `/proc/meminfo` 和 cgroup 限制（容器）。约 7000 个 Java 文件的
-  Spring/MyBatis 项目（ruoyi-vue-pro）存活堆峰值约 0.19 GB；RuoYi-Vue 用 256 MB 也能跑完。
+  Spring/MyBatis 项目（ruoyi-vue-pro）分析一个提交时存活堆峰值约 0.19 GB，十个提交约 1.3 GB；RuoYi-Vue 用 256 MB 也能跑完。
 - `FAULTLINE_GC_OPTS`：替换收集器参数（上面的前四个），例如 `-XX:+UseSerialGC`。
 - `FAULTLINE_JAVA_OPTS`：额外参数，放在最后，因此可以覆盖任何默认值。例如：
   - `-Dfaultline.parseThreads=N`：解析（或从摘要缓存读取）一个版本的文件所用的线程数。默认等于处理器数，最多 8。
+  - `-Dfaultline.gitThreads=N`：冲突分析时并行读取文件历史（`git log`）的 git 进程数。默认等于处理器数，最多 8。
   - `-XX:ReservedCodeCacheSize=48m` 可少占约 20 MB 空闲 RSS，但缓存未命中时分析慢约 11%。
   - `-XX:TieredStopAtLevel=1` 可少占约 30 MB RSS，但分析慢约 40%。
 - `FAULTLINE_CDS=1`：开启 AppCDS，第一次运行时把归档写入 `~/.cache/faultline/`。JDK 19+ 用
@@ -194,16 +201,23 @@ MEDIUM 表示入口点、孤儿代码、tenant 的改动或不确定的依赖。
 分析如何控制内存：
 
 - 代码索引只保留每个 Java 文件的摘要（类型、成员、import、注解）。完整语法树按需重新解析，放进一个按源码大小
-  限额的缓存（默认堆的 1/160，至少 200 万字符；`-Dfaultline.astCacheChars=N`）。修复前，四个版本（fork、base、
+  限额的缓存（默认堆的 1/160，至少 200 万、最多 800 万字符，约 250 MB 语法树；`-Dfaultline.astCacheChars=N`）。
+  加上 800 万的上限之前，4.9 GB 的堆对应 3200 万字符的额度，ruoyi-vue-pro 的 10 个提交的分析存活堆为 2.9 GB 而不是
+  1.3 GB，耗时和报告都相同。修复前，四个版本（fork、base、
   ours、theirs）的所有文件都一直保持解析状态，每个源码字符约占 25–30 字节堆，这就是大项目上
   `Java heap space` 报错的原因。
 - 全项目扫描（调用方、类型使用、注入）先在源码文本里查找标识符，只解析提到它的文件。
 - symbol solver 的单文件缓存有上限（`-Dfaultline.solverCacheSize=N`，默认 64），各版本之间相同的文件内容共享。
+  solver 解析的文件同样丢弃 token。（每个源码根 16 个时，10 个提交的分析再少约 200 MB，但慢 60 s；4 个时 10 分钟内没跑完。）
+- symbol solver 把解析结果存放在语法树节点上，而解析出的类型指向它找到的声明，也就是 solver 解析的某个文件。
+  因此缓存中的一棵语法树会让它解析过的所有文件一直留在内存里，即使 solver 早已丢弃它们。现在每当语法树缓存约
+  一半被替换，就从缓存的语法树上清掉这些数据（需要时重新解析，结果相同）。
 - 解析完就丢弃 parser token；反向边（“谁调用了它”）只对需要的符号按需解析。每次分析结束都会清空 JavaParser 缓存。
 - 摘要中的成员文本只保存 128 位指纹（报告用到的少数文本从语法树重新打印），注解只保存源码文本。解码出的字符串
   会被 intern，多个文件、多个版本共用的名称和类型只存一份；按 id 查方法时经由其所属的类，不再维护所有方法 id 的 map。
 - 见过的文件直接从[摘要缓存](#摘要缓存)读取摘要。
-- `-Dfaultline.heapLog=true` 会在分析的每个阶段做一次 full GC 并打印存活堆大小。
+- `-Dfaultline.heapLog=true` 会在分析的每个阶段做一次 full GC 并打印存活堆大小；`-Dfaultline.heapHisto=N`
+  另外打印占用最多的 N 个类。`-v` 会打印 git 命令的调用次数和耗时（`git: log 412 calls 61.2 s, …`）。
 
 实测环境：Linux（JDK 21，16 核，19 GB，磁盘缓存已预热），通过 `scripts/faultline` 用 GUI 自动化运行。
 ruoyi-vue-pro：把 `5f839f5bb0` pick 到 `tenant`（从 master 的 `91870831` 分叉，3697 个 Java 文件；master 有 7622 个），
@@ -222,6 +236,35 @@ ruoyi-vue-pro：把 `5f839f5bb0` pick 到 `tenant`（从 master 的 `91870831` �
 窗口显示时间包含启动脚本以及测量程序启动进程的时间。存活堆峰值（命令行，`-Xmx1g -Dfaultline.heapLog=true`）
 从 460–461 MB 降到 188 MB，冷热缓存相同。摘要缓存共 8683 个条目：数据 11 MB，按 4 KB 块计占用 35 MB。JSON、
 Markdown 和 HTML 报告与之前逐字节相同，缓存冷、热或关闭都一样。
+
+一次分析多个提交：主线最新的 10 个提交（`--pick master~10..master`，pick 到 `tenant`，命令行，`--no-maven`）：
+242 个文件中 665 个冲突 hunk，610 条 finding。每项 1 次，同一台机器：
+
+| | 堆上限 | 分析耗时 | 峰值 RSS | 存活堆峰值 |
+|---|---|---|---|---|
+| `9b43304` | 4.9 GB（默认） | 30 分钟内未完成 | 22 分钟时 5.1 GB | — |
+| 只修复冲突分析 | 4.9 GB（默认） | 432 s | 5.3 GB | 3.4 GB |
+| 现在 | 4.9 GB（默认） | 199–213 s | 3.7 GB | 1.26 GB |
+| 现在 | `FAULTLINE_XMX=4g` | 201 s | 3.8 GB | |
+| 现在 | `FAULTLINE_XMX=2g` | 207 s | 2.3 GB | |
+
+G1 会把堆扩展到给它的空间里，所以峰值 RSS 随上限变化；存活堆（分析真正持有的内存）峰值为 1.26 GB，2 GB 堆也一样快。
+慢和大的原因：
+
+- 对每个冲突 hunk，“保留 ours”检查都会重新收集 pick 改动的每个方法的依赖（hunk 数 × 方法数次符号解析）。现在每次分析只收集一次。
+- 其余时间大多花在 `git` 上：约 1000 次 `git log --follow`（在这段历史上每次约 0.5 s；`--follow` 用不了 commit-graph 的
+  changed-path 过滤器）、11000 个 `git cat-file` 进程，以及每个符号一次、没有缓存的 `git diff -M` 和 `git log -S`。现在当普通的
+  路径日志只包含修改时就用它（快约 60 倍，提交相同；否则仍用 `--follow`），分析要用的文件历史由最多 8 个 git 进程并行读取
+  （`-Dfaultline.gitThreads`），文件版本由一个 `git cat-file --batch` 进程读取（27.5 s → 2 s），重命名和 pickaxe 结果做了缓存。
+- 接收者类型未知的调用会和所有类的所有方法比对，而检查 varargs 时还会解析每个候选方法所在的文件；现在有了“名称 → 方法”
+  索引，摘要里也记录了 varargs 标志（摘要格式 2：旧格式的缓存条目会重建一次）。
+- 内存：语法树缓存额度上限为 800 万字符，缓存的语法树上不再保留 solver 的解析数据，solver 解析的文件丢弃 token（见上文）。
+
+报告与之前相同，有两处预期内的差别。模拟提交（`faultline simulated pick of …`）现在使用其 pick 的日期，因此 SHA 和报告每次
+运行都相同。在这个例子上，context 视图的依赖链之前会因 `NullPointerException` 失败（只表现为警告 `context view failed`），
+现在可以正常生成。有一条依赖树的边（`RedisMQTemplate#send(T)`）会随缓存状态在“已解析”和 *uncertain* 之间变化，这是
+symbol solver 原有的行为，不是新问题。改动后重新测量，上面单个提交的 GUI 数据没有变化（冷缓存 7.4 s、峰值 700–762 MB；
+热缓存 3.5–3.6 s、511–527 MB）。
 
 更早，在改为只保留摘要的索引之前，ruoyi-vue-pro 在 1 GB 下报 `Java heap space`，需要 6 GB 堆（RSS 2.8–3.6 GB，
 34–37 s）。RuoYi-Vue `dbe9834e`（8 核，16 GB，摘要缓存之前）：约 0.6 s 显示窗口，空闲约 140 MB，峰值 RSS 495–630 MB，

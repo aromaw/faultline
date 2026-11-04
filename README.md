@@ -146,7 +146,9 @@ The window walks through four numbered steps in its header; each turns into a gr
    whatever order you click them in.
 4. **Analyze**: the blue *Analyze N commits* button (Ctrl/⌘+Enter) runs the offline simulation
    (`git merge-tree`) in the background. The status bar shows the phase, a *Cancel* button (it takes
-   effect at the next phase) and the heap in use.
+   effect at the next phase) and *Memory X of Y*: the Java heap still in use after the last garbage
+   collection, and the heap limit. (The used heap also counts garbage that has not been collected yet, so
+   it climbs towards the limit even when little is in use; click the label to collect now.)
 
 Results:
 
@@ -155,9 +157,14 @@ Results:
 - The hunk view shows Ours (tenant) | Base (pick parent) | Theirs (the pick) side by side (or Ours |
   Theirs), with synced scrolling, and the tabs *Why it conflicts*, *Take theirs → needs* (dependencies of
   the mainline code), *Keep ours → callers* (affected entry points and callers in the tenant), *Checklist*
-  and *Dependency chain*. Click any row or `File.java:123` reference to open it read-only on the right.
+  and *Dependency chain*. A one-line hint above the columns says what they are (*Hide* removes it for
+  good). Click any row or `File.java:123` reference to open it read-only on the right; that pane appears
+  with the first click.
+- First time? Click the first conflict in the tree (it is selected after an analysis), read *Why it
+  conflicts*, then *Take theirs → needs* or *Keep ours → callers* for the side you plan to keep, and
+  work through the *Checklist*.
 - *Export Report* writes the same HTML, Markdown or JSON report as the CLI.
-- *Dark Theme* / *Light Theme* (or View › Toggle Light / Dark Theme) switches themes.
+- *Dark* / *Light* (or View › Toggle Light / Dark Theme) switches themes.
 
 Every button has a text label and a tooltip. Panels without content show what to do next.
 
@@ -165,7 +172,10 @@ Severity badges are a GUI-only heuristic. HIGH means a deleted file, or a missin
 that does not come from the pick. MEDIUM means entry points, orphans, tenant edits, or uncertain needs.
 
 The app icon (window, taskbar, macOS Dock) is drawn by hand in `assets/icon/faultline.svg`;
-`assets/icon/render.py` renders the PNGs (16–1024 px), `faultline.icns` and `faultline.ico`.
+`assets/icon/render.py` renders the PNGs (16–1024 px), `faultline.icns` and `faultline.ico`. On macOS
+(`faultline.icns` and the Dock image) the icon sits on Apple's grid, an 824 px square with a soft
+shadow on a 1024 px canvas, so it is the same size as the other Dock icons; the window and Windows /
+Linux icons fill the square.
 
 ### Memory and startup
 
@@ -176,11 +186,14 @@ The app icon (window, taskbar, macOS Dock) is drawn by hand in `assets/icon/faul
 - `FAULTLINE_XMX`: heap cap, e.g. `4g`. The default is a quarter of the physical memory, at least 1 GB
   and at most 8 GB. The launcher reads the memory with `sysctl -n hw.memsize` on macOS, and from
   `/proc/meminfo` and the cgroup limit (containers) on Linux. A ~7,000-file Spring/MyBatis project
-  (ruoyi-vue-pro) peaks at about 0.19 GB of live heap; RuoYi-Vue runs in 256 MB.
+  (ruoyi-vue-pro) peaks at about 0.19 GB of live heap for one commit and 1.3 GB for ten; RuoYi-Vue runs
+  in 256 MB.
 - `FAULTLINE_GC_OPTS`: replaces the collector flags (the first four above), e.g. `-XX:+UseSerialGC`.
 - `FAULTLINE_JAVA_OPTS`: extra flags. They come last, so they override any default. Examples:
   - `-Dfaultline.parseThreads=N`: threads that parse (or read from the summary cache) a version's
     files. Default: the number of processors, at most 8.
+  - `-Dfaultline.gitThreads=N`: git processes that read file histories (`git log`) side by side
+    during a conflict analysis. Default: the number of processors, at most 8.
   - `-XX:ReservedCodeCacheSize=48m` saves about 20 MB of idle RSS, but a cold-cache analysis takes
     about 11% longer.
   - `-XX:TieredStopAtLevel=1` saves about 30 MB of RSS but makes the analysis about 40% slower.
@@ -213,13 +226,22 @@ How the analysis keeps memory low:
 
 - The code index keeps only summaries (types, members, imports, annotations) of each Java file. Full
   syntax trees are parsed again on demand into a cache bounded by source size (by default 1/160 of the
-  heap, at least 2 M characters; `-Dfaultline.astCacheChars=N`). Before this, all four versions (fork,
+  heap, at least 2 M and at most 8 M characters, about 250 MB of trees; `-Dfaultline.astCacheChars=N`).
+  Before the 8 M cap, a 4.9 GB heap gave a 32 M budget, and a 10-commit analysis of ruoyi-vue-pro kept
+  2.9 GB live instead of 1.3 GB, in the same time and with the same report. Before this, all four versions (fork,
   base, ours, theirs) of every file stayed parsed, about 25–30 bytes of heap per source character. That
   was the cause of the `Java heap space` error on large projects.
 - Whole-project scans (callers, type usages, injections) first check the source text for the
   identifier and parse only the files that mention it.
 - The symbol solvers' per-file caches are bounded (`-Dfaultline.solverCacheSize=N`, default 64), and
-  identical file contents are shared between versions.
+  identical file contents are shared between versions. The solver's parsed files drop their tokens too.
+  (16 per source root saved another ~200 MB on the 10-commit run but took 60 s longer; 4 did not finish
+  in 10 minutes.)
+- The symbol solver stores what it resolved on the syntax nodes, and a resolved type points at the
+  declaration it found, in a file the solver parsed. A cached tree therefore kept every file it had
+  resolved into alive, long after the solver had dropped it. Whenever about half of the tree cache has
+  been replaced, that data is dropped from the cached trees (it is resolved again on demand, with the same
+  results).
 - Parser tokens are dropped after parsing, and reverse edges ("who calls this") are resolved only for
   the symbols that are needed. After each run the JavaParser caches are cleared.
 - A summary keeps member texts as 128-bit fingerprints (the few texts a report shows are printed again
@@ -227,7 +249,9 @@ How the analysis keeps memory low:
   or type shared by many files and versions exists once, and methods are found by id through their
   class instead of a map of every method's id.
 - Summaries come from the [summary cache](#summary-cache) when the file was seen before.
-- `-Dfaultline.heapLog=true` prints the live heap after a full GC at each phase of an analysis.
+- `-Dfaultline.heapLog=true` prints the live heap after a full GC at each phase of an analysis;
+  `-Dfaultline.heapHisto=N` adds the N largest classes. `-v` prints the git commands' call counts and
+  times (`git: log 412 calls 61.2 s, …`).
 
 Measured on Linux (JDK 21, 16 CPUs, 19 GB, warm disk cache), GUI automation through
 `scripts/faultline`, ruoyi-vue-pro: pick `5f839f5bb0` onto `tenant` (forked from master at `91870831`,
@@ -247,6 +271,43 @@ The window-shown times include the launcher script and the time the benchmark to
 process. The peak live heap (CLI, `-Xmx1g -Dfaultline.heapLog=true`) went from 460–461 MB to 188 MB,
 cold or warm. The summary cache holds 8,683 entries: 11 MB of data, 35 MB on disk in 4 KB blocks. JSON,
 Markdown and HTML reports are byte-for-byte the same as before, with the cache cold, warm or disabled.
+
+Several commits at once: the 10 newest mainline commits (`--pick master~10..master` onto `tenant`, CLI,
+`--no-maven`): 665 conflict hunks in 242 files, 610 findings. One run each, same machine:
+
+| | heap limit | analysis | peak RSS | peak live heap |
+|---|---|---|---|---|
+| `9b43304` | 4.9 GB (default) | not finished after 30 min | 5.1 GB after 22 min | — |
+| conflict analysis fixed only | 4.9 GB (default) | 432 s | 5.3 GB | 3.4 GB |
+| now | 4.9 GB (default) | 199–213 s | 3.7 GB | 1.26 GB |
+| now | `FAULTLINE_XMX=4g` | 201 s | 3.8 GB | |
+| now | `FAULTLINE_XMX=2g` | 207 s | 2.3 GB | |
+
+G1 grows the heap into the space it is given, so the peak RSS follows the limit; the live heap (what
+the analysis really holds) peaks at 1.26 GB, and 2 GB is as fast. What made it slow and big:
+
+- For every conflict hunk, the "keep ours" check collected the dependencies of every method the picks
+  change again (hunks × methods symbol resolutions). They are now collected once per analysis.
+- Most of the remaining time was `git`: about 1,000 `git log --follow` calls (~0.5 s each on this
+  history; `--follow` cannot use the commit-graph's changed-path filters), 11,000 `git cat-file`
+  processes, and an uncached `git diff -M` and `git log -S` per symbol. Now a plain path log is used when
+  it shows only modifications (60 times faster, same commits; otherwise `--follow`), the histories an
+  analysis will need are read by up to 8 git processes side by side (`-Dfaultline.gitThreads`), file
+  versions come from one `git cat-file --batch` process (27.5 s → 2 s), and the rename and pickaxe
+  results are cached.
+- Calls whose receiver type is unknown were matched against every method of every class, and checking
+  for varargs parsed each candidate's file; there is now a name → methods index and a varargs flag in
+  the summaries (summary format 2: cache entries of the old format are rebuilt once).
+- Memory: the syntax-tree cache budget is capped at 8 M characters, the solver's resolution data is
+  dropped from cached trees, and the solver's parses drop their tokens (see above).
+
+The reports are the same as before, with two intended differences. Simulated commits (`faultline
+simulated pick of …`) are now dated like their pick, so their SHAs, and the reports, are the same on
+every run. On this case the context view's dependency chains failed with a `NullPointerException`
+(reported only as the warning `context view failed`); they are now there. One dependency-tree edge
+(`RedisMQTemplate#send(T)`) switches between resolved and *uncertain* from run to run with the cache
+state; this is older symbol-solver behaviour, not new. Re-measured after these changes, the single-commit
+GUI runs above are unchanged (cold 7.4 s, 700–762 MB peak; warm 3.5–3.6 s, 511–527 MB).
 
 Earlier, before the summary-only index, the ruoyi-vue-pro run failed with `Java heap space` at 1 GB and
 needed a 6 GB heap (2.8–3.6 GB RSS, 34–37 s). RuoYi-Vue `dbe9834e` (8 CPUs, 16 GB, before the summary
