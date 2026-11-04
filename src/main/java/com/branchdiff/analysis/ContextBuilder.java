@@ -835,12 +835,14 @@ public final class ContextBuilder {
         for (Map.Entry<String, Set<String>> e : deps.entrySet()) for (String t : e.getValue()) neededBy.putIfAbsent(t, e.getKey());
         int step = 1;
         for (String k : order) {
-            Node n = model.nodes.get(k);
+            // node(), not model.nodes.get(): a chain's anchors need not have a node yet (a 10-pick analysis of a large
+            // project crashed here with a NullPointerException); node() returns the existing one when there is one
+            Node n = node(k);
             String action = action(n, c.direction, subjects.contains(k), callers);
             if (action == null) continue;
             String by = neededBy.get(k);
-            String why = by == null ? (c.roots.contains(k) ? "chain root" : "") : "needed by " + model.nodes.get(by).label;
-            if ("impact".equals(c.direction) && !subjects.contains(k) && by != null) why = "uses " + model.nodes.get(by).label;
+            String why = by == null ? (c.roots.contains(k) ? "chain root" : "") : "needed by " + node(by).label;
+            if ("impact".equals(c.direction) && !subjects.contains(k) && by != null) why = "uses " + node(by).label;
             c.checklist.add(new ChecklistItem(step++, k, action, why));
         }
     }
