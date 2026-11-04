@@ -166,7 +166,9 @@ Results:
 - *Export Report* writes the same HTML, Markdown or JSON report as the CLI.
 - *Dark* / *Light* (or View › Toggle Light / Dark Theme) switches themes.
 
-Every button has a text label and a tooltip. Panels without content show what to do next.
+Every button has a text label and a tooltip. Panels without content show what to do next. The window uses
+FlatLaf's macOS-style light and dark themes on every platform, with rounded controls, tables without grid
+lines and tinted chips and badges.
 
 Severity badges are a GUI-only heuristic. HIGH means a deleted file, or a missing or changed dependency
 that does not come from the pick. MEDIUM means entry points, orphans, tenant edits, or uncertain needs.

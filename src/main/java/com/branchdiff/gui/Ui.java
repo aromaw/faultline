@@ -25,7 +25,110 @@ final class Ui {
     }
 
     static final Color RED = new Color(0xE5493A), ORANGE = new Color(0xE0912F), GREEN = new Color(0x4FA45E),
-            BLUE = new Color(0x3592C4), ACCENT = new Color(0x3D7BF7), FAULT = new Color(0xFF9F43);
+            BLUE = new Color(0x3592C4), ACCENT = new Color(0x4C6EF5), FAULT = new Color(0xFF9F43);
+
+    /**
+     * Shared look on top of the FlatLaf theme, set after each theme switch: rounder controls, thin scroll bars
+     * without arrows, roomy table rows without grid lines (a faint alternate row instead), plain split dividers.
+     */
+    static void modernDefaults(boolean dark) {
+        UIManager.put("Component.arc", 10);
+        UIManager.put("Button.arc", 10);
+        UIManager.put("TextComponent.arc", 10);
+        UIManager.put("CheckBox.arc", 6);
+        UIManager.put("ProgressBar.arc", 8);
+        UIManager.put("Component.focusWidth", 1);
+        UIManager.put("Component.innerFocusWidth", 0);
+        UIManager.put("ScrollBar.width", 10);
+        UIManager.put("ScrollBar.thumbArc", 999);
+        UIManager.put("ScrollBar.trackArc", 999);
+        UIManager.put("ScrollBar.thumbInsets", new java.awt.Insets(2, 2, 2, 2));
+        UIManager.put("ScrollBar.showButtons", false);
+        UIManager.put("ScrollPane.smoothScrolling", true);
+        UIManager.put("Table.rowHeight", 28);
+        UIManager.put("Table.showHorizontalLines", false);
+        UIManager.put("Table.showVerticalLines", false);
+        UIManager.put("Table.intercellSpacing", new java.awt.Dimension(0, 0));
+        UIManager.put("Table.cellMargins", new java.awt.Insets(2, 6, 2, 6));
+        UIManager.put("TableHeader.height", 30);
+        UIManager.put("TableHeader.separatorColor", UIManager.getColor("Table.background"));
+        Color tableBg = UIManager.getColor("Table.background");
+        if (tableBg != null) {
+            UIManager.put("Table.alternateRowColor", dark ? mix(tableBg, Color.WHITE, 0.03f) : mix(tableBg, new Color(0x1C2030), 0.025f));
+        }
+        UIManager.put("TabbedPane.tabHeight", 36);
+        UIManager.put("TabbedPane.showTabSeparators", false);
+        UIManager.put("TabbedPane.tabSelectionHeight", 2);
+        UIManager.put("TabbedPane.tabInsets", new java.awt.Insets(4, 14, 4, 14));
+        UIManager.put("SplitPane.dividerSize", 6);
+        UIManager.put("SplitPaneDivider.gripDotCount", 0);
+        UIManager.put("SplitPane.continuousLayout", true);
+        UIManager.put("TitlePane.unifiedBackground", true);
+        UIManager.put("Tree.rowHeight", 26);
+    }
+
+    /**
+     * A panel drawn as a rounded, tinted surface ({@code tint} at a low alpha, more in the dark theme), for chips
+     * and banners; its children sit on it transparently.
+     */
+    static class Tinted extends javax.swing.JPanel {
+        private final java.util.function.Supplier<Color> tint;
+        private final int arc;
+
+        Tinted(java.awt.LayoutManager layout, java.util.function.Supplier<Color> tint, int arc) {
+            super(layout);
+            this.tint = tint;
+            this.arc = arc;
+            setOpaque(false);
+        }
+
+        @Override
+        protected void paintComponent(Graphics g) {
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            Color c = tint.get();
+            g2.setColor(alpha(c, dark() ? 0.22f : 0.10f));
+            g2.fill(new RoundRectangle2D.Float(0, 0, getWidth(), getHeight(), arc, arc));
+            g2.dispose();
+            super.paintComponent(g);
+        }
+    }
+
+    /** a summary chip: the number in bold and in {@code color}, then what it counts, on a tinted pill */
+    static javax.swing.JComponent chip(String number, String what, Color color) {
+        Tinted p = new Tinted(new java.awt.FlowLayout(java.awt.FlowLayout.LEFT, 5, 0), () -> color, 999);
+        p.setBorder(BorderFactory.createEmptyBorder(3, 6, 3, 8));
+        JLabel n = new JLabel(number) {
+            @Override
+            public void updateUI() {
+                super.updateUI();
+                Font f = UIManager.getFont("Label.font");
+                if (f != null) setFont(f.deriveFont(Font.BOLD));
+                setForeground(textOn(color));
+            }
+        };
+        p.add(n);
+        p.add(new JLabel(what));
+        p.setMaximumSize(p.getPreferredSize());
+        return p;
+    }
+
+    /** {@code c} as text on a light tint of itself: a darker shade in the light theme, a lighter one in the dark */
+    static Color textOn(Color c) {
+        return dark() ? mix(c, Color.WHITE, 0.25f) : mix(c, Color.BLACK, 0.28f);
+    }
+
+    /** {@code a} moved {@code t} (0..1) towards {@code b} */
+    static Color mix(Color a, Color b, float t) {
+        return new Color(Math.round(a.getRed() + (b.getRed() - a.getRed()) * t),
+                Math.round(a.getGreen() + (b.getGreen() - a.getGreen()) * t),
+                Math.round(a.getBlue() + (b.getBlue() - a.getBlue()) * t));
+    }
+
+    /** {@code c} at {@code alpha} (0..1) */
+    static Color alpha(Color c, float alpha) {
+        return new Color(c.getRed(), c.getGreen(), c.getBlue(), Math.round(alpha * 255));
+    }
 
     static boolean dark() {
         Color bg = UIManager.getColor("Panel.background");
@@ -130,11 +233,12 @@ final class Ui {
             g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
             g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
             int w = getIconWidth() - 4, h = getIconHeight();
-            g2.setColor(dark() ? color.darker() : color);
+            // a tinted pill with the text in the colour, not a solid block with white text
+            g2.setColor(alpha(color, dark() ? 0.26f : 0.15f));
             g2.fill(new RoundRectangle2D.Float(x, y, w, h, h, h));
             g2.setFont(font());
             FontMetrics fm = g2.getFontMetrics();
-            g2.setColor(Color.WHITE);
+            g2.setColor(textOn(color));
             g2.drawString(text, x + (w - fm.stringWidth(text)) / 2f, y + (h - fm.getHeight()) / 2f + fm.getAscent());
             g2.dispose();
         }
@@ -153,7 +257,7 @@ final class Ui {
 
     // ------------------------------------------------------------------ line icons
 
-    enum Glyph { FOLDER, BRANCH, PLAY, STOP, EXPORT, THEME, RELOAD, CHECK, SEARCH, COMMIT, CLEAR, ARROW_DOWN }
+    enum Glyph { FOLDER, BRANCH, PLAY, STOP, EXPORT, THEME, RELOAD, CHECK, SEARCH, COMMIT, CLEAR, ARROW_DOWN, INFO }
 
     /** a 16 x 16 line icon in the label color ({@code color} null) or a fixed color */
     static Icon icon(Glyph glyph) {
@@ -245,6 +349,11 @@ final class Ui {
                 p.lineTo(11.5, 3.6);
                 p.lineTo(8.8, 4.6);
                 g.draw(p);
+            }
+            case INFO -> {
+                g.draw(new java.awt.geom.Ellipse2D.Float(1.5f, 1.5f, 13, 13));
+                g.draw(new java.awt.geom.Line2D.Float(8, 7.2f, 8, 11.5f));
+                g.fill(new java.awt.geom.Ellipse2D.Float(7.1f, 4.1f, 1.8f, 1.8f));
             }
             case CHECK -> {
                 Path2D p = new Path2D.Float();

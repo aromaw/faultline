@@ -3,8 +3,9 @@ package com.branchdiff.gui;
 import com.branchdiff.git.GitRunner;
 import com.branchdiff.gui.GitQueries.Branch;
 import com.branchdiff.gui.GitQueries.CommitRow;
-import com.formdev.flatlaf.FlatDarculaLaf;
-import com.formdev.flatlaf.FlatIntelliJLaf;
+import com.formdev.flatlaf.FlatLaf;
+import com.formdev.flatlaf.themes.FlatMacDarkLaf;
+import com.formdev.flatlaf.themes.FlatMacLightLaf;
 import com.formdev.flatlaf.FlatLaf;
 
 import javax.swing.BorderFactory;
@@ -26,7 +27,6 @@ import javax.swing.JProgressBar;
 import javax.swing.JScrollPane;
 import javax.swing.JSplitPane;
 import javax.swing.JTabbedPane;
-import javax.swing.JSeparator;
 import javax.swing.JTextArea;
 import javax.swing.KeyStroke;
 import javax.swing.SwingConstants;
@@ -254,15 +254,16 @@ final class MainFrame {
         for (int i = 0; i < 4; i++) {
             if (i > 0) {
                 c.gridx = 2 * i - 1;
-                c.insets = new Insets(0, 8, 0, 8);
-                JSeparator sep = new JSeparator(SwingConstants.VERTICAL);
-                sep.setPreferredSize(new Dimension(1, 44));
-                p.add(sep, c);
+                c.insets = new Insets(0, 10, 0, 10);
+                // a chevron between the steps instead of a separator bar: the header reads as one flow
+                JLabel chevron = Ui.muted("\u203A");
+                chevron.setFont(chevron.getFont().deriveFont(20f));
+                p.add(chevron, c);
             }
             c.gridx = 2 * i;
             c.insets = new Insets(0, 0, 0, 0);
             JPanel step = new JPanel(new BorderLayout(0, 4));
-            stepTitles[i] = Ui.label(titles[i].toUpperCase(), "small");
+            stepTitles[i] = new JLabel(titles[i]);
             stepTitles[i].setIcon(steps[i]);
             stepTitles[i].setIconTextGap(6);
             stepTitles[i].setFont(stepTitles[i].getFont().deriveFont(Font.BOLD));
@@ -883,9 +884,15 @@ final class MainFrame {
         updateActions();
     }
 
+    /**
+     * FlatLaf's macOS-style themes (on every platform) with one accent colour and the shared modern defaults of
+     * {@link Ui#modernDefaults}: rounded controls, thin overlay-style scroll bars, tables without grid lines.
+     */
     static void applyLaf(boolean dark) {
-        if (dark) FlatDarculaLaf.setup();
-        else FlatIntelliJLaf.setup();
+        FlatLaf.setGlobalExtraDefaults(java.util.Map.of("@accentColor", Ui.hex(Ui.ACCENT)));
+        if (dark) FlatMacDarkLaf.setup();
+        else FlatMacLightLaf.setup();
+        Ui.modernDefaults(dark);
         CodeViews.dark = dark;
     }
 

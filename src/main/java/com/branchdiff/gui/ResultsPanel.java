@@ -82,7 +82,7 @@ final class ResultsPanel {
         split.setResizeWeight(0.5);
         split.setBorder(null);
         summary.setLayout(new javax.swing.BoxLayout(summary, javax.swing.BoxLayout.X_AXIS));
-        summary.setBorder(BorderFactory.createEmptyBorder(6, 4, 6, 8));
+        summary.setBorder(BorderFactory.createEmptyBorder(10, 8, 8, 8));
         hint = hint();
         JPanel north = new JPanel(new BorderLayout());
         north.add(summary, BorderLayout.NORTH);
@@ -117,7 +117,6 @@ final class ResultsPanel {
             chip(String.valueOf(c.cleanFiles.size()), "merged cleanly", Ui.GREEN);
             chip(String.valueOf(c.checklist.size()), "checklist steps", Ui.BLUE);
             chip(String.valueOf(c.bringAlong.size()), "commits to consider", Ui.muted());
-            summary.add(Ui.muted("  analysis " + r.millis() + " ms"));
         } else {
             summary.removeAll();
             if (r != null) summary.add(Ui.muted("no conflict model (see the exported report)"));
@@ -130,22 +129,28 @@ final class ResultsPanel {
 
     /** how to read the result, for a first-time user; "Hide" remembers that it is not needed */
     private javax.swing.JComponent hint() {
-        JPanel p = new JPanel(new BorderLayout(8, 0));
-        p.setBorder(BorderFactory.createEmptyBorder(0, 8, 6, 8));
-        JLabel text = Ui.muted("<html>Pick a conflict on the left. <b>Ours</b> = target branch, <b>Base</b> = the pick's parent, "
-                + "<b>Theirs</b> = the pick. The tabs explain the conflict; <b>Checklist</b> lists every step.</html>");
+        // an info banner: a soft accent-tinted strip with rounded corners
+        JPanel p = new Ui.Tinted(new BorderLayout(10, 0), () -> Ui.ACCENT, 12);
+        p.setBorder(BorderFactory.createEmptyBorder(7, 12, 7, 6));
+        JLabel text = new JLabel("<html>Pick a conflict on the left. <b>Ours</b> = target branch, <b>Base</b> = the pick's parent, "
+                + "<b>Theirs</b> = the pick. The tabs explain the conflict; <b>Checklist</b> lists every step.</html>",
+                Ui.icon(Ui.Glyph.INFO, Ui.ACCENT), javax.swing.SwingConstants.LEFT);
+        text.setIconTextGap(10);
+        JPanel outer = new JPanel(new BorderLayout());
+        outer.setBorder(BorderFactory.createEmptyBorder(0, 8, 8, 10));
+        outer.add(p);
         javax.swing.JButton hide = new javax.swing.JButton("Hide");
         Ui.style(hide, "small");
         hide.putClientProperty("JButton.buttonType", "borderless");
         hide.setToolTipText("Do not show this hint again");
         hide.addActionListener(e -> {
             prefs.setFlag("hint.results.hidden", true);
-            p.setVisible(false);
+            outer.setVisible(false);
             detail.revalidate();
         });
         p.add(text, BorderLayout.CENTER);
         p.add(hide, BorderLayout.EAST);
-        return p;
+        return outer;
     }
 
     /** opens a location in the file pane, showing the pane first if it is still hidden */
@@ -167,10 +172,8 @@ final class ResultsPanel {
     }
 
     private void chip(String n, String what, Color color) {
-        JLabel l = new JLabel(what, new Ui.Badge(n, color, 22), javax.swing.SwingConstants.LEFT);
-        l.setIconTextGap(2);
-        l.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 8));
-        summary.add(l);
+        summary.add(Ui.chip(n, what, color));
+        summary.add(javax.swing.Box.createHorizontalStrut(6));
     }
 
     /** the tab titles of the hunk detail (automation iterates them) */
