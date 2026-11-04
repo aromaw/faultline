@@ -92,6 +92,7 @@ class BranchPickerLogicTest {
         assertTrue(f.canDisplay('\ue725'), "Nerd Font icon (git branch)");
         assertEquals(java.awt.Font.BOLD, NerdFont.font(java.awt.Font.BOLD, 13).getStyle());
         assertNotNull(NerdFont.class.getResource("fonts/OFL.txt"), "the font's license ships with it");
+        for (Ui.Glyph g : Ui.Glyph.values()) assertTrue(f.canDisplay(Ui.nerdGlyph(g).charAt(0)), "Nerd Font has the icon " + g);
     }
 
     @Test

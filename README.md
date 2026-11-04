@@ -168,7 +168,7 @@ Results:
 
 Every button has a text label and a tooltip. Panels without content show what to do next. The window uses
 FlatLaf's macOS-style light and dark themes on every platform, with rounded controls, tables without grid
-lines and tinted chips and badges. The font is the bundled JetBrains Mono Nerd Font (window and code;
+lines and tinted chips and badges. The font is the bundled JetBrains Mono Nerd Font (window, code and icons, which are the font's VS Code codicons;
 characters it lacks, such as Chinese, come from the system's fallback fonts); View › *Nerd Font (JetBrains
 Mono)* switches back to the system font and is remembered. The font files are under the SIL Open Font
 License (`src/main/resources/com/branchdiff/gui/fonts/OFL.txt`) and add about 3 MB to the jar.

@@ -154,7 +154,7 @@ java -jar target/branch-diff-tool.jar  # 桌面环境下不带参数也会打开
 
 每个按钮都有文字和提示（tooltip）。没有内容的面板会提示下一步该做什么。窗口在所有平台上都使用 FlatLaf 的
 macOS 风格浅色/深色主题：圆角控件、无网格线的表格、浅色底的标签和徽章。字体为内置的 JetBrains Mono Nerd Font
-（窗口和代码都用它；字体里没有的字符，例如中文，由系统的后备字体显示）；View › *Nerd Font (JetBrains Mono)* 可切回系统字体，
+（窗口、代码和图标都用它，图标取自字体里的 VS Code codicons；字体里没有的字符，例如中文，由系统的后备字体显示）；View › *Nerd Font (JetBrains Mono)* 可切回系统字体，
 选择会被记住。字体文件采用 SIL Open Font License（`src/main/resources/com/branchdiff/gui/fonts/OFL.txt`），让 jar 增大约 3 MB。
 
 严重度标签只是 GUI 的启发式标记：HIGH 表示文件被删除，或者有缺失/已改动、但不来自本次 pick 的依赖；

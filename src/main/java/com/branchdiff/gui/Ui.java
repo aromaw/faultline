@@ -280,8 +280,12 @@ final class Ui {
                 g2.setRenderingHint(RenderingHints.KEY_STROKE_CONTROL, RenderingHints.VALUE_STROKE_PURE);
                 Color col = color != null ? color : (c != null && !c.isEnabled() ? muted() : fg());
                 g2.setColor(col);
-                g2.setStroke(new BasicStroke(1.4f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-                draw(g2, glyph);
+                if (NerdFont.enabled) {
+                    nerd(g2, glyph);
+                } else {
+                    g2.setStroke(new BasicStroke(1.4f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+                    draw(g2, glyph);
+                }
                 g2.dispose();
             }
 
@@ -295,6 +299,39 @@ final class Ui {
                 return 16;
             }
         };
+    }
+
+    /**
+     * The icon's Nerd Font glyph: VS Code's codicons (line icons, like the hand-drawn ones), except a filled play
+     * triangle for Analyze and Font Awesome's half-filled circle for the theme switch.
+     */
+    static String nerdGlyph(Glyph glyph) {
+        return switch (glyph) {
+            case FOLDER -> "\ueaf7";     // nf-cod-folder_opened
+            case BRANCH -> "\uea68";     // nf-cod-source_control
+            case PLAY -> "\uf04b";       // nf-fa-play
+            case STOP -> "\uead7";       // nf-cod-debug_stop
+            case EXPORT -> "\uebac";     // nf-cod-export
+            case THEME -> "\uf042";      // nf-fa-adjust
+            case RELOAD -> "\ueb37";     // nf-cod-refresh
+            case CHECK -> "\ueab2";      // nf-cod-check
+            case SEARCH -> "\uea6d";     // nf-cod-search
+            case COMMIT -> "\ueafc";     // nf-cod-git_commit
+            case CLEAR -> "\uea76";      // nf-cod-close
+            case ARROW_DOWN -> "\ueab4"; // nf-cod-chevron_down
+            case INFO -> "\uea74";       // nf-cod-info
+        };
+    }
+
+    /** draws the glyph centred on its visual bounds in the 16 x 16 box */
+    private static void nerd(Graphics2D g, Glyph glyph) {
+        g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+        java.awt.font.GlyphVector gv = NerdFont.font(Font.PLAIN, 15).createGlyphVector(g.getFontRenderContext(), nerdGlyph(glyph));
+        java.awt.geom.Rectangle2D b = gv.getVisualBounds();
+        float scale = (float) Math.min(1.0, 14.0 / Math.max(b.getWidth(), b.getHeight()));
+        g.translate(8, 8);
+        g.scale(scale, scale);
+        g.drawGlyphVector(gv, (float) -b.getCenterX(), (float) -b.getCenterY());
     }
 
     private static void draw(Graphics2D g, Glyph glyph) {
