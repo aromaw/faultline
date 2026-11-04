@@ -18,7 +18,7 @@ import java.util.Map;
  * few thousand files. Re-parsing is deterministic, so a dropped and re-parsed file gives the same answers.
  *
  * <p>The budget defaults to max heap / 160 characters (about 6.7 M characters, roughly 180 MB of ASTs, for a 1 GB
- * heap) and can be set with {@code -Dfaultline.astCacheChars=<n>}.
+ * heap), at most 8 M characters, and can be set with {@code -Dfaultline.astCacheChars=<n>}.
  */
 public final class AstCache {
     /** one parsed file and its type declarations in {@code findAll(TypeDeclaration.class)} order */
@@ -40,6 +40,7 @@ public final class AstCache {
     private static final Map<Key, Entry> LRU = new LinkedHashMap<>(256, 0.75f, true);
     private static long budget = defaultBudget();
     private static long chars;
+    /** source chars evicted since the solver's data was last dropped from the cached ASTs (see {@link #trim}) */
     private static long evictedSinceFacadeClear;
     private static long loads, hits;
 
@@ -55,8 +56,15 @@ public final class AstCache {
                 // fall through
             }
         }
-        return Math.max(2_000_000L, Runtime.getRuntime().maxMemory() / 160);
+        return Math.max(2_000_000L, Math.min(MAX_DEFAULT_BUDGET, Runtime.getRuntime().maxMemory() / 160));
     }
+
+    /**
+     * The default budget stops growing with the heap at 8 M characters (~250 MB of ASTs). A 10-pick analysis of
+     * ruoyi-vue-pro with a 4.9 GB heap: a 32 M budget peaked at 2.9 GB live heap, 8 M at 1.3 GB, in the same time
+     * and with the same report.
+     */
+    static final long MAX_DEFAULT_BUDGET = 8_000_000L;
 
     /** sets the budget in source characters (tests); a negative value restores the default */
     public static synchronized void setBudget(long sourceChars) {
@@ -95,12 +103,29 @@ public final class AstCache {
             chars -= e.chars();
             evictedSinceFacadeClear += e.chars();
         }
-        if (evictedSinceFacadeClear > Math.max(budget, 1)) {
-            // the symbol solver's facades cache resolved types per AST node (strongly), which would keep every
-            // evicted AST alive; dropping them bounds the retained ASTs to about twice the budget
+        if (evictedSinceFacadeClear > Math.max(budget / 2, 1)) {
             evictedSinceFacadeClear = 0;
             com.github.javaparser.symbolsolver.javaparsermodel.JavaParserFacade.clearInstances();
+            for (Entry e : LRU.values()) stripResolutions(e.cu());
         }
+    }
+
+    /**
+     * Drops what the symbol solver stored on the nodes of {@code cu} (resolved types and declarations, as node
+     * data). A resolved type points at the declaration it found, in a file the solver parsed, so a cached AST kept
+     * every file it ever resolved into alive (with its tokens) long after the solver itself had evicted it: on a
+     * 10-pick analysis of a large project that was gigabytes beyond the cache's budget. Resolution is redone on
+     * demand and gives the same answers. The symbol resolver itself (set by the parser) stays.
+     */
+    static void stripResolutions(CompilationUnit cu) {
+        cu.walk(n -> {
+            if (n.getDataKeys().isEmpty()) return;
+            for (com.github.javaparser.ast.DataKey<?> k : new java.util.ArrayList<>(n.getDataKeys())) {
+                if (k != com.github.javaparser.ast.Node.SYMBOL_RESOLVER_KEY && k.getClass().getName().startsWith("com.github.javaparser.symbolsolver")) {
+                    n.removeData(k);
+                }
+            }
+        });
     }
 
     /** drops every AST of {@code index} (the index is no longer used) */

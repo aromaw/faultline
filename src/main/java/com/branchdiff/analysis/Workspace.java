@@ -183,14 +183,32 @@ public final class Workspace implements AutoCloseable {
         }
     }
 
+    /**
+     * How the symbol solver parses source files: without their tokens. A parsed file's tokens take about as much heap
+     * as the rest of its AST and the solver only needs the declarations; {@code setStoreTokens(false)} alone is not
+     * enough, as every node's token range still links the whole token chain, so the ranges are kept and the token
+     * ranges dropped after parsing, as for the index's own ASTs ({@link com.branchdiff.util.Ast#dropTokens}).
+     */
+    static com.github.javaparser.ParserConfiguration solverParserConfig() {
+        com.github.javaparser.ParserConfiguration cfg = new com.github.javaparser.ParserConfiguration()
+                .setLanguageLevel(com.github.javaparser.ParserConfiguration.LanguageLevel.BLEEDING_EDGE);
+        cfg.getProcessors().add(() -> new com.github.javaparser.Processor() {
+            @Override
+            public void postProcess(com.github.javaparser.ParseResult<? extends com.github.javaparser.ast.Node> result,
+                                    com.github.javaparser.ParserConfiguration configuration) {
+                result.getResult().ifPresent(com.branchdiff.util.Ast::dropTokens);
+            }
+        });
+        return cfg;
+    }
+
     public TypeSolver typeSolver(boolean includeTests, List<String> warnings) {
         CombinedTypeSolver solver = new CombinedTypeSolver();
         solver.add(new ReflectionTypeSolver(true));
         // bounded caches: by default every parsed file (with its tokens) and every parsed package directory stays in
         // memory until the solver is dropped, which on a large project is as large as the project's ASTs themselves
         for (Path r : sourceRoots(includeTests)) {
-            solver.add(new JavaParserTypeSolver(r, new com.github.javaparser.ParserConfiguration()
-                    .setLanguageLevel(com.github.javaparser.ParserConfiguration.LanguageLevel.BLEEDING_EDGE), SOLVER_CACHE_SIZE));
+            solver.add(new JavaParserTypeSolver(r, solverParserConfig(), SOLVER_CACHE_SIZE));
         }
         for (Path jar : jars) {
             try {
