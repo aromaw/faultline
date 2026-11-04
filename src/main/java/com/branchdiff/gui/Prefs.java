@@ -79,6 +79,16 @@ public final class Prefs {
         save();
     }
 
+    /** a remembered yes/no choice of the window (e.g. a dismissed hint) */
+    public boolean flag(String name) {
+        return "true".equals(p.getProperty("flag." + name));
+    }
+
+    public void setFlag(String name, boolean value) {
+        p.setProperty("flag." + name, Boolean.toString(value));
+        save();
+    }
+
     private void save() {
         try {
             if (file.getParent() != null) Files.createDirectories(file.getParent());

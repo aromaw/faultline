@@ -254,7 +254,7 @@ final class MainFrame {
         for (int i = 0; i < 4; i++) {
             if (i > 0) {
                 c.gridx = 2 * i - 1;
-                c.insets = new Insets(0, 12, 0, 12);
+                c.insets = new Insets(0, 8, 0, 8);
                 JSeparator sep = new JSeparator(SwingConstants.VERTICAL);
                 sep.setPreferredSize(new Dimension(1, 44));
                 p.add(sep, c);
@@ -305,11 +305,18 @@ final class MainFrame {
         analyze.setIcon(Ui.icon(Ui.Glyph.PLAY, analyze.isEnabled() ? Color.WHITE : null));
     }
 
+    /**
+     * Components side by side, top-aligned, never wrapping: a FlowLayout wraps when the window is narrower than the
+     * header, which pushed the project path below the header's bottom edge.
+     */
     private static JPanel row(JComponent... cs) {
-        JPanel p = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
-        for (JComponent x : cs) p.add(x);
-        ((FlowLayout) p.getLayout()).setHgap(8);
-        p.setBorder(BorderFactory.createEmptyBorder(0, -8, 0, 0));
+        JPanel p = new JPanel();
+        p.setLayout(new BoxLayout(p, BoxLayout.X_AXIS));
+        for (int i = 0; i < cs.length; i++) {
+            if (i > 0) p.add(Box.createHorizontalStrut(8));
+            cs[i].setAlignmentY(0f);
+            p.add(cs[i]);
+        }
         return p;
     }
 
@@ -354,7 +361,9 @@ final class MainFrame {
         cancel.addActionListener(e -> cancel());
         cancel.setVisible(false);
         east.add(cancel);
-        memory.setToolTipText("Java heap used / limit. Click to run the garbage collector. Raise the limit with FAULTLINE_XMX=4g.");
+        memory.setToolTipText("<html>Java heap in use after the last garbage collection / the heap limit.<br>"
+                + "The process may hold more until the collector gives it back. Click to collect now.<br>"
+                + "Raise the limit with FAULTLINE_XMX=6g.</html>");
         memory.addMouseListener(new java.awt.event.MouseAdapter() {
             @Override
             public void mouseClicked(java.awt.event.MouseEvent e) {
@@ -708,7 +717,7 @@ final class MainFrame {
 
     private void showResult(AnalysisJob.Result r) {
         if (results == null) {
-            results = new ResultsPanel();
+            results = new ResultsPanel(prefs);
             right.add(results.detail, "results");
         }
         results.setResult(r);
@@ -849,18 +858,17 @@ final class MainFrame {
         if (results == null || results.result() == null) buildWelcome();
     }
 
-    private static String shortPath(String p) {
+    static String shortPath(String p) {
         String home = System.getProperty("user.home");
         if (home != null && p.startsWith(home)) p = "~" + p.substring(home.length());
-        return p.length() > 48 ? "…" + p.substring(p.length() - 47) : p;
+        return p.length() > 30 ? "…" + p.substring(p.length() - 29) : p;
     }
 
     private void updateMemory() {
-        Runtime rt = Runtime.getRuntime();
-        long used = (rt.totalMemory() - rt.freeMemory()) >> 20;
-        long max = rt.maxMemory() >> 20;
-        memory.setText("Heap " + used + " / " + max + " MB");
-        memory.setForeground(used > max * 0.85 ? Ui.ORANGE : Ui.muted());
+        long max = Runtime.getRuntime().maxMemory();
+        long live = MemoryAdvice.liveHeapBytes();
+        memory.setText("Memory " + MemoryAdvice.limitText(live) + " of " + MemoryAdvice.limitText(max));
+        memory.setForeground(live > max * 0.85 ? Ui.ORANGE : Ui.muted());
     }
 
     void toggleTheme() {
@@ -882,7 +890,8 @@ final class MainFrame {
     }
 
     private void updateThemeButton() {
-        theme.setText(prefs.dark() ? "Light Theme" : "Dark Theme");
+        // a short label: "Light Theme" / "Dark Theme" made the header wider than a 1440 px laptop screen
+        theme.setText(prefs.dark() ? "Light" : "Dark");
         theme.setToolTipText("Switch to the " + (prefs.dark() ? "light" : "dark") + " theme (View › Toggle Light / Dark Theme)");
     }
 

@@ -31,8 +31,22 @@ final class AppIcon {
 
     /** decoded lazily by the toolkit (no ImageIO on the start-up path); null when the resource is missing */
     static Image load(int size) {
-        java.net.URL u = AppIcon.class.getResource("icons/faultline-" + size + ".png");
+        return loadNamed("faultline-" + size);
+    }
+
+    static Image loadNamed(String name) {
+        java.net.URL u = AppIcon.class.getResource("icons/" + name + ".png");
         return u == null ? null : Toolkit.getDefaultToolkit().createImage(u);
+    }
+
+    /**
+     * The Dock / taskbar image: on macOS the icon on Apple's grid (an 824 px square with a shadow on a 1024 px
+     * canvas, see assets/icon/render.py), so it is as large as the other Dock icons; elsewhere the full-bleed one.
+     */
+    static Image taskbarImage(String osName) {
+        Image mac = osName != null && osName.startsWith("Mac") ? loadNamed("faultline-mac-512") : null;
+        List<Image> imgs = images();
+        return mac != null ? mac : imgs.isEmpty() ? null : imgs.get(imgs.size() - 1);
     }
 
     /** window icons, plus the Dock icon on macOS (ignored where unsupported) */
@@ -43,7 +57,7 @@ final class AppIcon {
         frame.setIconImages(imgs.size() > 1 ? imgs.subList(0, imgs.size() - 1) : imgs);
         try {
             if (Taskbar.isTaskbarSupported() && Taskbar.getTaskbar().isSupported(Taskbar.Feature.ICON_IMAGE)) {
-                Taskbar.getTaskbar().setIconImage(imgs.get(imgs.size() - 1));
+                Taskbar.getTaskbar().setIconImage(taskbarImage(System.getProperty("os.name")));
             }
         } catch (RuntimeException | Error ignored) {
             // no taskbar on this platform / headless

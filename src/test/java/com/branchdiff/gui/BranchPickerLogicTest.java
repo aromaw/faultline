@@ -83,4 +83,21 @@ class BranchPickerLogicTest {
         }
         assertFalse(AppIcon.images().isEmpty());
     }
+
+    @Test
+    void macDockIconSitsOnApplesGridOtherPlatformsGetTheFullBleedOne() throws Exception {
+        java.awt.Image mac = AppIcon.taskbarImage("Mac OS X");
+        assertNotNull(mac);
+        assertEquals(512, new javax.swing.ImageIcon(mac).getIconWidth());
+        assertTrue(AppIcon.taskbarImage("Linux") == AppIcon.images().get(AppIcon.images().size() - 1));
+        // Apple's grid: the 824/1024 square is centred, so a 512 px image is transparent outside about 50..462
+        java.awt.image.BufferedImage b = javax.imageio.ImageIO.read(AppIcon.class.getResource("icons/faultline-mac-512.png"));
+        assertEquals(0, b.getRGB(256, 30) >>> 24, "transparent margin above the icon");
+        assertEquals(0, b.getRGB(30, 256) >>> 24, "transparent margin left of the icon");
+        assertEquals(255, b.getRGB(256, 256) >>> 24, "opaque centre");
+        assertEquals(255, b.getRGB(60, 256) >>> 24, "the square starts at about 50 px");
+        // the full-bleed icon reaches much closer to the edge
+        java.awt.image.BufferedImage full = javax.imageio.ImageIO.read(AppIcon.class.getResource("icons/faultline-512.png"));
+        assertEquals(255, full.getRGB(30, 256) >>> 24);
+    }
 }

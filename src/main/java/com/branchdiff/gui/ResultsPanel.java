@@ -52,13 +52,20 @@ final class ResultsPanel {
     private final DiffView diff = new DiffView();
     private final SourceView source = new SourceView();
     final JTabbedPane tabs = new JTabbedPane();
-    private final JPanel summary = new JPanel(new java.awt.FlowLayout(java.awt.FlowLayout.LEFT, 6, 0));
+    /** one line of chips (a FlowLayout wrapped its last item onto a second line that the panel then clipped) */
+    private final JPanel summary = new JPanel();
     private AnalysisJob.Result result;
     private Hunk current;
     private ConflictFile currentFile;
     private final JCheckBox onlyThisHunk = new JCheckBox("Only steps of this hunk", false);
 
-    ResultsPanel() {
+    private final Prefs prefs;
+    /** the tabs and, once something was opened in it, the file / commit pane on their right */
+    private final JSplitPane bottom = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT);
+    private final javax.swing.JComponent hint;
+
+    ResultsPanel(Prefs prefs) {
+        this.prefs = prefs;
         tree.setRootVisible(false);
         tree.setShowsRootHandles(true);
         tree.setCellRenderer(new Renderer());
@@ -67,14 +74,21 @@ final class ResultsPanel {
         tree.addTreeSelectionListener(e -> onSelect());
         tabs.putClientProperty("JTabbedPane.tabType", "underlined");
         tabs.setTabLayoutPolicy(JTabbedPane.SCROLL_TAB_LAYOUT);
-        JSplitPane bottom = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, tabs, source);
+        bottom.setLeftComponent(tabs);
+        bottom.setRightComponent(null); // shown on the first click on a location or a commit (showSource)
         bottom.setResizeWeight(0.6);
         bottom.setBorder(null);
         JSplitPane split = new JSplitPane(JSplitPane.VERTICAL_SPLIT, diff, bottom);
         split.setResizeWeight(0.5);
         split.setBorder(null);
+        summary.setLayout(new javax.swing.BoxLayout(summary, javax.swing.BoxLayout.X_AXIS));
         summary.setBorder(BorderFactory.createEmptyBorder(6, 4, 6, 8));
-        detail.add(summary, BorderLayout.NORTH);
+        hint = hint();
+        JPanel north = new JPanel(new BorderLayout());
+        north.add(summary, BorderLayout.NORTH);
+        north.add(hint, BorderLayout.SOUTH);
+        hint.setVisible(!prefs.flag("hint.results.hidden"));
+        detail.add(north, BorderLayout.NORTH);
         detail.add(split, BorderLayout.CENTER);
         onlyThisHunk.addActionListener(e -> {
             if (current != null) showHunk(currentFile, current);
@@ -86,6 +100,7 @@ final class ResultsPanel {
         current = null;
         currentFile = null;
         source.setResult(r);
+        bottom.setRightComponent(null); // until something is opened in it
         diff.clear();
         tabs.removeAll();
         DefaultMutableTreeNode root = new DefaultMutableTreeNode("conflicts");
@@ -111,6 +126,44 @@ final class ResultsPanel {
         summary.repaint();
         tree.setModel(new DefaultTreeModel(root));
         for (int i = 0; i < tree.getRowCount(); i++) tree.expandRow(i);
+    }
+
+    /** how to read the result, for a first-time user; "Hide" remembers that it is not needed */
+    private javax.swing.JComponent hint() {
+        JPanel p = new JPanel(new BorderLayout(8, 0));
+        p.setBorder(BorderFactory.createEmptyBorder(0, 8, 6, 8));
+        JLabel text = Ui.muted("<html>Pick a conflict on the left. <b>Ours</b> = target branch, <b>Base</b> = the pick's parent, "
+                + "<b>Theirs</b> = the pick. The tabs explain the conflict; <b>Checklist</b> lists every step.</html>");
+        javax.swing.JButton hide = new javax.swing.JButton("Hide");
+        Ui.style(hide, "small");
+        hide.putClientProperty("JButton.buttonType", "borderless");
+        hide.setToolTipText("Do not show this hint again");
+        hide.addActionListener(e -> {
+            prefs.setFlag("hint.results.hidden", true);
+            p.setVisible(false);
+            detail.revalidate();
+        });
+        p.add(text, BorderLayout.CENTER);
+        p.add(hide, BorderLayout.EAST);
+        return p;
+    }
+
+    /** opens a location in the file pane, showing the pane first if it is still hidden */
+    private void showSource(Loc l) {
+        revealSource();
+        source.open(l);
+    }
+
+    private void showCommit(String sha, String path) {
+        revealSource();
+        source.showCommit(sha, path);
+    }
+
+    private void revealSource() {
+        if (bottom.getRightComponent() == source) return;
+        bottom.setRightComponent(source);
+        bottom.revalidate();
+        javax.swing.SwingUtilities.invokeLater(() -> bottom.setDividerLocation(0.6));
     }
 
     private void chip(String n, String what, Color color) {
@@ -212,7 +265,7 @@ final class ResultsPanel {
         for (BlameRun b : h.baseBlame) {
             rows.add(new Object[] {"base lines", b.boundary() ? "(before fork)" : b.commit().shortSha(), b.boundary() ? "" : day(b.commit().date()),
                     "L" + b.start() + (b.end() > b.start() ? "-" + b.end() : ""), "blame", b.boundary() ? "" : b.commit().subject()});
-            actions.add(b.boundary() ? () -> source.open(new Loc("base", f.path, b.start())) : () -> source.showCommit(b.commit().sha(), f.path));
+            actions.add(b.boundary() ? () -> showSource(new Loc("base", f.path, b.start())) : () -> showCommit(b.commit().sha(), f.path));
         }
         for (Event e : f.fileHistory) addEvent(rows, actions, "file history", e, f.path);
         return withHeader("Why it conflicts", sb.toString(), "Commits that changed these lines (click a row to see the commit)",
@@ -224,7 +277,7 @@ final class ResultsPanel {
         if (e.from != null && e.to != null && !e.from.equals(e.to)) member = e.from + " -> " + e.to;
         rows.add(new Object[] {side, e.commit.shortSha(), day(e.commit.date()), e.kind + (e.detail != null ? " (" + e.detail + ")" : ""),
                 member, e.commit.subject() + "  - " + e.commit.author()});
-        actions.add(() -> source.showCommit(e.commit.sha(), path));
+        actions.add(() -> showCommit(e.commit.sha(), path));
     }
 
     private JComponent takeTheirs(Hunk h) {
@@ -242,7 +295,7 @@ final class ResultsPanel {
             Loc l = n.theirsLocation != null ? Loc.parse("theirs", n.theirsLocation)
                     : n.line > 0 ? new Loc("theirs", h.path, n.line) : Loc.parse("ours", n.oursLocation);
             Loc tenant = Loc.parse("ours", n.tenantLocation != null ? n.tenantLocation : n.oursLocation);
-            actions.add(() -> source.open(l != null ? l : tenant));
+            actions.add(() -> showSource(l != null ? l : tenant));
         }
         return withHeader("If you take theirs", sb.toString(), "Dependencies of the mainline code (missing ones first; click to open)",
                 table(new String[] {"Symbol", "Line", "In tenant", "Origin", "Tenant has", "Introduced by", "Detail"}, rows, actions));
@@ -291,8 +344,8 @@ final class ResultsPanel {
             Loc fl = l;
             String commit = i.commits().isEmpty() ? null : i.commits().get(0);
             actions.add(() -> {
-                if (fl != null) source.open(fl);
-                else if (commit != null) source.showCommit(commit, null);
+                if (fl != null) showSource(fl);
+                else if (commit != null) showCommit(commit, null);
             });
         }
         JPanel p = new JPanel(new BorderLayout());
@@ -373,8 +426,8 @@ final class ResultsPanel {
     }
 
     private void openLoc(Loc l) {
-        if ("commit".equals(l.side())) source.showCommit(l.path(), null);
-        else source.open(l);
+        if ("commit".equals(l.side())) showCommit(l.path(), null);
+        else showSource(l);
     }
 
     private JComponent table(String[] cols, List<Object[]> rows, List<Runnable> actions) {

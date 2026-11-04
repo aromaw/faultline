@@ -11,6 +11,24 @@ public final class MemoryAdvice {
         return Math.max(2, gb) + "g";
     }
 
+    /**
+     * The heap still in use after the last garbage collection (what the app really holds), not the used heap,
+     * which also counts garbage not collected yet and so climbs towards the limit even when little is in use.
+     * Before the first collection of a pool, its current use counts.
+     */
+    public static long liveHeapBytes() {
+        long sum = 0;
+        for (java.lang.management.MemoryPoolMXBean p : java.lang.management.ManagementFactory.getMemoryPoolMXBeans()) {
+            if (p.getType() != java.lang.management.MemoryType.HEAP) continue;
+            java.lang.management.MemoryUsage after = p.getCollectionUsage();
+            java.lang.management.MemoryUsage now = p.getUsage();
+            long u = after != null && after.getMax() != 0 && after.getCommitted() > 0 ? after.getUsed() : now == null ? 0 : now.getUsed();
+            // a pool shrinks between collections only when collected; its current use bounds the last value
+            sum += now == null ? u : Math.min(u, now.getUsed());
+        }
+        return sum;
+    }
+
     public static String limitText(long maxBytes) {
         long mb = maxBytes >> 20;
         return mb >= 1024 ? String.format("%.1f GB", mb / 1024.0) : mb + " MB";
