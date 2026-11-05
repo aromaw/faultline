@@ -120,6 +120,28 @@ public final class ConflictModel {
         /** regular findings related to this hunk */
         public List<Integer> findings = new ArrayList<>();
         public List<String> notes = new ArrayList<>();
+        /** how to resolve this hunk, derived from everything above */
+        public Suggestion suggestion;
+    }
+
+    /**
+     * A suggested resolution of one hunk. {@code choice}: THEIRS (take the pick's side), OURS (keep the tenant's side),
+     * BOTH (a combination of the two, given in {@code resolution}) or MANUAL (needs a person: both sides changed the
+     * same lines). For a file-level conflict (deleted on one side) THEIRS / OURS mean the pick's / the tenant's state of
+     * the whole file, and {@code resolution} is null.
+     */
+    public static final class Suggestion {
+        public String choice;
+        /** HIGH (nothing found against it), MEDIUM (works after the follow-ups, or a heuristic), LOW (a starting point) */
+        public String confidence;
+        /** one sentence: what to do */
+        public String headline;
+        /** why this choice */
+        public List<String> reasons = new ArrayList<>();
+        /** what else to do for the choice to build and run (bring symbols, update callers, retest routes) */
+        public List<String> followUps = new ArrayList<>();
+        /** the lines to put in place of the conflict, when they follow mechanically from the choice (null otherwise) */
+        public List<String> resolution;
     }
 
     /** One change to a member (or file) in one commit. */

@@ -6,7 +6,7 @@
 
 租户代码很早就从主线分了出去。现在要从主线迁移一个功能（一个或几个提交），cherry-pick 时出现冲突。冲突的代码通常是分叉之后主线新增、重构、改名或删除的代码。`git diff` 只显示冲突的行，看不出相关的调用方和上下文依赖是否都正确。
 
-`faultline conflicts` 对每个冲突块回答五个问题：
+`faultline conflicts` 对每个冲突块回答六个问题：
 
 | | 问题 | faultline 给出 |
 |---|---|---|
@@ -14,6 +14,7 @@
 | **WHY 为什么** | 为什么冲突？ | 从分叉点到 pick 的父提交之间，改过这段代码的主线提交（hash、日期、标题）；成员级历史（新增、修改、改名、移动、签名变化，按方法体识别）；base 行的 `git blame -w -M`；以及租户自分叉以来的修改 |
 | **TAKE THEIRS 取主线** | 取 pick 这边需要什么？ | 冲突块 theirs 侧用到的所有符号（方法、字段、类型、Bean、配置项、Mapper 语句、第三方库类型），向下最多 4 层：租户有没有，旧名字是什么，由哪个主线提交引入。也会检查被挪走的 import 和 git 自动合并的行 |
 | **TAKE OURS 保留租户** | 保留租户这边会坏什么？ | ours 侧成员在租户里的调用方，一直追到入口：HTTP 方法和路径（`@RequestMapping` 等）、`@PreAuthorize` 权限、`@Scheduled`、`@EventListener` 和 MQ 监听、Runner；还有 pick 里会因此悬空的部分 |
+| **SUGGESTION 建议** | 到底取哪一边？ | 给出建议的解决方式及其置信度（高 / 中 / 低）和理由：*take theirs*（取主线）、*keep ours*（保留租户）、*combine both*（两边合并）或 *merge by hand*（手工合并），以及之后要做的事（要带过来的符号、要更新的调用方、要回归测试的接口）。能机械推出解决结果时（取某一边、只有空白差异、相邻行的修改、在同一处各自新增的代码、两份 import 列表的并集），直接给出可粘贴的结果行 |
 | **CHECKLIST 清单** | 按什么顺序处理？ | 依赖优先：建议先 pick 的主线提交、要带过来的文件、要补进租户文件的符号、需要手工适配的地方（如 `jakarta.*` 与 `javax.*`），然后是逐个解决冲突块，以及需要回归测试的入口 |
 
 pick 中能干净合并的文件也会经过依赖分析：干净合并的代码同样可能用到租户没有的符号。
@@ -68,12 +69,12 @@ java -jar target/branch-diff-tool.jar conflicts --repo . --onto tenant --pick '0
 
 - **HTML**：单个离线文件，CSS 和 JS 全部内联。
   - 侧栏先列冲突块，按文件分组，并标出 modify/delete。然后是迁移清单，以及 pick 干净部分的发现。
-  - 每个冲突块有 **Conflict / Why / Take theirs / Take ours / Checklist** 五个标签页。Conflict 页是类似 IDE 的 ours | base | theirs 视图，当前冲突块描边，其他冲突块加底色。
+  - 每个冲突块有 **Conflict / Suggestion / Why / Take theirs / Take ours / Checklist** 六个标签页。Suggestion 页显示建议的解决方式、理由和后续步骤，以及带 *Copy* 按钮的结果行。Conflict 页是类似 IDE 的 ours | base | theirs 视图，当前冲突块描边，其他冲突块加底色。
   - 点击符号、历史事件或调用链节点，可以看到该成员在三边的版本。
   - 打开上下文标签页时，代码区会自动切换为 ours | theirs，顶栏的开关可以切回三栏。
   - URL hash 保存当前状态，如 `#hunk=<id>&ctab=c-why`；`#hunk=__check` 直接打开清单。
 - **JSON**：同样的数据放在 `conflicts` 下，同时保留分支分析的字段。
-- **Markdown**：先是清单，然后每个文件、每个冲突块一节（where / why / take theirs / take ours），之后是 git 自动合并的行，最后是干净合并的文件。
+- **Markdown**：先是清单，然后每个文件、每个冲突块一节（where / 建议及结果行 / why / take theirs / take ours），之后是 git 自动合并的行，最后是干净合并的文件。
 
 ![Why 页：冲突背后的租户修改和主线历史](docs/conflict-why.png)
 ![Take theirs：pick 需要的符号、租户有没有、由哪个提交引入](docs/conflict-take-theirs.png)
@@ -90,7 +91,11 @@ java -jar target/branch-diff-tool.jar conflicts --repo . --onto tenant --pick '0
 4. **历史**。对 base 侧，沿 `git log fork..base` 跟踪文件。对每个提交前后的成员做 diff，先按名字配对，再按方法体相似度（token Dice ≥ 0.75）配对，以识别改名、移动和签名变化。对 base 行运行 `git blame -w -M`。
 5. **取主线**。对 theirs 侧成员求依赖闭包，再与租户的索引对照，判断每个符号是存在、缺失、改名还是不兼容。引入它的提交从成员历史中得到。
 6. **保留租户**。在租户的反向调用图中，从 ours 侧成员一直追到入口。
-7. **清单**。需要的符号按文件分组，依赖排在前面。
+7. **建议**。依次检查：某一边只有空白差异；theirs 只是移动了 import；对冲突块逐行合并（`git merge-file` 把相邻行的修改当成同一个冲突，
+   不重叠时就合并；两边在同一处各自新增的行都保留，但如果新增的内容有相同的代码行，说明是同一段代码的两个版本，不合并）；
+   租户改过同样的行（手工合并）；否则取 theirs，缺失的符号、不确定的符号、以及 theirs 删掉但租户仍在调用的成员都会降低置信度。
+   被删除的文件给出文件级建议（`git add` / `git rm`）。清单中的 RESOLVE 步骤复述每个冲突块的建议。
+8. **清单**。需要的符号按文件分组，依赖排在前面。
 
 ### 摘要缓存
 
@@ -144,11 +149,11 @@ java -jar target/branch-diff-tool.jar  # 桌面环境下不带参数也会打开
 - Conflicts 页是 文件 › hunk 树，带 HIGH / MEDIUM / LOW 标签；上方一行汇总（冲突 hunk 数、冲突文件数、
   干净合并的文件数、检查清单步骤数、需要考虑的提交数）。
 - hunk 视图并排显示 Ours（tenant）| Base（pick 的父提交）| Theirs（本次 pick），也可切成 Ours | Theirs，
-  滚动同步；下方页签为 *Why it conflicts*（为什么冲突）、*Take theirs → needs*（主线代码的依赖）、
+  滚动同步；下方页签为 *Suggestion*（建议的解决方式、理由，以及带 *Copy* 的结果行）、*Why it conflicts*（为什么冲突）、*Take theirs → needs*（主线代码的依赖）、
   *Keep ours → callers*（tenant 中受影响的入口和调用方）、*Checklist* 和 *Dependency chain*。三栏上方有一行提示，
   说明各栏是什么（点 *Hide* 永久隐藏）。点击任意一行或 `File.java:123` 这类引用，会在右侧只读打开代码；
   右侧面板在第一次点击时才出现。
-- 第一次用？分析结束后树中第一个冲突已被选中：先读 *Why it conflicts*，再按准备保留的一侧看
+- 第一次用？分析结束后树中第一个冲突已被选中：先读 *Suggestion* 和 *Why it conflicts*，再按准备保留的一侧看
   *Take theirs → needs* 或 *Keep ours → callers*，最后按 *Checklist* 逐步处理。
 - *Export* 导出与命令行相同的 HTML / Markdown / JSON 报告。
 - *Dark* / *Light*（或 View › Toggle Light / Dark Theme）切换深色/浅色主题。

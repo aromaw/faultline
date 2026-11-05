@@ -11,6 +11,7 @@ import com.branchdiff.conflict.ConflictModel.Hunk;
 import com.branchdiff.conflict.ConflictModel.Member;
 import com.branchdiff.conflict.ConflictModel.Need;
 import com.branchdiff.conflict.ConflictModel.Orphan;
+import com.branchdiff.conflict.ConflictModel.Suggestion;
 import com.branchdiff.report.ContextModel;
 import com.branchdiff.report.ContextModel.TreeNode;
 import com.branchdiff.report.Report;
@@ -177,9 +178,9 @@ final class ResultsPanel {
     }
 
     /** the tab titles of the hunk detail (automation iterates them) */
-    static final String TAB_WHY = "Why it conflicts", TAB_THEIRS = "Take theirs \u2192 needs", TAB_OURS = "Keep ours \u2192 callers",
+    static final String TAB_SUGGEST = "Suggestion", TAB_WHY = "Why it conflicts", TAB_THEIRS = "Take theirs \u2192 needs", TAB_OURS = "Keep ours \u2192 callers",
             TAB_CHECKLIST = "Checklist", TAB_CHAIN = "Dependency chain";
-    static final String[] TABS = {TAB_WHY, TAB_THEIRS, TAB_OURS, TAB_CHECKLIST, TAB_CHAIN};
+    static final String[] TABS = {TAB_SUGGEST, TAB_WHY, TAB_THEIRS, TAB_OURS, TAB_CHECKLIST, TAB_CHAIN};
 
     AnalysisJob.Result result() {
         return result;
@@ -242,6 +243,7 @@ final class ResultsPanel {
                 + "  <span style='color:" + Ui.hex(Ui.muted()) + "'>" + esc(f.path) + "</span></html>";
         diff.show(f.path, headline, texts, new ConflictModel.Range[] {h.ours, h.base, h.theirs});
         tabs.removeAll();
+        tabs.addTab(TAB_SUGGEST, null, suggestion(f, h), "How to resolve this hunk, and why");
         tabs.addTab(TAB_WHY, null, why(f, h), "What each side changed here, and the commits behind it");
         tabs.addTab(TAB_THEIRS, null, takeTheirs(h), "Symbols the mainline code needs, and whether the tenant has them");
         tabs.addTab(TAB_OURS, null, takeOurs(h), "Entry points and callers in the tenant that keeping ours affects");
@@ -252,6 +254,88 @@ final class ResultsPanel {
 
     private boolean hasSteps() {
         return result.report().conflicts.picks.size() > 1;
+    }
+
+    static Color choiceColor(String choice) {
+        return switch (choice == null ? "" : choice) {
+            case "THEIRS" -> Ui.BLUE;
+            case "OURS" -> Ui.GREEN;
+            case "BOTH" -> Ui.ORANGE;
+            default -> Ui.RED;
+        };
+    }
+
+    private JComponent suggestion(ConflictFile f, Hunk h) {
+        Suggestion sg = h.suggestion;
+        if (sg == null) return withHeader("Suggestion", "No suggestion for this hunk" + (h.notes.isEmpty() ? "." : ": " + String.join("; ", h.notes)),
+                "", new JPanel());
+        StringBuilder sb = new StringBuilder(sg.headline);
+        if (!sg.reasons.isEmpty()) {
+            sb.append("\n\nWhy:");
+            for (String r : sg.reasons) sb.append("\n  \u2022 ").append(r);
+        }
+        if (!sg.followUps.isEmpty()) {
+            sb.append("\n\nThen:");
+            for (String r : sg.followUps) sb.append("\n  \u2022 ").append(r);
+        }
+        JTextArea a = new JTextArea(sb.toString());
+        a.setEditable(false);
+        a.setLineWrap(true);
+        a.setWrapStyleWord(true);
+        a.setOpaque(false);
+        a.setFont(UIManager.getFont("Label.font"));
+        a.setBorder(BorderFactory.createEmptyBorder(4, 8, 6, 8));
+        int rows = 0;
+        for (String l : sb.toString().split("\n", -1)) rows += 1 + l.length() / 110; // wrapped lines too
+        a.setRows(Math.min(14, rows));
+
+        JPanel head = new JPanel(new java.awt.FlowLayout(java.awt.FlowLayout.LEFT, 8, 0));
+        head.setBorder(BorderFactory.createEmptyBorder(8, 2, 2, 8));
+        head.add(Ui.heading("Suggested", 0));
+        head.add(new JLabel(new Ui.Badge(com.branchdiff.conflict.Suggestions.label(sg.choice).toUpperCase(), choiceColor(sg.choice))));
+        head.add(Ui.style(Ui.muted(sg.confidence.toLowerCase() + " confidence"), "small"));
+
+        JPanel top = new JPanel(new BorderLayout());
+        top.add(head, BorderLayout.NORTH);
+        top.add(new JScrollPane(a, JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED, JScrollPane.HORIZONTAL_SCROLLBAR_NEVER) {
+            {
+                setBorder(null);
+            }
+        }, BorderLayout.CENTER);
+        JPanel p = new JPanel(new BorderLayout());
+        p.add(top, BorderLayout.NORTH);
+        if (sg.resolution == null) {
+            JLabel none = Ui.style(Ui.muted(f.kind.startsWith("DELETED_BY") ? "File-level conflict: no lines to paste, see the git command above."
+                    : "No mechanical resolution: both sides change the same lines. Compare them in the merge view above."), "small");
+            none.setBorder(BorderFactory.createEmptyBorder(2, 8, 8, 8));
+            top.add(none, BorderLayout.SOUTH);
+            return p;
+        }
+        String text = String.join("\n", sg.resolution);
+        JPanel bar = new JPanel(new BorderLayout());
+        JLabel lt = Ui.style(Ui.muted("Resolved lines: replace this hunk's conflict block (ours " + lines(h.ours) + ") with them"
+                + (sg.resolution.isEmpty() ? " (none: delete the block)" : "")), "small");
+        lt.setFont(lt.getFont().deriveFont(java.awt.Font.BOLD));
+        lt.setBorder(BorderFactory.createEmptyBorder(2, 8, 4, 8));
+        javax.swing.JButton copy = new javax.swing.JButton("Copy");
+        copy.setToolTipText("Copy the resolved lines to the clipboard");
+        copy.addActionListener(e -> {
+            java.awt.Toolkit.getDefaultToolkit().getSystemClipboard().setContents(
+                    new java.awt.datatransfer.StringSelection(sg.resolution.isEmpty() ? "" : text + "\n"), null);
+            copy.setText("Copied");
+            javax.swing.Timer t = new javax.swing.Timer(1200, ev -> copy.setText("Copy"));
+            t.setRepeats(false);
+            t.start();
+        });
+        bar.add(lt, BorderLayout.CENTER);
+        bar.add(Ui.pad(copy, 0, 0, 4, 8), BorderLayout.EAST);
+        top.add(bar, BorderLayout.SOUTH);
+        org.fife.ui.rsyntaxtextarea.RSyntaxTextArea code = CodeViews.area();
+        code.setSyntaxEditingStyle(CodeViews.syntaxFor(f.path));
+        code.setText(text);
+        code.setCaretPosition(0);
+        p.add(CodeViews.scroll(code), BorderLayout.CENTER);
+        return p;
     }
 
     private JComponent why(ConflictFile f, Hunk h) {
@@ -563,7 +647,8 @@ final class ResultsPanel {
                 HunkSeverity s = HunkSeverity.of(parentFile(value), h);
                 String mem = members(h.members.get("ours") != null && !h.members.get("ours").isEmpty() ? h.members.get("ours") : h.members.get("theirs"));
                 setText("<html><b>#" + h.index + "</b> " + esc(shorten(mem, 60)) + " <span" + gray + ">ours " + lines(h.ours) + "</span></html>");
-                setToolTipText(h.why);
+                setToolTipText(h.suggestion == null ? h.why : "Suggested: " + com.branchdiff.conflict.Suggestions.label(h.suggestion.choice)
+                        + " (" + h.suggestion.confidence.toLowerCase() + " confidence). " + h.suggestion.headline);
                 setIcon(new Ui.Badge(s.name(), Ui.severity(s.name()), 58));
             } else if (o instanceof Item it) {
                 setText(it.text());

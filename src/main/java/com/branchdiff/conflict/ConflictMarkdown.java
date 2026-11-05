@@ -94,6 +94,7 @@ public final class ConflictMarkdown {
             ConflictModel.Range rg = side.equals("ours") ? h.ours : side.equals("base") ? h.base : h.theirs;
             sb.append("| ").append(side).append(" | ").append(rg).append(" | ").append(esc(members(h.members.get(side)))).append(" |\n");
         }
+        suggestion(sb, h);
         sb.append("\n**Why:** ").append(esc(h.why)).append("\n\n");
         if (!h.mainline.isEmpty()) {
             sb.append("Mainline (fork..base):\n\n");
@@ -139,6 +140,33 @@ public final class ConflictMarkdown {
         }
         for (String n : h.notes) sb.append("- note: ").append(esc(n)).append("\n");
         sb.append("\n");
+    }
+
+    private static void suggestion(StringBuilder sb, Hunk h) {
+        ConflictModel.Suggestion s = h.suggestion;
+        if (s == null) return;
+        sb.append("\n**Suggestion: ").append(Suggestions.label(s.choice)).append("** (").append(s.confidence.toLowerCase())
+                .append(" confidence) - ").append(esc(s.headline)).append("\n\n");
+        for (String x : s.reasons) sb.append("- ").append(esc(x)).append("\n");
+        for (String x : s.followUps) sb.append("- then: ").append(esc(x)).append("\n");
+        if (s.resolution != null) {
+            String fence = "```";
+            for (String l : s.resolution) while (l.contains(fence)) fence += "`";
+            sb.append("\nResolved lines (in place of the conflict markers):\n\n").append(fence).append(lang(h.path)).append("\n");
+            for (String l : s.resolution) sb.append(l).append("\n");
+            sb.append(fence).append("\n");
+        }
+    }
+
+    private static String lang(String path) {
+        String l = path.toLowerCase();
+        int dot = l.lastIndexOf('.');
+        String ext = dot < 0 ? "" : l.substring(dot + 1);
+        return switch (ext) {
+            case "yml" -> "yaml";
+            case "java", "xml", "yaml", "properties", "sql", "json", "kt", "js", "ts" -> ext;
+            default -> "";
+        };
     }
 
     private static void needs(StringBuilder sb, List<Need> needs) {

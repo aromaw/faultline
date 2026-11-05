@@ -6,7 +6,7 @@ English | [简体中文](README.zh-CN.md)
 
 A tenant codebase forked from mainline long ago. You cherry-pick one feature from mainline, one commit or a few. Git stops on conflicts. The conflicting code is usually code that mainline added, refactored, renamed or deleted after the fork. `git diff` shows only the conflicting lines. It does not tell you whether the callers and dependencies around them are right.
 
-`faultline conflicts` answers five questions for every conflict hunk:
+`faultline conflicts` answers six questions for every conflict hunk:
 
 | | Question | What faultline shows |
 |---|---|---|
@@ -14,6 +14,7 @@ A tenant codebase forked from mainline long ago. You cherry-pick one feature fro
 | **WHY** | Why does it conflict? | The mainline commits between the fork point and the pick's parent that touched this code (hash, date, subject), member-level history (added / modified / renamed / moved / signature changed, detected from the body), `git blame -w -M` of the base lines, and the tenant's own edits since the fork |
 | **TAKE THEIRS** | If I take the pick's side, what does it need? | Every symbol the theirs side of the hunk uses (methods, fields, types, beans, config keys, mapper statements, library types), transitively down to 4 levels: whether the tenant has it, under which old name, and which mainline commit introduced it. Moved imports and the lines git merged automatically are checked too |
 | **TAKE OURS** | If I keep the tenant's side, what breaks? | Tenant callers of the ours-side members, traced up to entry points (HTTP method and path from `@RequestMapping` and friends, `@PreAuthorize` permission, `@Scheduled`, `@EventListener` / MQ listeners, runners), plus parts of the pick that would be left dangling |
+| **SUGGESTION** | So which side do I take? | A suggested resolution with a confidence (high / medium / low) and its reasons: *take theirs*, *keep ours*, *combine both* or *merge by hand*, plus what to do afterwards (symbols to bring, callers to update, routes to retest). When the resolved lines follow mechanically (one side, a whitespace-only difference, edits on adjacent lines, separate additions at the same place, the union of two import lists), they are included, ready to paste |
 | **CHECKLIST** | In what order do I fix it? | Dependencies first: mainline commits to consider picking first, files to bring, symbols to add to tenant files, places to adapt by hand (e.g. `jakarta.*` vs `javax.*`), then each hunk to resolve and the entry points to retest |
 
 Files of the pick that merge cleanly still go through the dependency analyzers. A clean merge can also need a symbol the tenant lacks.
@@ -68,12 +69,12 @@ Each pick is simulated with `git merge-tree --write-tree --merge-base=<pick>^ <s
 
 - **HTML**: one offline file with inline CSS and JS.
   - The sidebar lists the conflict hunks first, grouped by file, with modify/delete markers. Then come the migration checklist and the findings of the clean part of the pick.
-  - Each hunk has the tabs **Conflict / Why / Take theirs / Take ours / Checklist**. Conflict shows an IDE-like ours | base | theirs view: the selected hunk is outlined and the other hunks are shaded.
+  - Each hunk has the tabs **Conflict / Suggestion / Why / Take theirs / Take ours / Checklist**. Suggestion shows the suggested resolution, its reasons and follow-ups, and the resolved lines with a *Copy* button. Conflict shows an IDE-like ours | base | theirs view: the selected hunk is outlined and the other hunks are shaded.
   - Clicking a symbol, a history event or a call-path node shows that member on all three sides.
   - When a context tab is open, the code view switches to ours | theirs automatically. The toggle in the top bar can switch it back.
   - The URL hash holds the state, e.g. `#hunk=<id>&ctab=c-why`. `#hunk=__check` opens the checklist.
 - **JSON**: the same data under `conflicts`, together with the branch-analysis fields.
-- **Markdown**: the checklist first, then one section per file and hunk (where / why / take theirs / take ours), then the lines git merged automatically, then the clean files.
+- **Markdown**: the checklist first, then one section per file and hunk (where / suggestion with the resolved lines / why / take theirs / take ours), then the lines git merged automatically, then the clean files.
 
 ![Why tab: the tenant edit and the mainline history behind a conflict](docs/conflict-why.png)
 ![Take theirs: symbols the pick needs, whether the tenant has them, the commit that introduced them](docs/conflict-take-theirs.png)
@@ -90,7 +91,13 @@ Each pick is simulated with `git merge-tree --write-tree --merge-base=<pick>^ <s
 4. **History**. For the base side, `git log fork..base` follows the file. Each commit's two versions of the member are diffed, and members are paired by name, then by body similarity (Dice on tokens ≥ 0.75) to detect renames, moves and signature changes. `git blame -w -M` is run on the base lines.
 5. **Take theirs**. The dependency closure of the theirs-side members is built against the tenant's index, which says whether each symbol is present, missing, renamed or incompatible. The introducing commit is found from the member history.
 6. **Take ours**. The tenant's reverse call graph goes from the ours-side members up to entry points.
-7. **Checklist**. The needs are grouped per file and ordered with dependencies first.
+7. **Suggestion**. Checked in order: a whitespace-only difference on one side; theirs only moving imports; a line-by-line merge
+   of the hunk (`git merge-file` treats edits on adjacent lines as one conflict; when they do not overlap they are combined,
+   and two sides adding lines at the same place are kept both, unless the additions share a line of code, which makes them
+   two versions of the same code); tenant edits of the same lines (merge by hand); otherwise take theirs, with a confidence
+   lowered by missing symbols, uncertain ones, and tenant callers of what theirs removes. Deleted files get a file-level
+   suggestion (`git add` / `git rm`). The checklist's RESOLVE steps repeat each hunk's suggestion.
+8. **Checklist**. The needs are grouped per file and ordered with dependencies first.
 
 ### Summary cache
 
@@ -157,13 +164,14 @@ Results:
 - The Conflicts tab shows a file › hunk tree with HIGH / MEDIUM / LOW badges, and a summary row (conflict
   hunks, conflicted files, files merged cleanly, checklist steps, commits to consider).
 - The hunk view shows Ours (tenant) | Base (pick parent) | Theirs (the pick) side by side (or Ours |
-  Theirs), with synced scrolling, and the tabs *Why it conflicts*, *Take theirs → needs* (dependencies of
+  Theirs), with synced scrolling, and the tabs *Suggestion* (the suggested resolution, its reasons, and the
+  resolved lines with *Copy*), *Why it conflicts*, *Take theirs → needs* (dependencies of
   the mainline code), *Keep ours → callers* (affected entry points and callers in the tenant), *Checklist*
   and *Dependency chain*. A one-line hint above the columns says what they are (*Hide* removes it for
   good). Click any row or `File.java:123` reference to open it read-only on the right; that pane appears
   with the first click.
-- First time? Click the first conflict in the tree (it is selected after an analysis), read *Why it
-  conflicts*, then *Take theirs → needs* or *Keep ours → callers* for the side you plan to keep, and
+- First time? Click the first conflict in the tree (it is selected after an analysis), read *Suggestion*
+  and *Why it conflicts*, then *Take theirs → needs* or *Keep ours → callers* for the side you plan to keep, and
   work through the *Checklist*.
 - *Export* writes the same HTML, Markdown or JSON report as the CLI.
 - *Dark* / *Light* (or View › Toggle Light / Dark Theme) switches themes.

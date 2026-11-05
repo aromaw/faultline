@@ -236,6 +236,10 @@ table.ctable .det { color: var(--muted); font-size: 11px; }
 .hchip.cur { background: var(--accent); color: #fff; border-color: var(--accent); }
 ol.check li.mine { box-shadow: inset 3px 0 0 var(--accent); }
 .eproute { font: 600 12px var(--mono); }
+.sg { font: 700 10.5px var(--mono); padding: 0 5px; border-radius: 3px; color: #fff; white-space: nowrap; text-transform: lowercase; }
+.sg-THEIRS { background: var(--accent); } .sg-OURS { background: var(--low); } .sg-BOTH { background: var(--medium); } .sg-MANUAL { background: var(--high); }
+.sgconf { font-size: 11px; color: var(--muted); }
+pre.resolution { margin: 2px 10px 8px; padding: 6px 9px; border: 1px solid var(--border); border-radius: 4px; background: var(--panel); font: 12px/18px var(--mono); overflow: auto; max-height: 50vh; white-space: pre; }
 .needs { margin: 2px 8px 10px; border-top: 1px solid var(--border); }
 .need { padding: 5px 6px; border-bottom: 1px solid var(--border); cursor: pointer; font-size: 12px; border-left: 3px solid transparent; }
 .need:hover { background: var(--hover); }
@@ -1100,6 +1104,14 @@ ol.check li.mine { box-shadow: inset 3px 0 0 var(--accent); }
   });
   $("ctx").addEventListener("click", function (e) {
     var t = e.target;
+    if (t.closest("button[data-copy]")) {
+      var hh = HUNKS[state.hid], btn = t.closest("button[data-copy]");
+      var txt = hh && hh.suggestion && hh.suggestion.resolution ? hh.suggestion.resolution.join("\n") + (hh.suggestion.resolution.length ? "\n" : "") : "";
+      var done = function () { btn.textContent = "Copied"; setTimeout(function () { btn.textContent = "Copy"; }, 1200); };
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(done, function () { btn.textContent = "Copy failed"; });
+      else { var ta = document.createElement("textarea"); ta.value = txt; document.body.appendChild(ta); ta.select(); try { document.execCommand("copy"); done(); } catch (x) { } document.body.removeChild(ta); }
+      return;
+    }
     var hc = t.closest(".hchip[data-hid]");
     if (hc) { selectHunk(hc.getAttribute("data-hid"), { ctab: "c-conflict" }); return; }
     var crow = t.closest(".epath .nl[data-node], tr[data-node], .ev[data-node], .need[data-node]");
@@ -1185,7 +1197,7 @@ ol.check li.mine { box-shadow: inset 3px 0 0 var(--accent); }
   var CONF = DATA.conflicts || null;
   var HUNKS = {}, HUNK_FILE = {}, HUNK_ORDER = [];
   if (CONF) CONF.files.forEach(function (f) { f.hunks.forEach(function (h) { HUNKS[h.id] = h; HUNK_FILE[h.id] = f; HUNK_ORDER.push(h.id); }); });
-  var CTABS = [["c-conflict", "Conflict"], ["c-why", "Why"], ["c-theirs", "Take theirs"], ["c-ours", "Take ours"], ["c-check", "Checklist"]];
+  var CTABS = [["c-conflict", "Conflict"], ["c-suggest", "Suggestion"], ["c-why", "Why"], ["c-theirs", "Take theirs"], ["c-ours", "Take ours"], ["c-check", "Checklist"]];
   function rng(r) { return !r ? "" : r.end < r.start ? "(insert at " + r.start + ")" : r.start === r.end ? "L" + r.start : "L" + r.start + "\u2013" + r.end; }
   function sha8(c) { return c ? '<span class="sha" title="' + esc(c.sha + "\n" + (c.date || "") + "\n" + c.subject) + '">' + esc(c.sha.slice(0, 10)) + "</span>" : ""; }
   function day(d) { return d ? String(d).slice(0, 10) : ""; }
@@ -1223,7 +1235,7 @@ ol.check li.mine { box-shadow: inset 3px 0 0 var(--accent); }
         body += '<div class="item hunk' + (state.kind === "hunk" && state.hid === h.id && state.ctab !== "c-check" ? " sel" : "") + '" data-hid="' + esc(h.id) + '" title="' + esc(h.id) + '"><div class="l1"><span class="num">#' + h.index + '</span><span class="sym">' + esc(hunkTitle(h)) + "</span>" +
           (h.tenant.length ? '<span class="mini blu" title="the tenant edited this code since the fork">tenant</span>' : "") +
           (h.mainline.length ? '<span class="mini" title="mainline commits that changed this code between the fork and the pick">' + commitsOfHunk(h).length + " ml</span>" : "") +
-          (miss ? '<span class="mini red" title="symbols taking theirs needs that the tenant lacks">\u2717' + miss + "</span>" : "") + '</div><div class="l2">' +
+          (miss ? '<span class="mini red" title="symbols taking theirs needs that the tenant lacks">\u2717' + miss + "</span>" : "") + sgBadge(h.suggestion) + '</div><div class="l2">' +
           esc("ours " + rng(h.ours) + " \u00B7 theirs " + rng(h.theirs) + (ep ? " \u00B7 " + ep + " entry point" + (ep > 1 ? "s" : "") : "")) + "</div></div>";
       });
       body += "</div></div>";
@@ -1253,9 +1265,13 @@ ol.check li.mine { box-shadow: inset 3px 0 0 var(--accent); }
     DATA.findings.forEach(function (f) { counts[f.group] = (counts[f.group] || 0) + 1; });
     $("chips").innerHTML = '<span class="chip" title="conflict hunks"><span class="dot g-HIGH"></span>Hunks <b>' + c.summary.conflictHunks + '</b></span><span class="chip" title="symbols to bring over or adapt">To bring <b>' + c.summary.symbolsToBringOrAdapt + '</b></span><span class="chip" title="findings of the regular analysis of the picked change">Findings <b>' + DATA.findings.length + "</b></span>";
   }
+  var SG_LABEL = { THEIRS: "take theirs", OURS: "keep ours", BOTH: "combine both", MANUAL: "merge by hand" };
+  function sgBadge(sg) { return sg ? '<span class="sg sg-' + esc(sg.choice) + '" title="suggested resolution, ' + esc(sg.confidence.toLowerCase()) + ' confidence">' + esc(SG_LABEL[sg.choice] || sg.choice) + "</span>" : ""; }
   function recommendationOf(h) {
+    if (h.suggestion) return sgBadge(h.suggestion) + ' <span class="sgconf">' + esc(h.suggestion.confidence.toLowerCase()) + " confidence</span> " + esc(h.suggestion.headline) +
+      ' <span class="nl" data-tab="c-suggest">details</span>';
     var it = CONF.checklist.filter(function (i) { return i.action === "RESOLVE" && i.hunks.indexOf(h.id) >= 0; })[0];
-    return it ? it.why : "";
+    return it ? esc(it.why) : "";
   }
   function hunkCard(h) {
     var f = HUNK_FILE[h.id];
@@ -1269,7 +1285,7 @@ ol.check li.mine { box-shadow: inset 3px 0 0 var(--accent); }
       return '<div class="jump' + (state.ctarget === s ? " on" : "") + '" data-cside="' + s + '"><span class="side">' + s + '</span><span class="loc">' + esc(rng(r)) + '</span><span class="lbl">' + esc(lbl + (h.members[s] ? " \u00B7 " + (ms || "\u2013") : " \u00B7 file absent")) + "</span></div>";
     }).join("");
     $("card").innerHTML = row + '<div class="symbol">' + esc(f.path) + ' <span class="hint">#' + h.index + "</span></div>" +
-      '<div class="msg"><b>Suggested:</b> ' + esc(recommendationOf(h)) + "</div>" + '<div class="jumps">' + jumps + "</div>";
+      '<div class="msg"><b>Suggested:</b> ' + recommendationOf(h) + "</div>" + '<div class="jumps">' + jumps + "</div>";
   }
   function conflictTabs() {
     $("tabs").innerHTML = CTABS.map(function (t) {
@@ -1355,7 +1371,21 @@ ol.check li.mine { box-shadow: inset 3px 0 0 var(--accent); }
     if (!on || !h) return;
     var f = HUNK_FILE[h.id], html = "";
     expanded = {};
-    if (state.ctab === "c-why") {
+    if (state.ctab === "c-suggest") {
+      var sg = h.suggestion;
+      if (!sg) html += '<div class="ptext hint">No suggestion for this hunk.</div>';
+      else {
+        html += '<div class="sec">' + sgBadge(sg) + '<span class="sgconf">' + esc(sg.confidence.toLowerCase()) + ' confidence</span></div><div class="ptext box">' + esc(sg.headline) + "</div>";
+        if (sg.reasons.length) html += '<div class="sec">Why</div><ul class="limits" style="margin-top:0;font-size:12px;color:inherit">' + sg.reasons.map(function (x) { return "<li>" + esc(x) + "</li>"; }).join("") + "</ul>";
+        if (sg.followUps.length) html += '<div class="sec">Then</div><ul class="limits" style="margin-top:0;font-size:12px;color:inherit">' + sg.followUps.map(function (x) { return "<li>" + esc(x) + "</li>"; }).join("") + "</ul>";
+        if (sg.resolution) {
+          html += '<div class="sec">Resolved lines <span class="hint">replace everything from &lt;&lt;&lt;&lt;&lt;&lt;&lt; to &gt;&gt;&gt;&gt;&gt;&gt;&gt; of this hunk (ours ' + esc(rng(h.ours)) + ')</span><button class="btn" data-copy="1" style="margin-left:auto">Copy</button></div>' +
+            '<pre class="resolution">' + (sg.resolution.length ? esc(sg.resolution.join("\n")) : '<span class="hint">(no lines: delete the hunk)</span>') + "</pre>";
+        } else {
+          html += '<div class="ptext hint">No mechanical resolution: ' + (HUNK_FILE[h.id].kind === "CONTENT" || HUNK_FILE[h.id].kind === "ADDED_BY_BOTH" ? "the two sides change the same lines." : "this is a file-level conflict.") + "</div>";
+        }
+      }
+    } else if (state.ctab === "c-why") {
       if (f.explanation && (h.why || "").indexOf(f.explanation) < 0) html += '<div class="ptext box' + (f.eol ? " warn" : "") + '">' + esc(f.explanation) + "</div>";
       html += '<div class="sec">Why this conflicts</div><div class="ptext">' + esc(h.why || "") + "</div>";
       html += '<div class="sec">Mainline since the fork <span class="hint">fork ' + esc(short(CONF.fork.sha)) + " .. pick parent " + esc(short(stepBase(f))) + ": commits the tenant does not have</span></div>";

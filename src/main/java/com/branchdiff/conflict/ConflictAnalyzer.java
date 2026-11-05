@@ -74,6 +74,10 @@ public final class ConflictAnalyzer {
     private final List<String> pickDeclaredSymbols = new ArrayList<>();
     /** package -> first commit of the window that imports from it ("" when none) */
     private final Map<String, String> firstImportOf = new HashMap<>();
+    /** viewKey -> {origin, tenant path} of a file the tenant lacks (for the suggestions) */
+    private final Map<String, String[]> fileOrigins = new HashMap<>();
+    /** ours-side members of a hunk that theirs drops while tenant code still uses them ("label (N users)") */
+    private final Map<Hunk, List<String>> theirsRemovesUsed = new java.util.IdentityHashMap<>();
 
     public ConflictAnalyzer(GitRunner git, ConflictSession session, String mainlineRef, Analyzer.Context ctx,
                             Snapshot forkSnapshot, CodeIndex forkIndex) {
@@ -226,6 +230,7 @@ public final class ConflictAnalyzer {
                 model.messages.add("analysis of the merged part of " + path + " failed: " + ex);
             }
         }
+        suggest(f);
         return f;
     }
 
@@ -304,16 +309,19 @@ public final class ConflictAnalyzer {
             case "DELETED_BY_US": {
                 if (atFork == null && renamed != null) {
                     boolean tenantHasOld = git.show(st.ours, renamed.from) != null;
+                    if (tenantHasOld) fileOrigins.put(f.viewKey, new String[] {"RENAMED_ON_MAINLINE", renamed.from});
                     return "The tenant does not have this file. Mainline renamed " + renamed.from + " to " + path + " in "
                             + c(renamed.commit) + (tenantHasOld ? "; the tenant still has the old path " + renamed.from
                             + " (git could not pair the two because the content diverged too much)" : "") + ".";
                 }
                 if (atFork == null && added != null) {
+                    fileOrigins.put(f.viewKey, new String[] {"ADDED_ON_MAINLINE", null});
                     return "The tenant does not have this file: it was added on mainline after the fork by " + c(added.commit)
                             + ". The pick modifies it, so git reports modify/delete. Taking theirs adds the whole file as of the pick, "
                             + "including everything mainline put into it between " + short10(added.commit.sha()) + " and the pick.";
                 }
                 if (atFork != null) {
+                    fileOrigins.put(f.viewKey, new String[] {"DELETED_BY_TENANT", null});
                     String del = tenantDeletion(st.ours, path);
                     return "The file existed at the fork; the tenant deleted or moved it" + (del == null ? "" : " in " + del)
                             + ". The pick modifies it.";
@@ -1013,6 +1021,10 @@ public final class ConflictAnalyzer {
                 cb.nodeOf(m.id());
                 TreeNode impact = cb.impactTreeOf(m.id());
                 h.takeOurs.impact.add(impact);
+                if (tm == null && !impact.children.isEmpty()) {
+                    theirsRemovesUsed.computeIfAbsent(h, k -> new ArrayList<>()).add(m.label() + " (" + impact.children.size() + " user"
+                            + (impact.children.size() > 1 ? "s" : "") + ")");
+                }
                 starts.add(m.id());
                 // mapper statements are reached through their interface method
                 if (m.id().startsWith("SQL:")) {
@@ -1256,7 +1268,7 @@ public final class ConflictAnalyzer {
         for (ChecklistItem i : adapt) model.checklist.add(renumber(i, ++step));
         for (ConflictFile f : model.files) {
             for (Hunk h : f.hunks) {
-                String rec = recommendation(h, f);
+                String rec = recommendation(h);
                 model.checklist.add(new ChecklistItem(++step, "RESOLVE", h.id + " " + labels(h.members.getOrDefault("theirs",
                         h.members.getOrDefault("ours", List.of()))), null, rec, List.of(h.id), List.of()));
             }
@@ -1315,49 +1327,35 @@ public final class ConflictAnalyzer {
         }
     }
 
-    private String recommendation(Hunk h, ConflictFile f) {
-        List<String> parts = new ArrayList<>();
-        int missing = 0;
-        for (Need n : h.takeTheirs.needs) {
-            if (n.origin != null && !n.origin.equals("IN_HUNK") && !n.origin.equals("IN_PICK")
-                    && (n.ours.equals(ContextModel.MISSING) || n.ours.equals(ContextModel.CHANGED))) missing++;
-        }
+    // ------------------------------------------------------------------ suggestions
+
+    private void suggest(ConflictFile f) {
+        String[] origin = fileOrigins.get(f.viewKey);
         int mergedMissing = f.merged == null ? 0 : f.merged.needs.size();
-        if (!h.takeTheirs.movedImports.isEmpty() && h.tenant.isEmpty()) {
-            parts.add("keep ours here: theirs only moved the import(s) (" + String.join(", ", h.takeTheirs.movedImports) + ")"
-                    + (mergedMissing > 0 ? "; the moved copy merged automatically and uses what the tenant lacks, so remove it or rewrite it (see ADAPT)" : ""));
-        } else if (f.kind.equals("DELETED_BY_US")) {
-            parts.add("the tenant lacks the file: adding it brings mainline's whole version (check the BRING items above and the file's history)");
-        } else if (!h.tenant.isEmpty()) {
-            parts.add("merge by hand: keep the tenant's edits (" + commitList(commitsOf(h.tenant)) + ") and add theirs' change");
-        } else if (!analyzable(h.path)) {
-            parts.add("no symbol analysis for this file type: compare both sides by hand");
-        } else if (missing == 0) {
-            parts.add("taking theirs is self-contained (everything it uses exists in the tenant)");
-        } else {
-            parts.add("taking theirs needs " + missing + " symbol(s) the tenant lacks (see BRING / ADAPT)");
+        for (Hunk h : f.hunks) {
+            Suggestions.Facts facts = new Suggestions.Facts(h == f.hunks.get(0) ? mergedMissing : 0,
+                    theirsRemovesUsed.getOrDefault(h, List.of()), origin == null ? null : origin[0], origin == null ? null : origin[1]);
+            try {
+                h.suggestion = Suggestions.suggest(h, f, facts);
+            } catch (RuntimeException ex) {
+                h.notes.add("suggestion failed: " + ex);
+            }
+            theirsRemovesUsed.remove(h);
         }
-        if (mergedMissing > 0 && h.takeTheirs.movedImports.isEmpty() && f.hunks.indexOf(h) == 0) {
-            parts.add("whatever you choose, " + mergedMissing + " symbol(s) used by the automatically merged lines of this file are missing in the tenant (see ADAPT / BRING)");
-        }
-        if (!h.takeOurs.orphans.isEmpty()) parts.add("do not simply keep ours: " + h.takeOurs.orphans.size() + " place(s) of the pick use what theirs' side declares");
-        if (!h.takeOurs.entryPoints.isEmpty()) {
-            List<String> routes = new ArrayList<>();
-            for (EntryPoint e : h.takeOurs.entryPoints) if (routes.size() < 4) routes.add(e.route);
-            parts.add("retest " + String.join(", ", routes) + (h.takeOurs.entryPoints.size() > 4 ? " …" : ""));
-        }
-        return String.join("; ", parts);
+    }
+
+    /** the RESOLVE step of the checklist: the hunk's suggestion in one line */
+    private static String recommendation(Hunk h) {
+        ConflictModel.Suggestion s = h.suggestion;
+        if (s == null) return "compare both sides by hand";
+        StringBuilder sb = new StringBuilder(s.headline).append(" (").append(s.confidence.toLowerCase()).append(" confidence)");
+        for (String x : s.followUps) sb.append(' ').append(x);
+        return sb.toString();
     }
 
     static boolean analyzable(String path) {
         String l = path.toLowerCase();
         return l.endsWith(".java") || l.endsWith(".xml") || l.endsWith(".yml") || l.endsWith(".yaml") || l.endsWith(".properties");
-    }
-
-    private static List<Commit> commitsOf(List<Event> es) {
-        List<Commit> res = new ArrayList<>();
-        for (Event e : es) if (!res.contains(e.commit)) res.add(e.commit);
-        return res;
     }
 
     private Finding byId(int id) {
